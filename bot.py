@@ -82,6 +82,7 @@ async def enquete(ctx, *, pergunta: str):
     await mensagem.add_reaction("❌")
     await ctx.message.delete()
 
+@bot.event
 @bot.tree.command(name="conquista", description="Dá uma conquista personalizada para um amigo")
 @discord.app_commands.describe(
     membro="Quem vai receber a conquista",
