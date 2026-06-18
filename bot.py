@@ -16,9 +16,10 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 @bot.event
 async def on_ready():
+    await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
-    await bot.change_presence(activity=discord.Game(name="!ajuda para ver comandos"))
+    await bot.change_presence(activity=discord.Game(name="/conquista para dar conquistas"))
 
 @bot.command(name="oi")
 async def oi(ctx):
@@ -81,13 +82,18 @@ async def enquete(ctx, *, pergunta: str):
     await mensagem.add_reaction("❌")
     await ctx.message.delete()
 
-@bot.command(name="conquista")
-@commands.has_permissions(manage_roles=True)
-async def conquista(ctx, membro: discord.Member, cargo: discord.Role, *, mensagem: str):
+@bot.tree.command(name="conquista", description="Dá uma conquista personalizada para um amigo")
+@discord.app_commands.describe(
+    membro="Quem vai receber a conquista",
+    cargo="Cargo que será dado",
+    mensagem="Mensagem personalizada da conquista"
+)
+@discord.app_commands.checks.has_permissions(manage_roles=True)
+async def conquista(interaction: discord.Interaction, membro: discord.Member, cargo: discord.Role, mensagem: str):
     await membro.add_roles(cargo)
     canal = bot.get_channel(CANAL_CONQUISTAS_ID)
     if canal is None:
-        await ctx.send("❌ Canal de conquistas não encontrado. Verifique o ID do canal no código.")
+        await interaction.response.send_message("❌ Canal de conquistas não encontrado.", ephemeral=True)
         return
     embed = discord.Embed(
         title="🏆 Nova Conquista Desbloqueada!",
@@ -97,27 +103,9 @@ async def conquista(ctx, membro: discord.Member, cargo: discord.Role, *, mensage
     embed.add_field(name="Conquistador", value=membro.mention, inline=True)
     embed.add_field(name="Cargo recebido", value=cargo.mention, inline=True)
     embed.set_thumbnail(url=membro.display_avatar.url)
-    embed.set_footer(text=f"Conquista concedida por {ctx.author.display_name}")
+    embed.set_footer(text=f"Conquista concedida por {interaction.user.display_name}")
     await canal.send(embed=embed)
-    await ctx.send(f"✅ Conquista concedida! A mensagem foi enviada em {canal.mention}.")
-
-@bot.remove_command("help")
-@bot.command(name="ajuda")
-async def ajuda(ctx):
-    embed = discord.Embed(
-        title="📖 Lista de Comandos",
-        description=f"Todos os comandos usam o prefixo `{PREFIX}`",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
-    embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
-    embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed.add_field(name="!hora", value="Mostra a data e hora atual", inline=False)
-    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
-    embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
-    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
-    embed.add_field(name="!conquista @usuario @cargo mensagem", value="Dá uma conquista personalizada a um amigo", inline=False)
-    await ctx.send(embed=embed)
+    await interaction.response.send_message(f"✅ Conquista concedida! A mensagem foi enviada em {canal.mention}.", ephemeral=True)
 
 @bot.event
 async def on_command_error(ctx, error):
