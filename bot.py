@@ -21,6 +21,24 @@ async def on_ready():
     print(f"   Servidores: {len(bot.guilds)}")
     await bot.change_presence(activity=discord.Game(name="!ajuda para ver a lista de comandos"))
 
+@bot.remove_command("help")
+@bot.command(name="ajuda")
+async def ajuda(ctx):
+    embed = discord.Embed(
+        title="📖 Lista de Comandos",
+        description=f"Todos os comandos usam o prefixo `{PREFIX}`",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
+    embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
+    embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
+    embed.add_field(name="!hora", value="Mostra a data e hora atual", inline=False)
+    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
+    embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
+    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
+    embed.add_field(name="/conquista @usuario @cargo mensagem", value="Dá uma conquista personalizada a um amigo", inline=False)
+    await ctx.send(embed=embed)
+
 @bot.command(name="oi")
 async def oi(ctx):
     await ctx.send(f"Olá, {ctx.author.mention}! 👋 Tudo bem?")
@@ -87,15 +105,16 @@ async def enquete(ctx, *, pergunta: str):
     membro="Quem vai receber a conquista",
     cargo="Cargo que será dado",
     mensagem="Mensagem personalizada da conquista",
-    imagem="Foto opcional"
+    midia="Foto ou vídeo opcional da conquista"
 )
 @discord.app_commands.checks.has_permissions(manage_roles=True)
-async def conquista(interaction: discord.Interaction, membro: discord.Member, cargo: discord.Role, mensagem: str, imagem: discord.Attachment = None):
+async def conquista(interaction: discord.Interaction, membro: discord.Member, cargo: discord.Role, mensagem: str, midia: discord.Attachment = None):
     await membro.add_roles(cargo)
     canal = bot.get_channel(CANAL_CONQUISTAS_ID)
     if canal is None:
         await interaction.response.send_message("❌ Canal de conquistas não encontrado.", ephemeral=True)
         return
+
     embed = discord.Embed(
         title="🏆 Nova Conquista Desbloqueada!",
         description=mensagem,
@@ -106,11 +125,21 @@ async def conquista(interaction: discord.Interaction, membro: discord.Member, ca
     embed.set_thumbnail(url=membro.display_avatar.url)
     embed.set_footer(text=f"Conquista concedida por {interaction.user.display_name}")
 
-    # Se tiver imagem, adiciona no embed
-    if imagem is not None:
-        embed.set_image(url=imagem.url)
+    # Se tiver mídia, verifica se é imagem ou vídeo
+    if midia is not None:
+        if midia.content_type and midia.content_type.startswith("image/"):
+            embed.set_image(url=midia.url)
+            await canal.send(embed=embed)
+        elif midia.content_type and midia.content_type.startswith("video/"):
+            await canal.send(embed=embed)
+            await canal.send(midia.url)  # Vídeo enviado separadamente abaixo do embed
+        else:
+            await canal.send(embed=embed)
+            await interaction.response.send_message("⚠️ Arquivo enviado não é imagem nem vídeo, foi ignorado. Conquista concedida mesmo assim!", ephemeral=True)
+            return
+    else:
+        await canal.send(embed=embed)
 
-    await canal.send(embed=embed)
     await interaction.response.send_message(f"✅ Conquista concedida! A mensagem foi enviada em {canal.mention}.", ephemeral=True)
 
 @bot.event
