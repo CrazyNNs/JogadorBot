@@ -38,10 +38,10 @@ async def moeda(ctx):
     resultado = random.choice(["🪙 Cara!", "🪙 Coroa!"])
     await ctx.send(resultado)
 
-@bot.command(name="hora")
+@bot.command(name="data")
 async def hora(ctx):
     agora = datetime.datetime.now().strftime("%d/%m/%Y às %H:%M:%S")
-    await ctx.send(f"🕐 Agora são: **{agora}**")
+    await ctx.send(f"🕐 Hoje é: **{agora}**")
 
 @bot.command(name="userinfo")
 async def userinfo(ctx, membro: discord.Member = None):
