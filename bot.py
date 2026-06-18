@@ -32,7 +32,7 @@ async def ajuda(ctx):
     embed.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
     embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
     embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed.add_field(name="!hora", value="Mostra a data e hora atual", inline=False)
+    embed.add_field(name="!data", value="Mostra a data e hora atual", inline=False)
     embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
     embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
     embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
