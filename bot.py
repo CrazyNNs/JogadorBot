@@ -29,19 +29,11 @@ async def ajuda(ctx):
         description=f"Todos os comandos usam o prefixo `{PREFIX}`",
         color=discord.Color.green()
     )
-    embed.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
     embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
     embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed.add_field(name="!data", value="Mostra a data e hora atual", inline=False)
-    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
     embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
-    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
     embed.add_field(name="/conquista @usuario @cargo mensagem", value="Dá uma conquista personalizada a um amigo", inline=False)
     await ctx.send(embed=embed)
-
-@bot.command(name="oi")
-async def oi(ctx):
-    await ctx.send(f"Olá, {ctx.author.mention}! 👋 Tudo bem?")
 
 @bot.command(name="dado")
 async def dado(ctx, lados: int = 6):
@@ -56,26 +48,6 @@ async def moeda(ctx):
     resultado = random.choice(["🪙 Cara!", "🪙 Coroa!"])
     await ctx.send(resultado)
 
-@bot.command(name="data")
-async def hora(ctx):
-    agora = datetime.datetime.now().strftime("%d/%m/%Y às %H:%M:%S")
-    await ctx.send(f"🕐 Hoje é: **{agora}**")
-
-@bot.command(name="userinfo")
-async def userinfo(ctx, membro: discord.Member = None):
-    if membro is None:
-        membro = ctx.author
-    embed = discord.Embed(
-        title=f"Informações de {membro.name}",
-        color=discord.Color.blue()
-    )
-    embed.set_thumbnail(url=membro.display_avatar.url)
-    embed.add_field(name="Nome completo", value=str(membro), inline=True)
-    embed.add_field(name="ID", value=membro.id, inline=True)
-    embed.add_field(name="Apelido no servidor", value=membro.display_name, inline=True)
-    embed.add_field(name="Entrou no servidor em", value=membro.joined_at.strftime("%d/%m/%Y"), inline=True)
-    embed.add_field(name="Conta criada em", value=membro.created_at.strftime("%d/%m/%Y"), inline=True)
-    await ctx.send(embed=embed)
 
 @bot.command(name="limpar")
 @commands.has_permissions(manage_messages=True)
@@ -86,19 +58,6 @@ async def limpar(ctx, quantidade: int = 5):
     await ctx.channel.purge(limit=quantidade + 1)
     confirmacao = await ctx.send(f"🗑️ {quantidade} mensagens apagadas!")
     await confirmacao.delete(delay=3)
-
-@bot.command(name="enquete")
-async def enquete(ctx, *, pergunta: str):
-    embed = discord.Embed(
-        title="📊 Enquete",
-        description=pergunta,
-        color=discord.Color.gold()
-    )
-    embed.set_footer(text=f"Pergunta feita por {ctx.author.display_name}")
-    mensagem = await ctx.send(embed=embed)
-    await mensagem.add_reaction("✅")
-    await mensagem.add_reaction("❌")
-    await ctx.message.delete()
 
 @bot.tree.command(name="conquista", description="Dá uma conquista personalizada para um amigo")
 @discord.app_commands.describe(
