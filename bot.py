@@ -86,7 +86,7 @@ async def gerar_card_perfil(usuario: discord.Member):
     avatar_circular = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
 
-  card = Image.open("perfil.png").convert("RGBA").resize((600, 400))
+    card = Image.open("perfil.png").convert("RGBA").resize((600, 400))
     draw = ImageDraw.Draw(card)
 
     for i in range(200):
