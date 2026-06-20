@@ -79,34 +79,35 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((130, 130))
-
-    mascara = Image.new("L", (130, 130), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 130, 130), fill=255)
-    avatar_circular = Image.new("RGBA", (130, 130), (0, 0, 0, 0))
+    # Avatar circular — 110px para caber no círculo
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((110, 110))
+    mascara = Image.new("L", (110, 110), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, 110, 110), fill=255)
+    avatar_circular = Image.new("RGBA", (110, 110), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
 
-    card = Image.open("perfil.png").convert("RGBA").resize((600, 400))
+    # Abre o fundo
+    card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
     draw = ImageDraw.Draw(card)
 
-    for i in range(200):
-        alpha = int(30 + (i / 200) * 20)
-        draw.line([(0, i), (500, i)], fill=(40, 40, 60, alpha))
+    # Cola o avatar no círculo (ajuste x e y se precisar)
+    card.paste(avatar_circular, (33, 28), avatar_circular)
 
-    card.paste(avatar_circular, (35, 30), avatar_circular)
-
+    # Fontes
     try:
-        fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+        fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 26)
         fonte_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
     except:
         fonte_nome = ImageFont.load_default()
         fonte_info = ImageFont.load_default()
 
-    draw.text((185, 35), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-    draw.text((185, 75), f"@{usuario.name}", font=fonte_info, fill=(180, 180, 180))
+    # Nickname na barra cinza
+    draw.text((190, 38), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
 
+    # @ e conquistas abaixo da barra
+    draw.text((190, 95), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
     conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((185, 105), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
+    draw.text((190, 125), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
