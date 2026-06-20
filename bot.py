@@ -105,7 +105,7 @@ async def gerar_card_perfil(usuario: discord.Member):
     draw.text((190, 45), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
 
     # @ e conquistas abaixo da barra
-    draw.text((190, 40), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
+    draw.text((190, 55), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((190, 125), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
 
