@@ -79,11 +79,11 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((100, 100))
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((130, 130))
 
-    mascara = Image.new("L", (100, 100), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 100, 100), fill=255)
-    avatar_circular = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    mascara = Image.new("L", (130, 130), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, 130, 130), fill=255)
+    avatar_circular = Image.new("RGBA", (130, 130), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
 
     card = Image.open("perfil.png").convert("RGBA").resize((600, 400))
@@ -93,8 +93,7 @@ async def gerar_card_perfil(usuario: discord.Member):
         alpha = int(30 + (i / 200) * 20)
         draw.line([(0, i), (500, i)], fill=(40, 40, 60, alpha))
 
-    draw.rounded_rectangle([(2, 2), (498, 198)], radius=15, outline=(212, 175, 55), width=3)
-    card.paste(avatar_circular, (30, 50), avatar_circular)
+    card.paste(avatar_circular, (35, 30), avatar_circular)
 
     try:
         fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
@@ -103,11 +102,11 @@ async def gerar_card_perfil(usuario: discord.Member):
         fonte_nome = ImageFont.load_default()
         fonte_info = ImageFont.load_default()
 
-    draw.text((155, 60), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-    draw.text((155, 100), f"@{usuario.name}", font=fonte_info, fill=(180, 180, 180))
+    draw.text((185, 35), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
+    draw.text((185, 75), f"@{usuario.name}", font=fonte_info, fill=(180, 180, 180))
 
     conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((155, 135), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
+    draw.text((185, 105), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
