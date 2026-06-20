@@ -91,7 +91,7 @@ async def gerar_card_perfil(usuario: discord.Member):
     draw = ImageDraw.Draw(card)
 
     # Cola o avatar no círculo (ajuste x e y se precisar)
-    card.paste(avatar_circular, (33, 28), avatar_circular)
+    card.paste(avatar_circular, (45, 45), avatar_circular)
 
     # Fontes
     try:
