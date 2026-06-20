@@ -102,10 +102,10 @@ async def gerar_card_perfil(usuario: discord.Member):
         fonte_info = ImageFont.load_default()
 
     # Nickname na barra cinza
-    draw.text((190, 38), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
+    draw.text((190, 45), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
 
     # @ e conquistas abaixo da barra
-    draw.text((190, 95), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
+    draw.text((190, 40), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((190, 125), f"🏆 {len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
 
