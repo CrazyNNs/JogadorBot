@@ -27,7 +27,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 # BANCO DE DADOS
 # ============================================================
 def iniciar_banco():
-    con = sqlite3.connect("jogadorbot.db")
+    con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conquistas (
@@ -53,7 +53,7 @@ def iniciar_banco():
 # FUNÇÕES AUXILIARES
 # ============================================================
 def buscar_conquistas_usuario(usuario_id):
-    con = sqlite3.connect("jogadorbot.db")
+    con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         SELECT c.nome, c.descricao, c.emoji, cu.data
@@ -67,7 +67,7 @@ def buscar_conquistas_usuario(usuario_id):
     return resultado
 
 def buscar_todas_conquistas():
-    con = sqlite3.connect("jogadorbot.db")
+    con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id, nome, descricao, emoji FROM conquistas ORDER BY nome")
     resultado = cur.fetchall()
@@ -317,7 +317,7 @@ conquista_group = app_commands.Group(name="conquista", description="Sistema de c
 )
 @app_commands.checks.has_permissions(manage_roles=True)
 async def conquista_criar(interaction: discord.Interaction, nome: str, descricao: str, emoji: str):
-    con = sqlite3.connect("jogadorbot.db")
+    con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     try:
         cur.execute("INSERT INTO conquistas (nome, descricao, emoji) VALUES (?, ?, ?)", (nome, descricao, emoji))
@@ -336,7 +336,7 @@ async def conquista_criar(interaction: discord.Interaction, nome: str, descricao
 )
 @app_commands.checks.has_permissions(manage_roles=True)
 async def conquista_dar(interaction: discord.Interaction, membro: discord.Member, nome: str, midia: discord.Attachment = None):
-    con = sqlite3.connect("jogadorbot.db")
+    con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
 
     cur.execute("SELECT id, nome, descricao, emoji FROM conquistas WHERE LOWER(nome) = LOWER(?)", (nome,))
