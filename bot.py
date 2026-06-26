@@ -94,12 +94,13 @@ async def gerar_card_perfil(usuario: discord.Member):
     card.paste(avatar_circular, (45, 45), avatar_circular)
 
     # Fontes
-    try:
-        fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
-        fonte_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
-    except:
-        fonte_nome = ImageFont.load_default()
-        fonte_info = ImageFont.load_default()
+   try:
+    fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
+    fonte_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+   except Exception as e:
+    print(f"Erro ao carregar fonte: {e}")
+    fonte_nome = ImageFont.load_default()
+    fonte_info = ImageFont.load_default()
 
     # Nickname na barra cinza
     draw.text((190, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
