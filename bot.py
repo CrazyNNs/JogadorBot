@@ -284,13 +284,16 @@ async def perfil(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
     async with ctx.typing():
-        buffer, total = await gerar_card_perfil(membro)
-        arquivo = discord.File(buffer, filename="perfil.png")
-        embed = discord.Embed(color=discord.Color.blurple())
-        embed.set_image(url="attachment://perfil.png")
-        view = ViewPerfil(membro)
-        await ctx.send(file=arquivo, embed=embed, view=view)
-
+        try:
+            buffer, total = await gerar_card_perfil(membro)
+            arquivo = discord.File(buffer, filename="perfil.png")
+            embed = discord.Embed(color=discord.Color.blurple())
+            embed.set_image(url="attachment://perfil.png")
+            view = ViewPerfil(membro)
+            await ctx.send(file=arquivo, embed=embed, view=view)
+        except Exception as e:
+            await ctx.send(f"❌ Erro ao gerar perfil: `{e}`")
+            
 @bot.remove_command("help")
 @bot.command(name="ajuda")
 async def ajuda(ctx):
