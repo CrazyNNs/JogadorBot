@@ -95,8 +95,8 @@ async def gerar_card_perfil(usuario: discord.Member):
 
     # Fontes
     try:
-       fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
-       fonte_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+       fonte_nome = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100)
+       fonte_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 100)
     except Exception as e:
        print(f"Erro ao carregar fonte: {e}")
        fonte_nome = ImageFont.load_default()
