@@ -15,6 +15,8 @@ import io
 TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
 CANAL_CONQUISTAS_ID = 1517028501356806144  # ← ID do seu canal de conquistas
+DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
+CARGO_ADMIN_NOME = "Admin"  # Nome exato do cargo admin no servidor
 # ============================================================
 
 intents = discord.Intents.default()
@@ -76,6 +78,17 @@ def iniciar_banco():
         CREATE TABLE IF NOT EXISTS banner_ativo (
             usuario_id TEXT PRIMARY KEY,
             banner_id INTEGER
+        )
+    """)
+
+# ============================================================
+# Medida de proteção de comandos
+# ============================================================
+    
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            usuario_id TEXT PRIMARY KEY,
+            expira TEXT
         )
     """)
     
@@ -169,6 +182,47 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
+# ============================================================
+# FUNÇÕES AUXILIARES - Medida de proteção
+# ============================================================
+    
+    MEU_ID = 880243114403573780
+
+def parsear_tempo(tempo_str):
+    """Converte string como 1d5h30m para segundos. Retorna None se for 'infinito'."""
+    if tempo_str.lower() == "infinito":
+        return None
+    import re
+    total = 0
+    partes = re.findall(r"(\d+)([dhm])", tempo_str.lower())
+    if not partes:
+        raise ValueError("Formato inválido")
+    for valor, unidade in partes:
+        valor = int(valor)
+        if unidade == "d":
+            total += valor * 86400
+        elif unidade == "h":
+            total += valor * 3600
+        elif unidade == "m":
+            total += valor * 60
+    return total
+
+def eh_admin(usuario_id):
+    """Verifica se o usuário é admin válido (não expirado)."""
+    if usuario_id == MEU_ID:
+        return True
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT expira FROM admins WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    if not resultado:
+        return False
+    expira = resultado[0]
+    if expira is None:
+        return True  # infinito
+    return datetime.datetime.fromisoformat(expira) > datetime.datetime.now()
+
     # Avatar circular — 110px para caber no círculo
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
     mascara = Image.new("L", (120, 120), 0)
@@ -208,6 +262,25 @@ async def gerar_card_perfil(usuario: discord.Member):
     card.save(buffer, format="PNG")
     buffer.seek(0)
     return buffer, len(conquistas)
+
+from discord.ext import tasks
+
+@tasks.loop(minutes=5)
+async def verificar_admins_expirados():
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    agora = datetime.datetime.now().isoformat()
+    cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
+    expirados = cur.fetchall()
+    for (usuario_id,) in expirados:
+        cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            await usuario.send("⏰ Seu acesso de admin no **JogadorBot** expirou.")
+        except:
+            pass
+    con.commit()
+    con.close()
 
 # ============================================================
 # VIEWS (BOTÕES)
@@ -392,6 +465,7 @@ class ViewMenuLoja(discord.ui.View):
 @bot.event
 async def on_ready():
     iniciar_banco()
+    verificar_admins_expirados.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
@@ -507,6 +581,9 @@ async def ajuda(ctx):
     embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
     embed.add_field(name="!banner", value="Gerencia seus banners", inline=False)
     embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
+    embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
+    embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
+    embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="diario")
@@ -584,6 +661,15 @@ async def banner_cmd(ctx):
         view.add_item(botao)
     await ctx.send(embed=embed, view=view)
 
+@bot.command(name="addjoyens")
+async def addjoyens(ctx, membro: discord.Member, quantidade: int):
+    if not eh_admin(ctx.author.id):
+        await ctx.send("❌ Você não tem permissão para usar este comando.")
+        return
+    adicionar_joyens(membro.id, quantidade)
+    novo_saldo = buscar_joyens(membro.id)
+    await ctx.send(f"✅ **{quantidade} Joyens** adicionados para {membro.mention}! Novo saldo: **{novo_saldo} Joyens**.")
+
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
 # ============================================================
@@ -595,7 +681,7 @@ conquista_group = app_commands.Group(name="conquista", description="Sistema de c
     descricao="Descrição da conquista",
     emoji="Emoji que representa a conquista (ex: 🍀)"
 )
-@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def conquista_criar(interaction: discord.Interaction, nome: str, descricao: str, emoji: str):
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
@@ -614,7 +700,7 @@ async def conquista_criar(interaction: discord.Interaction, nome: str, descricao
     nome="Nome exato da conquista",
     midia="Foto ou vídeo opcional da conquista"
 )
-@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def conquista_dar(interaction: discord.Interaction, membro: discord.Member, nome: str, midia: discord.Attachment = None):
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
@@ -675,6 +761,10 @@ async def conquista_lista(interaction: discord.Interaction):
         embed.add_field(name=f"{emoji} {nome}", value=descricao, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# ============================================================
+# COMANDOS SLASH — Loja de banners
+# ============================================================
+
 banner_group = app_commands.Group(name="banner", description="Gerenciamento de banners")
 
 @banner_group.command(name="adicionar", description="Adiciona um novo banner à loja (admin)")
@@ -684,7 +774,7 @@ banner_group = app_commands.Group(name="banner", description="Gerenciamento de b
     preco="Preço em Joyens",
     imagem="Imagem do banner"
 )
-@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, imagem: discord.Attachment):
     os.makedirs("/data/banners", exist_ok=True)
     arquivo_path = f"/data/banners/{nome.replace(' ', '_')}.png"
@@ -703,6 +793,86 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
         await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
+
+# ============================================================
+# COMANDOS SLASH — Medida de proteção
+# ============================================================
+
+admin_group = app_commands.Group(name="adminbot", description="Gerenciamento de admins")
+
+@admin_group.command(name="gerenciar", description="Adiciona ou remove um admin")
+@app_commands.describe(
+    usuario="Usuário a ser gerenciado",
+    acao="adicionar ou remover",
+    tempo="Tempo do admin (ex: 1d5h30m) ou 'infinito'"
+)
+async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.Member, acao: str, tempo: str = "infinito"):
+    if interaction.user.id != MEU_ID:
+        await interaction.response.send_message("❌ Apenas o dono do bot pode usar este comando.", ephemeral=True)
+        return
+
+    if acao.lower() == "adicionar":
+        try:
+            segundos = parsear_tempo(tempo)
+        except ValueError:
+            await interaction.response.send_message("❌ Formato de tempo inválido! Use algo como `1d5h30m` ou `infinito`.", ephemeral=True)
+            return
+
+        expira = None if segundos is None else (datetime.datetime.now() + datetime.timedelta(seconds=segundos)).isoformat()
+
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO admins (usuario_id, expira) VALUES (?, ?)", (str(usuario.id), expira))
+        con.commit()
+        con.close()
+
+        tempo_texto = "permanentemente" if expira is None else f"até {datetime.datetime.fromisoformat(expira).strftime('%d/%m/%Y às %H:%M')}"
+        await interaction.response.send_message(f"✅ **{usuario.display_name}** agora é admin {tempo_texto}!", ephemeral=True)
+
+        try:
+            await usuario.send(f"✅ Você recebeu acesso de admin no **JogadorBot** {tempo_texto}!")
+        except:
+            pass
+
+    elif acao.lower() == "remover":
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("DELETE FROM admins WHERE usuario_id = ?", (str(usuario.id),))
+        con.commit()
+        con.close()
+        await interaction.response.send_message(f"✅ Admin de **{usuario.display_name}** removido.", ephemeral=True)
+        try:
+            await usuario.send("❌ Seu acesso de admin no **JogadorBot** foi removido.")
+        except:
+            pass
+    else:
+        await interaction.response.send_message("❌ Ação inválida! Use `adicionar` ou `remover`.", ephemeral=True)
+
+@admin_group.command(name="lista", description="Lista todos os admins ativos")
+async def adminbot_lista(interaction: discord.Interaction):
+    if interaction.user.id != MEU_ID:
+        await interaction.response.send_message("❌ Apenas o dono do bot pode ver esta lista.", ephemeral=True)
+        return
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT usuario_id, expira FROM admins")
+    admins = cur.fetchall()
+    con.close()
+    if not admins:
+        await interaction.response.send_message("Nenhum admin cadastrado.", ephemeral=True)
+        return
+    embed = discord.Embed(title="👑 Lista de Admins", color=discord.Color.gold())
+    for usuario_id, expira in admins:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            nome = usuario.display_name
+        except:
+            nome = f"ID {usuario_id}"
+        expira_texto = "Permanente" if expira is None else datetime.datetime.fromisoformat(expira).strftime("%d/%m/%Y às %H:%M")
+        embed.add_field(name=nome, value=f"Expira: {expira_texto}", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+bot.tree.add_command(admin_group)
 
 bot.tree.add_command(banner_group)
 
