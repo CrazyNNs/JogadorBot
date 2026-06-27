@@ -81,9 +81,9 @@ async def gerar_card_perfil(usuario: discord.Member):
 
     # Avatar circular — 110px para caber no círculo
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
-    mascara = Image.new("L", (110, 110), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 110, 110), fill=255)
-    avatar_circular = Image.new("RGBA", (110, 110), (0, 0, 0, 0))
+    mascara = Image.new("L", (120, 120), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
+    avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
 
     # Abre o fundo
