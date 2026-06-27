@@ -230,7 +230,7 @@ async def gerar_card_perfil(usuario: discord.Member):
 
 # Textos de perfil
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
-    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 15)
+    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
 
     draw.text((190, 8), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((190, 12), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
