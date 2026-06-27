@@ -94,21 +94,8 @@ async def gerar_card_perfil(usuario: discord.Member):
     card.paste(avatar_circular, (45, 45), avatar_circular)
 
     # Fontes
-    import urllib.request
-    fonte_path = "/tmp/fonte.ttf"
-    if not os.path.exists(fonte_path):
-        urllib.request.urlretrieve(
-            "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf",
-            fonte_path
-        )
-    fonte_path_regular = "/tmp/fonte_regular.ttf"
-    if not os.path.exists(fonte_path_regular):
-        urllib.request.urlretrieve(
-            "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf",
-            fonte_path_regular
-        )
-    fonte_nome = ImageFont.truetype(fonte_path, 50)
-    fonte_info = ImageFont.truetype(fonte_path_regular, 30)
+    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 50)
+    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 30)
 
     # Nickname na barra cinza
     draw.text((190, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
