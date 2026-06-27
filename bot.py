@@ -46,6 +46,39 @@ def iniciar_banco():
             FOREIGN KEY (conquista_id) REFERENCES conquistas(id)
         )
     """)
+# ============================================================
+# Economia e loja de banners
+# ============================================================
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS economia (
+            usuario_id TEXT PRIMARY KEY,
+            joyens INTEGER DEFAULT 0,
+            ultimo_diario TEXT
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS banners (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            descricao TEXT NOT NULL,
+            preco INTEGER NOT NULL,
+            arquivo TEXT NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS banners_usuarios (
+            usuario_id TEXT NOT NULL,
+            banner_id INTEGER NOT NULL,
+            PRIMARY KEY (usuario_id, banner_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS banner_ativo (
+            usuario_id TEXT PRIMARY KEY,
+            banner_id INTEGER
+        )
+    """)
+    
     con.commit()
     con.close()
 
@@ -74,6 +107,63 @@ def buscar_todas_conquistas():
     con.close()
     return resultado
 
+# ============================================================
+# FUNÇÕES AUXILIARES - Economia e loja de banners
+# ============================================================
+
+def buscar_joyens(usuario_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT joyens FROM economia WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else 0
+
+def adicionar_joyens(usuario_id, quantidade):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO economia (usuario_id, joyens) VALUES (?, ?)
+        ON CONFLICT(usuario_id) DO UPDATE SET joyens = joyens + ?
+    """, (str(usuario_id), quantidade, quantidade))
+    con.commit()
+    con.close()
+
+def remover_joyens(usuario_id, quantidade):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE economia SET joyens = joyens - ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
+    con.commit()
+    con.close()
+
+def buscar_todos_banners():
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, nome, descricao, preco, arquivo FROM banners ORDER BY id")
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def usuario_tem_banner(usuario_id, banner_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM banners_usuarios WHERE usuario_id = ? AND banner_id = ?", (str(usuario_id), banner_id))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado is not None
+
+def buscar_banner_ativo(usuario_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT b.arquivo FROM banner_ativo ba
+        JOIN banners b ON ba.banner_id = b.id
+        WHERE ba.usuario_id = ?
+    """, (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else None
+
 async def gerar_card_perfil(usuario: discord.Member):
     async with aiohttp.ClientSession() as session:
         async with session.get(str(usuario.display_avatar.url)) as resp:
@@ -88,6 +178,13 @@ async def gerar_card_perfil(usuario: discord.Member):
 
     # Abre o fundo
     card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
+
+    # Aplica banner ativo se houver
+    banner_arquivo = buscar_banner_ativo(usuario.id)
+    if banner_arquivo and os.path.exists(banner_arquivo):
+        banner = Image.open(banner_arquivo).convert("RGBA").resize((666, 193))
+        card.paste(banner, (67, 183), banner)
+
     draw = ImageDraw.Draw(card)
 
     # Cola o avatar no círculo (ajuste x e y se precisar)
@@ -104,6 +201,8 @@ async def gerar_card_perfil(usuario: discord.Member):
     draw.text((190, 85), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((60, 365), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 0))
+    joyens = buscar_joyens(usuario.id)
+    draw.text((400, 365), f"{joyens} Joyens", font=fonte_info, fill=(255, 215, 0))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
@@ -184,6 +283,108 @@ class ViewConquistas(discord.ui.View):
         embed.set_image(url="attachment://perfil.png")
         view = ViewPerfil(self.usuario)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+
+# ============================================================
+# VIEW (BOTÕES) - Loja de banners
+# ============================================================
+
+class ViewLoja(discord.ui.View):
+    def __init__(self, usuario_id, banners, index=0):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.banners = banners
+        self.index = index
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.index == 0
+        self.proximo.disabled = self.index >= len(self.banners) - 1
+        banner_id = self.banners[self.index][0]
+        self.comprar.disabled = usuario_tem_banner(self.usuario_id, banner_id)
+        self.comprar.label = "✅ Já possui" if usuario_tem_banner(self.usuario_id, banner_id) else "🛒 Comprar"
+
+    def gerar_embed(self):
+        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        joyens = buscar_joyens(self.usuario_id)
+        tem = usuario_tem_banner(self.usuario_id, banner_id)
+        embed = discord.Embed(
+            title=f"🖼️ {nome}",
+            description=descricao,
+            color=discord.Color.purple()
+        )
+        embed.add_field(name="Preço", value=f"{preco} Joyens", inline=True)
+        embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
+        if tem:
+            embed.add_field(name="Status", value="✅ Você já possui este banner", inline=False)
+        elif joyens < preco:
+            embed.add_field(name="Status", value="❌ Joyens insuficientes", inline=False)
+        if os.path.exists(arquivo):
+            file = discord.File(arquivo, filename="preview.png")
+            embed.set_image(url="attachment://preview.png")
+        embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
+        return embed
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index -= 1
+        self.atualizar_botoes()
+        embed = self.gerar_embed()
+        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename="preview.png")
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index += 1
+        self.atualizar_botoes()
+        embed = self.gerar_embed()
+        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename="preview.png")
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+
+    @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success)
+    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        joyens = buscar_joyens(self.usuario_id)
+        if joyens < preco:
+            await interaction.response.send_message(f"❌ Você não tem Joyens suficientes! Você tem {joyens} e precisa de {preco}.", ephemeral=True)
+            return
+        remover_joyens(self.usuario_id, preco)
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)", (str(self.usuario_id), banner_id))
+        con.commit()
+        con.close()
+        self.atualizar_botoes()
+        await interaction.response.send_message(f"✅ Banner **{nome}** comprado com sucesso! Use `!banner` para equipá-lo no seu perfil.", ephemeral=True)
+        await interaction.message.edit(view=self)
+
+
+class ViewMenuLoja(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+
+    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
+    async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
+        banners = buscar_todos_banners()
+        if not banners:
+            await interaction.response.send_message("Nenhum banner disponível na loja ainda!", ephemeral=True)
+            return
+        view = ViewLoja(self.usuario_id, banners)
+        embed = view.gerar_embed()
+        banner_id, nome, descricao, preco, arquivo = banners[0]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename="preview.png")
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
 # EVENTOS
@@ -301,7 +502,87 @@ async def ajuda(ctx):
     embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
     embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
     embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
+    embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
+    embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
+    embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
+    embed.add_field(name="!banner", value="Gerencia seus banners", inline=False)
+    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
     await ctx.send(embed=embed)
+
+@bot.command(name="diario")
+async def diario(ctx):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    hoje = datetime.date.today().isoformat()
+    cur.execute("SELECT ultimo_diario, joyens FROM economia WHERE usuario_id = ?", (str(ctx.author.id),))
+    resultado = cur.fetchone()
+    if resultado and resultado[0] == hoje:
+        con.close()
+        await ctx.send(f"{ctx.author.mention} Você já coletou seus Joyens hoje! Volte amanhã.")
+        return
+    quantidade = random.randint(50, 150)
+    cur.execute("""
+        INSERT INTO economia (usuario_id, joyens, ultimo_diario) VALUES (?, ?, ?)
+        ON CONFLICT(usuario_id) DO UPDATE SET joyens = joyens + ?, ultimo_diario = ?
+    """, (str(ctx.author.id), quantidade, hoje, quantidade, hoje))
+    con.commit()
+    novo_saldo = cur.execute("SELECT joyens FROM economia WHERE usuario_id = ?", (str(ctx.author.id),)).fetchone()[0]
+    con.close()
+    embed = discord.Embed(title="💰 Recompensa Diária!", color=discord.Color.gold())
+    embed.add_field(name="Joyens recebidos", value=f"+{quantidade} Joyens", inline=True)
+    embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
+    embed.set_footer(text="Volte amanhã para mais Joyens!")
+    await ctx.send(embed=embed)
+
+@bot.command(name="saldo")
+async def saldo(ctx, membro: discord.Member = None):
+    if membro is None:
+        membro = ctx.author
+    joyens = buscar_joyens(membro.id)
+    embed = discord.Embed(title=f"💰 Saldo de {membro.display_name}", color=discord.Color.gold())
+    embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command(name="loja")
+async def loja(ctx):
+    embed = discord.Embed(
+        title="🏪 Loja do JogadorBot",
+        description="Bem-vindo à loja! Use seus Joyens para comprar itens exclusivos.\nEscolha uma categoria abaixo:",
+        color=discord.Color.purple()
+    )
+    embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
+    embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
+    view = ViewMenuLoja(ctx.author.id)
+    await ctx.send(embed=embed, view=view)
+
+@bot.command(name="banner")
+async def banner_cmd(ctx):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT b.id, b.nome FROM banners_usuarios bu
+        JOIN banners b ON bu.banner_id = b.id
+        WHERE bu.usuario_id = ?
+    """, (str(ctx.author.id),))
+    banners = cur.fetchall()
+    con.close()
+    if not banners:
+        await ctx.send("Você não tem nenhum banner! Use `!loja` para comprar.")
+        return
+    embed = discord.Embed(title="🖼️ Seus Banners", description="Escolha um banner para equipar:", color=discord.Color.purple())
+    view = discord.ui.View(timeout=60)
+    for banner_id, nome in banners:
+        async def equipar_callback(interaction, bid=banner_id, bnome=nome):
+            con2 = sqlite3.connect("/data/jogadorbot.db")
+            cur2 = con2.cursor()
+            cur2.execute("INSERT OR REPLACE INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)", (str(interaction.user.id), bid))
+            con2.commit()
+            con2.close()
+            await interaction.response.send_message(f"✅ Banner **{bnome}** equipado! Aparecerá no seu `!perfil`.", ephemeral=True)
+        botao = discord.ui.Button(label=nome, style=discord.ButtonStyle.primary)
+        botao.callback = equipar_callback
+        view.add_item(botao)
+    await ctx.send(embed=embed, view=view)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
@@ -393,6 +674,37 @@ async def conquista_lista(interaction: discord.Interaction):
     for _, nome, descricao, emoji in conquistas:
         embed.add_field(name=f"{emoji} {nome}", value=descricao, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+banner_group = app_commands.Group(name="banner", description="Gerenciamento de banners")
+
+@banner_group.command(name="adicionar", description="Adiciona um novo banner à loja (admin)")
+@app_commands.describe(
+    nome="Nome do banner",
+    descricao="Descrição do banner",
+    preco="Preço em Joyens",
+    imagem="Imagem do banner"
+)
+@app_commands.checks.has_permissions(manage_roles=True)
+async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, imagem: discord.Attachment):
+    os.makedirs("/data/banners", exist_ok=True)
+    arquivo_path = f"/data/banners/{nome.replace(' ', '_')}.png"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(imagem.url) as resp:
+            imagem_bytes = await resp.read()
+    with open(arquivo_path, "wb") as f:
+        f.write(imagem_bytes)
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    try:
+        cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo) VALUES (?, ?, ?, ?)", (nome, descricao, preco, arquivo_path))
+        con.commit()
+        await interaction.response.send_message(f"✅ Banner **{nome}** adicionado à loja por {preco} Joyens!", ephemeral=True)
+    except sqlite3.IntegrityError:
+        await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
+    finally:
+        con.close()
+
+bot.tree.add_command(banner_group)
 
 bot.tree.add_command(conquista_group)
 
