@@ -94,14 +94,14 @@ async def gerar_card_perfil(usuario: discord.Member):
     card.paste(avatar_circular, (45, 45), avatar_circular)
 
     # Fontes
-    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 50)
+    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 40)
     fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 30)
 
     # Nickname na barra cinza
     draw.text((190, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
 
     # @ e conquistas abaixo da barra
-    draw.text((190, 85), f"@{usuario.name}", font=fonte_info, fill=(200, 200, 200))
+    draw.text((190, 85), f"@{usuario.name}", font=fonte_info, fill=(200, 220, 200))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((190, 140), f"{len(conquistas)} conquista(s)", font=fonte_info, fill=(212, 175, 55))
 
