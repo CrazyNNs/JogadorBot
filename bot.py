@@ -47,9 +47,7 @@ def iniciar_banco():
             FOREIGN KEY (conquista_id) REFERENCES conquistas(id)
         )
     """)
-# ============================================================
-# Economia e loja de banners
-# ============================================================
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS economia (
             usuario_id TEXT PRIMARY KEY,
@@ -79,10 +77,6 @@ def iniciar_banco():
             banner_id INTEGER
         )
     """)
-
-# ============================================================
-# Medida de proteção de comandos
-# ============================================================
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS admins (
@@ -176,15 +170,6 @@ def buscar_banner_ativo(usuario_id):
     con.close()
     return resultado[0] if resultado else None
 
-async def gerar_card_perfil(usuario: discord.Member):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(str(usuario.display_avatar.url)) as resp:
-            avatar_bytes = await resp.read()
-
-# ============================================================
-# FUNÇÕES AUXILIARES - Medida de proteção
-# ============================================================
-
 def parsear_tempo(tempo_str):
     """Converte string como 1d5h30m para segundos. Retorna None se for 'infinito'."""
     if tempo_str.lower() == "infinito":
@@ -217,38 +202,34 @@ def eh_admin(usuario_id):
         return False
     expira = resultado[0]
     if expira is None:
-        return True  # infinito
+        return True
     return datetime.datetime.fromisoformat(expira) > datetime.datetime.now()
 
-    # Avatar circular — 110px para caber no círculo
+async def gerar_card_perfil(usuario: discord.Member):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(str(usuario.display_avatar.url)) as resp:
+            avatar_bytes = await resp.read()
+
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
     mascara = Image.new("L", (120, 120), 0)
     ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
     avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
 
-    # Abre o fundo
     card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
 
-    # Aplica banner ativo se houver
     banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
         banner = Image.open(banner_arquivo).convert("RGBA").resize((666, 193))
         card.paste(banner, (67, 183), banner)
 
     draw = ImageDraw.Draw(card)
-
-    # Cola o avatar no círculo (ajuste x e y se precisar)
     card.paste(avatar_circular, (40, 40), avatar_circular)
 
-    # Fontes
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
     fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 30)
 
-    # Nickname na barra cinza
     draw.text((190, 35), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-
-    # @ e conquistas abaixo da barra
     draw.text((190, 85), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((60, 365), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 0))
