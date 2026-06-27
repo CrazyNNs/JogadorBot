@@ -225,19 +225,19 @@ async def gerar_card_perfil(usuario: discord.Member):
     
     banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
-        banner = Image.open(banner_arquivo).convert("RGBA").resize((799, 263))
+        banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 263))
         card.paste(banner, (0, 137), banner)
 
 # Textos de perfil
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
-    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 30)
+    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 15)
 
-    draw.text((190, 35), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-    draw.text((190, 85), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
+    draw.text((190, 8), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
+    draw.text((190, 12), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((60, 365), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 0))
+    draw.text((60, 190), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 0))
     joyens = buscar_joyens(usuario.id)
-    draw.text((400, 365), f"{joyens} Joyens", font=fonte_info, fill=(255, 215, 0))
+    draw.text((120, 190), f"{joyens} Joyens", font=fonte_info, fill=(255, 215, 0))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
