@@ -235,9 +235,9 @@ async def gerar_card_perfil(usuario: discord.Member):
     draw.text((140, 10), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((140, 40), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((140, 90), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(100, 255, 255))
+    draw.text((140, 100), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(100, 255, 255))
     joyens = buscar_joyens(usuario.id)
-    draw.text((400, 90), f"{joyens} Joyens", font=fonte_info, fill=(255, 215, 0))
+    draw.text((300, 100), f"{joyens} Joyens", font=fonte_info, fill=(255, 215, 0))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
