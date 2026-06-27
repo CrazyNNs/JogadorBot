@@ -220,7 +220,7 @@ async def gerar_card_perfil(usuario: discord.Member):
 
     banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
-        banner = Image.open(banner_arquivo).convert("RGBA").resize((666, 193))
+        banner = Image.open(banner_arquivo).convert("RGBA").resize((665, 176))
         card.paste(banner, (67, 183), banner)
 
     draw = ImageDraw.Draw(card)
