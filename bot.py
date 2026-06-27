@@ -16,7 +16,6 @@ TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
 CANAL_CONQUISTAS_ID = 1517028501356806144  # ← ID do seu canal de conquistas
 DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
-CARGO_ADMIN_NOME = "Admin"  # Nome exato do cargo admin no servidor
 # ============================================================
 
 intents = discord.Intents.default()
@@ -185,8 +184,6 @@ async def gerar_card_perfil(usuario: discord.Member):
 # ============================================================
 # FUNÇÕES AUXILIARES - Medida de proteção
 # ============================================================
-    
-    MEU_ID = 880243114403573780
 
 def parsear_tempo(tempo_str):
     """Converte string como 1d5h30m para segundos. Retorna None se for 'infinito'."""
@@ -209,7 +206,7 @@ def parsear_tempo(tempo_str):
 
 def eh_admin(usuario_id):
     """Verifica se o usuário é admin válido (não expirado)."""
-    if usuario_id == MEU_ID:
+    if usuario_id == DONO_ID:
         return True
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
@@ -807,7 +804,7 @@ admin_group = app_commands.Group(name="adminbot", description="Gerenciamento de 
     tempo="Tempo do admin (ex: 1d5h30m) ou 'infinito'"
 )
 async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.Member, acao: str, tempo: str = "infinito"):
-    if interaction.user.id != MEU_ID:
+    if interaction.user.id != DONO_ID:
         await interaction.response.send_message("❌ Apenas o dono do bot pode usar este comando.", ephemeral=True)
         return
 
@@ -850,7 +847,7 @@ async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.
 
 @admin_group.command(name="lista", description="Lista todos os admins ativos")
 async def adminbot_lista(interaction: discord.Interaction):
-    if interaction.user.id != MEU_ID:
+    if interaction.user.id != DONO_ID:
         await interaction.response.send_message("❌ Apenas o dono do bot pode ver esta lista.", ephemeral=True)
         return
     con = sqlite3.connect("/data/jogadorbot.db")
