@@ -216,13 +216,13 @@ async def gerar_card_perfil(usuario: discord.Member):
     ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
     avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
-
-    draw = ImageDraw.Draw(card)
-    card.paste(avatar_circular, (8, 8), avatar_circular)
     
 # Banner de perfil
     card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
 
+    draw = ImageDraw.Draw(card)
+    card.paste(avatar_circular, (8, 8), avatar_circular)
+    
     banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
         banner = Image.open(banner_arquivo).convert("RGBA").resize((799, 263))
