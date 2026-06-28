@@ -92,9 +92,10 @@ def iniciar_banco():
             emoji TEXT NOT NULL
         )
     """)
-    cur.execute("""
-        ALTER TABLE banners ADD COLUMN categoria_id INTEGER REFERENCES categorias_banner(id)
-    """)
+   try:
+        cur.execute("ALTER TABLE banners ADD COLUMN categoria_id INTEGER REFERENCES categorias_banner(id)")
+    except:
+        pass
     
     con.commit()
     con.close()
