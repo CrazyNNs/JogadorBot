@@ -885,6 +885,7 @@ async def conquista_lista(interaction: discord.Interaction):
 # ============================================================
 
 @banner_group.command(name="adicionar", description="Adiciona um novo banner à loja (admin)")
+
 @app_commands.describe(
     nome="Nome do banner",
     descricao="Descrição do banner",
