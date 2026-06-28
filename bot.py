@@ -16,6 +16,22 @@ TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
 CANAL_CONQUISTAS_ID = 1517028501356806144  # ← ID do seu canal de conquistas
 DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
+
+# ============================================================
+# TIPOS EDITÁVEIS — Para adicionar novo tipo, copie um bloco
+# e ajuste o nome e os campos. "tabela" é o nome da tabela
+# no banco de dados e "campos" são os campos editáveis.
+# ============================================================
+TIPOS_EDITAVEIS = {
+    "banner": {
+        "tabela": "banners",
+        "campos": ["novo_nome", "descricao", "preco", "categoria", "imagem"]
+    },
+    "conquista": {
+        "tabela": "conquistas",
+        "campos": ["novo_nome", "descricao", "emoji"]
+    },
+}
 # ============================================================
 
 intents = discord.Intents.default()
@@ -674,6 +690,7 @@ async def ajuda(ctx):
     embed.add_field(name="/categoria deletar", value="Deleta uma categoria e seus banners (admin)", inline=False)
     embed.add_field(name="/categoria lista", value="Lista todas as categorias", inline=False)
     embed.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
+    embed.add_field(name="/editar tipo nome", value="Edita um produto (banner ou conquista)", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -1082,6 +1099,129 @@ async def categoria_lista(interaction: discord.Interaction):
     for _, nome, emoji in categorias:
         embed.add_field(name=f"{emoji} {nome}", value="\u200b", inline=True)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="editar", description="Edita um produto da loja ou catálogo (admin)")
+@app_commands.describe(
+    tipo="Tipo do produto: banner ou conquista",
+    nome="Nome atual do produto",
+    novo_nome="Novo nome (opcional)",
+    descricao="Nova descrição (opcional)",
+    preco="Novo preço em Joyens (apenas banners)",
+    categoria="Nova categoria (apenas banners)",
+    emoji="Novo emoji (apenas conquistas)",
+    imagem="Nova imagem (apenas banners)"
+)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def editar(
+    interaction: discord.Interaction,
+    tipo: str,
+    nome: str,
+    novo_nome: str = None,
+    descricao: str = None,
+    preco: int = None,
+    categoria: str = None,
+    emoji: str = None,
+    imagem: discord.Attachment = None
+):
+    tipo = tipo.lower()
+
+    if tipo not in TIPOS_EDITAVEIS:
+        tipos_disponiveis = ", ".join(TIPOS_EDITAVEIS.keys())
+        await interaction.response.send_message(
+            f"❌ Tipo **{tipo}** inválido! Tipos disponíveis: `{tipos_disponiveis}`",
+            ephemeral=True
+        )
+        return
+
+    config = TIPOS_EDITAVEIS[tipo]
+    tabela = config["tabela"]
+    campos = config["campos"]
+
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+
+    # Verifica se o produto existe
+    cur.execute(f"SELECT id FROM {tabela} WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(
+            f"❌ {tipo.capitalize()} **{nome}** não encontrado.", ephemeral=True
+        )
+        con.close()
+        return
+
+    produto_id = resultado[0]
+    alteracoes = []
+
+    # Novo nome
+    if novo_nome and "novo_nome" in campos:
+        cur.execute(f"UPDATE {tabela} SET nome = ? WHERE id = ?", (novo_nome, produto_id))
+        alteracoes.append(f"Nome → **{novo_nome}**")
+
+    # Descrição
+    if descricao and "descricao" in campos:
+        cur.execute(f"UPDATE {tabela} SET descricao = ? WHERE id = ?", (descricao, produto_id))
+        alteracoes.append(f"Descrição atualizada")
+
+    # Preço (apenas banners)
+    if preco is not None and "preco" in campos:
+        cur.execute(f"UPDATE {tabela} SET preco = ? WHERE id = ?", (preco, produto_id))
+        alteracoes.append(f"Preço → **{preco} Joyens**")
+
+    # Emoji (apenas conquistas)
+    if emoji and "emoji" in campos:
+        cur.execute(f"UPDATE {tabela} SET emoji = ? WHERE id = ?", (emoji, produto_id))
+        alteracoes.append(f"Emoji → {emoji}")
+
+    # Categoria (apenas banners)
+    if categoria and "categoria" in campos:
+        cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
+        cat_resultado = cur.fetchone()
+        if not cat_resultado:
+            await interaction.response.send_message(
+                f"❌ Categoria **{categoria}** não encontrada. Use `/categoria lista` para ver as disponíveis.",
+                ephemeral=True
+            )
+            con.close()
+            return
+        cur.execute(f"UPDATE {tabela} SET categoria_id = ? WHERE id = ?", (cat_resultado[0], produto_id))
+        alteracoes.append(f"Categoria → **{categoria}**")
+
+    # Imagem (apenas banners)
+    if imagem and "imagem" in campos:
+        cur.execute("SELECT arquivo FROM banners WHERE id = ?", (produto_id,))
+        arquivo_antigo = cur.fetchone()[0]
+        novo_arquivo = f"/data/banners/{(novo_nome or nome).replace(' ', '_')}.png"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(imagem.url) as resp:
+                imagem_bytes = await resp.read()
+        with open(novo_arquivo, "wb") as f:
+            f.write(imagem_bytes)
+        if arquivo_antigo != novo_arquivo and os.path.exists(arquivo_antigo):
+            os.remove(arquivo_antigo)
+        cur.execute("UPDATE banners SET arquivo = ? WHERE id = ?", (novo_arquivo, produto_id))
+        alteracoes.append("Imagem atualizada")
+
+    if not alteracoes:
+        await interaction.response.send_message(
+            "❌ Nenhuma alteração foi feita! Preencha pelo menos um campo para editar.",
+            ephemeral=True
+        )
+        con.close()
+        return
+
+    con.commit()
+    con.close()
+
+    embed = discord.Embed(
+        title=f"✅ {tipo.capitalize()} editado com sucesso!",
+        description="\n".join(alteracoes),
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Produto: {nome}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+bot.tree.add_command(editar)
 
 bot.tree.add_command(categoria_group)
 
