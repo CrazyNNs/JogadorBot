@@ -14,8 +14,24 @@ import io
 # ============================================================
 TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
-CANAL_CONQUISTAS_ID = 1517028501356806144  # ← ID do seu canal de conquistas
 DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
+
+# Canais de notificação
+CANAL_CONQUISTAS_ID = 1517028501356806144
+CANAL_NOTIFICACOES_ID = 1520676033425313885
+
+# Rotação da loja
+DURACAO_ROTACAO_HORAS = 6
+BANNERS_POR_ROTACAO = 4
+
+# Raridades disponíveis e suas chances na rotação
+RARIDADES = {
+    "Comum":    0.50,
+    "Incomum":  0.25,
+    "Raro":     0.15,
+    "Epico":    0.07,
+    "Lendario": 0.03,
+}
 
 # ============================================================
 # TIPOS EDITÁVEIS — Para adicionar novo tipo, copie um bloco
@@ -112,6 +128,22 @@ def iniciar_banco():
         cur.execute("ALTER TABLE banners ADD COLUMN categoria_id INTEGER REFERENCES categorias_banner(id)")
     except:
         pass
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rotacao_atual (
+            banner_id INTEGER PRIMARY KEY,
+            expira TEXT NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rotacao_historico (
+            banner_id INTEGER NOT NULL
+        )
+    """)
+    try:
+        cur.execute("ALTER TABLE banners ADD COLUMN raridade TEXT DEFAULT 'Comum'")
+    except:
+        pass
     
     con.commit()
     con.close()
@@ -169,14 +201,6 @@ def remover_joyens(usuario_id, quantidade):
     cur.execute("UPDATE economia SET joyens = joyens - ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
     con.commit()
     con.close()
-
-def buscar_todos_banners():
-    con = sqlite3.connect("/data/jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT id, nome, descricao, preco, arquivo FROM banners ORDER BY id")
-    resultado = cur.fetchall()
-    con.close()
-    return resultado
 
 def usuario_tem_banner(usuario_id, banner_id):
     con = sqlite3.connect("/data/jogadorbot.db")
@@ -288,6 +312,52 @@ async def verificar_admins_expirados():
             await usuario.send("⏰ Seu acesso de admin no **JogadorBot** expirou.")
         except:
             pass
+
+    @tasks.loop(minutes=10)
+async def verificar_rotacao():
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT expira FROM rotacao_atual LIMIT 1")
+    resultado = cur.fetchone()
+    con.close()
+
+    precisa_rotacionar = False
+    if not resultado:
+        precisa_rotacionar = True
+    else:
+        expira = datetime.datetime.fromisoformat(resultado[0])
+        if datetime.datetime.now() >= expira:
+            precisa_rotacionar = True
+
+    if precisa_rotacionar:
+        ids_sorteados, expira = sortear_nova_rotacao()
+        canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+        if canal is None:
+            return
+        if ids_sorteados is None:
+            await canal.send(f"⚠️ {expira}")
+            return
+
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT b.nome, b.raridade FROM rotacao_atual ra
+            JOIN banners b ON ra.banner_id = b.id
+        """)
+        banners = cur.fetchall()
+        con.close()
+
+        expira_dt = datetime.datetime.fromisoformat(expira)
+        embed = discord.Embed(
+            title="🔄 Nova Rotação da Loja!",
+            description="Os banners disponíveis na loja mudaram! Corra para conferir antes que acabe.",
+            color=discord.Color.purple()
+        )
+        for nome, raridade in banners:
+            embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
+        embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
+        await canal.send(embed=embed)
+        
     con.commit()
     con.close()
 
@@ -310,6 +380,89 @@ def buscar_banners_por_categoria(categoria_id):
     resultado = cur.fetchall()
     con.close()
     return resultado
+
+def buscar_banners_rotacao():
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
+        FROM rotacao_atual ra
+        JOIN banners b ON ra.banner_id = b.id
+        LIMIT 1
+    """)
+    expira_row = cur.execute("SELECT expira FROM rotacao_atual LIMIT 1").fetchone()
+    cur.execute("""
+        SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
+        FROM rotacao_atual ra
+        JOIN banners b ON ra.banner_id = b.id
+    """)
+    banners = cur.fetchall()
+    con.close()
+    expira = expira_row[0] if expira_row else None
+    return banners, expira
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Rotação de banner na loja
+# ============================================================
+
+def sortear_nova_rotacao():
+    import random as rnd
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+
+    # Busca histórico para evitar repetição
+    cur.execute("SELECT banner_id FROM rotacao_historico")
+    historico = [row[0] for row in cur.fetchall()]
+
+    # Busca todos os banners do catálogo
+    cur.execute("SELECT id, raridade FROM banners")
+    todos = cur.fetchall()
+
+    # Filtra os do histórico recente
+    disponiveis = [b for b in todos if b[0] not in historico]
+
+    # Se não tiver suficientes fora do histórico, limpa o histórico
+    if len(disponiveis) < BANNERS_POR_ROTACAO:
+        cur.execute("DELETE FROM rotacao_historico")
+        disponiveis = todos
+
+    if len(disponiveis) < BANNERS_POR_ROTACAO:
+        con.close()
+        return None, f"❌ Não há banners suficientes no catálogo! São necessários pelo menos {BANNERS_POR_ROTACAO} banners."
+
+    # Sorteia baseado na raridade
+    pesos = []
+    for banner_id, raridade in disponiveis:
+        peso = RARIDADES.get(raridade, 0.50)
+        pesos.append(peso)
+
+    total_peso = sum(pesos)
+    pesos_normalizados = [p / total_peso for p in pesos]
+
+    ids_sorteados = []
+    pool = list(zip([b[0] for b in disponiveis], pesos_normalizados))
+
+    for _ in range(BANNERS_POR_ROTACAO):
+        if not pool:
+            break
+        ids = [p[0] for p in pool]
+        pesos_pool = [p[1] for p in pool]
+        total = sum(pesos_pool)
+        pesos_pool = [p / total for p in pesos_pool]
+        escolhido = rnd.choices(ids, weights=pesos_pool, k=1)[0]
+        ids_sorteados.append(escolhido)
+        pool = [p for p in pool if p[0] != escolhido]
+
+    # Atualiza a rotação
+    expira = (datetime.datetime.now() + datetime.timedelta(hours=DURACAO_ROTACAO_HORAS)).isoformat()
+    cur.execute("DELETE FROM rotacao_atual")
+    for bid in ids_sorteados:
+        cur.execute("INSERT INTO rotacao_atual (banner_id, expira) VALUES (?, ?)", (bid, expira))
+        cur.execute("INSERT INTO rotacao_historico (banner_id) VALUES (?)", (bid,))
+
+    con.commit()
+    con.close()
+    return ids_sorteados, expira
 
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
@@ -352,11 +505,12 @@ class ViewPerfil(discord.ui.View):
 # ============================================================
 
 class ViewLoja(discord.ui.View):
-    def __init__(self, usuario_id, banners, categoria_nome=""):
+    def __init__(self, usuario_id, banners, rotacao=False, expira=None):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.banners = banners
-        self.categoria_nome = categoria_nome
+        self.rotacao = rotacao
+        self.expira = expira
         self.index = 0
         self.atualizar_botoes()
 
@@ -368,7 +522,7 @@ class ViewLoja(discord.ui.View):
         self.comprar.label = "✅ Já possui" if usuario_tem_banner(self.usuario_id, banner_id) else "🛒 Comprar"
 
     def gerar_embed(self):
-        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
         joyens = buscar_joyens(self.usuario_id)
         tem = usuario_tem_banner(self.usuario_id, banner_id)
         embed = discord.Embed(
@@ -376,16 +530,20 @@ class ViewLoja(discord.ui.View):
             description=descricao,
             color=discord.Color.purple()
         )
-        embed.add_field(name="Categoria", value=self.categoria_nome, inline=True)
+        embed.add_field(name="Raridade", value=f"**{raridade}**", inline=True)
         embed.add_field(name="Preço", value=f"{preco} Joyens", inline=True)
         embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
         if tem:
             embed.add_field(name="Status", value="✅ Você já possui este banner", inline=False)
         elif joyens < preco:
             embed.add_field(name="Status", value="❌ Joyens insuficientes", inline=False)
+        if self.expira:
+            expira_dt = datetime.datetime.fromisoformat(self.expira)
+            embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)} • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
+        else:
+            embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
         if os.path.exists(arquivo):
             embed.set_image(url="attachment://preview.png")
-        embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
         return embed
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
@@ -393,7 +551,7 @@ class ViewLoja(discord.ui.View):
         self.index -= 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
-        _, _, _, _, arquivo = self.banners[self.index]
+        _, _, _, _, arquivo, _ = self.banners[self.index]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename="preview.png")
             await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
@@ -405,7 +563,7 @@ class ViewLoja(discord.ui.View):
         self.index += 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
-        _, _, _, _, arquivo = self.banners[self.index]
+        _, _, _, _, arquivo, _ = self.banners[self.index]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename="preview.png")
             await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
@@ -414,7 +572,7 @@ class ViewLoja(discord.ui.View):
 
     @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success, row=0)
     async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
         joyens = buscar_joyens(self.usuario_id)
         if joyens < preco:
             await interaction.response.send_message(
@@ -436,10 +594,16 @@ class ViewLoja(discord.ui.View):
         )
         await interaction.message.edit(view=self)
 
-    @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
-    async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewCategoriasLoja(self.usuario_id)
-        embed = view.gerar_embed()
+    @discord.ui.button(label="🔙 Loja", style=discord.ButtonStyle.danger, row=0)
+    async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🏪 Loja do JogadorBot",
+            description="Bem-vindo à loja! Use seus Joyens para comprar itens exclusivos.\nEscolha uma categoria abaixo:",
+            color=discord.Color.purple()
+        )
+        embed.add_field(name="🖼️ Banners da Semana", value="Banners exclusivos por tempo limitado!", inline=False)
+        embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
+        view = ViewMenuLoja(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 
@@ -448,17 +612,22 @@ class ViewMenuLoja(discord.ui.View):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
 
-    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🖼️ Banners da Semana", style=discord.ButtonStyle.primary)
     async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
-        categorias = buscar_todas_categorias()
-        if not categorias:
+        banners, expira = buscar_banners_rotacao()
+        if not banners:
             await interaction.response.send_message(
-                "Nenhuma categoria de banners disponível ainda!", ephemeral=True
+                "Nenhum banner disponível na rotação atual!", ephemeral=True
             )
             return
-        view = ViewCategoriasLoja(self.usuario_id)
+        view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira)
         embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        _, _, _, _, arquivo, _ = banners[0]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename="preview.png")
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Inventário de banner
@@ -571,88 +740,13 @@ class ViewInventarioBanners(discord.ui.View):
         return embed
 
 # ============================================================
-# VIEW (BOTÕES) - Categoria de banner
-# ============================================================
-
-class ViewCategoriasLoja(discord.ui.View):
-    def __init__(self, usuario_id, pagina=0):
-        super().__init__(timeout=120)
-        self.usuario_id = usuario_id
-        self.pagina = pagina
-        self.por_pagina = 9
-        self.categorias = buscar_todas_categorias()
-        self.total_paginas = max(1, -(-len(self.categorias) // self.por_pagina))
-        self.construir_botoes()
-
-    def construir_botoes(self):
-        self.clear_items()
-        inicio = self.pagina * self.por_pagina
-        fim = inicio + self.por_pagina
-        pagina_cats = self.categorias[inicio:fim]
-
-        for cat_id, nome, emoji in pagina_cats:
-            botao = discord.ui.Button(
-                label=f"{emoji} {nome}",
-                style=discord.ButtonStyle.primary,
-                row=len(self.children) // 3
-            )
-            async def callback(interaction, cid=cat_id, cnome=nome, cemoji=emoji):
-                banners = buscar_banners_por_categoria(cid)
-                if not banners:
-                    await interaction.response.send_message(
-                        f"Nenhum banner disponível na categoria **{cemoji} {cnome}** ainda!",
-                        ephemeral=True
-                    )
-                    return
-                view = ViewLoja(self.usuario_id, banners, categoria_nome=f"{cemoji} {cnome}")
-                embed = view.gerar_embed()
-                banner_id, nome_b, descricao, preco, arquivo = banners[0]
-                if os.path.exists(arquivo):
-                    arquivo_discord = discord.File(arquivo, filename="preview.png")
-                    await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
-                else:
-                    await interaction.response.edit_message(embed=embed, view=view, attachments=[])
-            botao.callback = callback
-            self.add_item(botao)
-
-        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary,
-                                          disabled=self.pagina == 0, row=3)
-        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
-                                         disabled=self.pagina >= self.total_paginas - 1, row=3)
-
-        async def anterior_callback(interaction):
-            self.pagina -= 1
-            self.categorias = buscar_todas_categorias()
-            self.construir_botoes()
-            await interaction.response.edit_message(embed=self.gerar_embed(), view=self, attachments=[])
-
-        async def proximo_callback(interaction):
-            self.pagina += 1
-            self.categorias = buscar_todas_categorias()
-            self.construir_botoes()
-            await interaction.response.edit_message(embed=self.gerar_embed(), view=self, attachments=[])
-
-        btn_anterior.callback = anterior_callback
-        btn_proximo.callback = proximo_callback
-        self.add_item(btn_anterior)
-        self.add_item(btn_proximo)
-
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="🏪 Loja — Banners",
-            description="Escolha uma categoria para ver os banners disponíveis:",
-            color=discord.Color.purple()
-        )
-        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.categorias)} categoria(s)")
-        return embed
-
-# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
 async def on_ready():
     iniciar_banco()
     verificar_admins_expirados.start()
+    verificar_rotacao.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
@@ -691,6 +785,8 @@ async def ajuda(ctx):
     embed.add_field(name="/categoria lista", value="Lista todas as categorias", inline=False)
     embed.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
     embed.add_field(name="/editar tipo nome", value="Edita um produto (banner ou conquista)", inline=False)
+    embed.add_field(name="/rotacao ver", value="Mostra os banners da rotação atual", inline=False)
+    embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -910,18 +1006,26 @@ banner_group = app_commands.Group(name="banner", description="Gerenciamento de b
     nome="Nome do banner",
     descricao="Descrição do banner",
     preco="Preço em Joyens",
+    raridade="Comum, Incomum, Raro, Epico ou Lendario",
     categoria="Nome exato da categoria",
     imagem="Imagem do banner"
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
-async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, categoria: str, imagem: discord.Attachment):
+async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, raridade: str, categoria: str, imagem: discord.Attachment):
+    if raridade not in RARIDADES:
+        raridades_disponiveis = ", ".join(RARIDADES.keys())
+        await interaction.response.send_message(
+            f"❌ Raridade **{raridade}** inválida! Use: `{raridades_disponiveis}`",
+            ephemeral=True
+        )
+        return
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
     resultado = cur.fetchone()
     if not resultado:
         await interaction.response.send_message(
-            f"❌ Categoria **{categoria}** não encontrada. Use `/categoria lista` para ver as disponíveis.",
+            f"❌ Categoria **{categoria}** não encontrada.",
             ephemeral=True
         )
         con.close()
@@ -935,11 +1039,11 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
     with open(arquivo_path, "wb") as f:
         f.write(imagem_bytes)
     try:
-        cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo, categoria_id) VALUES (?, ?, ?, ?, ?)",
-                    (nome, descricao, preco, arquivo_path, cat_id))
+        cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo, categoria_id, raridade) VALUES (?, ?, ?, ?, ?, ?)",
+                    (nome, descricao, preco, arquivo_path, cat_id, raridade))
         con.commit()
         await interaction.response.send_message(
-            f"✅ Banner **{nome}** adicionado à categoria **{categoria}** por {preco} Joyens!", ephemeral=True
+            f"✅ Banner **{nome}** ({raridade}) adicionado por {preco} Joyens!", ephemeral=True
         )
     except sqlite3.IntegrityError:
         await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
@@ -1100,6 +1204,10 @@ async def categoria_lista(interaction: discord.Interaction):
         embed.add_field(name=f"{emoji} {nome}", value="\u200b", inline=True)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# ============================================================
+# COMANDOS SLASH — Edição de produtos
+# ============================================================
+
 @bot.tree.command(name="editar", description="Edita um produto da loja ou catálogo (admin)")
 @app_commands.describe(
     tipo="Tipo do produto: banner ou conquista",
@@ -1119,6 +1227,7 @@ async def editar(
     novo_nome: str = None,
     descricao: str = None,
     preco: int = None,
+    raridade: str = None,
     categoria: str = None,
     emoji: str = None,
     imagem: discord.Attachment = None
@@ -1173,6 +1282,18 @@ async def editar(
         cur.execute(f"UPDATE {tabela} SET emoji = ? WHERE id = ?", (emoji, produto_id))
         alteracoes.append(f"Emoji → {emoji}")
 
+    # Raridade (apenas banners)
+    if "raridade" in campos and raridade:
+        if raridade not in RARIDADES:
+            raridades_disponiveis = ", ".join(RARIDADES.keys())
+            await interaction.response.send_message(
+                f"❌ Raridade inválida! Use: `{raridades_disponiveis}`", ephemeral=True
+            )
+            con.close()
+            return
+        cur.execute(f"UPDATE {tabela} SET raridade = ? WHERE id = ?", (raridade, produto_id))
+        alteracoes.append(f"Raridade → **{raridade}**")
+    
     # Categoria (apenas banners)
     if categoria and "categoria" in campos:
         cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
@@ -1220,6 +1341,56 @@ async def editar(
     )
     embed.set_footer(text=f"Produto: {nome}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+rotacao_group = app_commands.Group(name="rotacao", description="Gerenciamento da rotação da loja")
+
+@rotacao_group.command(name="ver", description="Mostra os banners da rotação atual")
+async def rotacao_ver(interaction: discord.Interaction):
+    banners, expira = buscar_banners_rotacao()
+    if not banners:
+        await interaction.response.send_message("Nenhuma rotação ativa no momento.", ephemeral=True)
+        return
+    expira_dt = datetime.datetime.fromisoformat(expira)
+    embed = discord.Embed(
+        title="🔄 Rotação Atual da Loja",
+        color=discord.Color.purple()
+    )
+    for banner_id, nome, descricao, preco, arquivo, raridade in banners:
+        embed.add_field(name=nome, value=f"Raridade: **{raridade}** | Preço: **{preco} Joyens**", inline=False)
+    embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@rotacao_group.command(name="forcar", description="Força uma nova rotação imediatamente (admin)")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def rotacao_forcar(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    ids_sorteados, expira = sortear_nova_rotacao()
+    if ids_sorteados is None:
+        await interaction.followup.send(expira, ephemeral=True)
+        return
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    if canal:
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT b.nome, b.raridade FROM rotacao_atual ra
+            JOIN banners b ON ra.banner_id = b.id
+        """)
+        banners = cur.fetchall()
+        con.close()
+        expira_dt = datetime.datetime.fromisoformat(expira)
+        embed = discord.Embed(
+            title="🔄 Nova Rotação da Loja!",
+            description="Os banners disponíveis na loja mudaram!",
+            color=discord.Color.purple()
+        )
+        for nome, raridade in banners:
+            embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
+        embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
+        await canal.send(embed=embed)
+    await interaction.followup.send("✅ Nova rotação forçada com sucesso!", ephemeral=True)
+
+bot.tree.add_command(rotacao_group)
 
 bot.tree.add_command(categoria_group)
 
