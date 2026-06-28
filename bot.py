@@ -264,7 +264,7 @@ async def verificar_admins_expirados():
     con.close()
 
 # ============================================================
-# VIEWS (BOTÕES)
+# VIEWS (BOTÕES) - Perfil
 # ============================================================
 class ViewPerfil(discord.ui.View):
     def __init__(self, usuario: discord.Member):
@@ -281,62 +281,23 @@ class ViewPerfil(discord.ui.View):
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
-
-class ViewConquistas(discord.ui.View):
-    def __init__(self, usuario: discord.Member, conquistas: list, pagina: int):
-        super().__init__(timeout=120)
-        self.usuario = usuario
-        self.conquistas = conquistas
-        self.pagina = pagina
-        self.por_pagina = 10
-        self.total_paginas = max(1, -(-len(conquistas) // self.por_pagina))
-        self.atualizar_botoes()
-
-    def atualizar_botoes(self):
-        self.anterior.disabled = self.pagina == 0
-        self.proximo.disabled = self.pagina >= self.total_paginas - 1
-
-    def gerar_embed(self):
-        inicio = self.pagina * self.por_pagina
-        fim = inicio + self.por_pagina
-        pagina_conquistas = self.conquistas[inicio:fim]
-
-        embed = discord.Embed(
-            title=f"🏆 Conquistas de {self.usuario.display_name}",
-            color=discord.Color.gold()
-        )
-        embed.set_thumbnail(url=self.usuario.display_avatar.url)
-
-        for nome, descricao, emoji, data in pagina_conquistas:
-            embed.add_field(
-                name=f"{emoji} {nome}",
-                value=f"{descricao}\n📅 {data}",
-                inline=False
-            )
-
-        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.conquistas)} conquista(s) no total")
-        return embed
-
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina -= 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
-
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina += 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
-
-    @discord.ui.button(label="🔙 Voltar ao Perfil", style=discord.ButtonStyle.danger)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        buffer, total = await gerar_card_perfil(self.usuario)
-        arquivo = discord.File(buffer, filename="perfil.png")
-        embed = discord.Embed(color=discord.Color.blurple())
-        embed.set_image(url="attachment://perfil.png")
-        view = ViewPerfil(self.usuario)
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.secondary)
+    async def ver_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT b.id FROM banners_usuarios bu
+            JOIN banners b ON bu.banner_id = b.id
+            WHERE bu.usuario_id = ?
+        """, (str(self.usuario.id),))
+        resultado = cur.fetchall()
+        con.close()
+        if not resultado:
+            await interaction.response.send_message("Este usuário não tem nenhum banner! Use `!loja` para comprar.", ephemeral=True)
+            return
+        view = ViewInventarioBanners(self.usuario)
+        embed = view.gerar_embed()
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
@@ -441,6 +402,116 @@ class ViewMenuLoja(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
+# VIEW (BOTÕES) - Inventário de banner
+# ============================================================
+
+class ViewInventarioBanners(discord.ui.View):
+    def __init__(self, usuario: discord.Member, pagina: int = 0):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.pagina = pagina
+        self.por_pagina = 9
+        self.banners = self.carregar_banners()
+        self.total_paginas = max(1, -(-len(self.banners) // self.por_pagina))
+        self.construir_botoes()
+
+    def carregar_banners(self):
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT b.id, b.nome FROM banners_usuarios bu
+            JOIN banners b ON bu.banner_id = b.id
+            WHERE bu.usuario_id = ?
+            ORDER BY b.nome
+        """, (str(self.usuario.id),))
+        resultado = cur.fetchall()
+        con.close()
+        return resultado
+
+    def banner_ativo_id(self):
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT banner_id FROM banner_ativo WHERE usuario_id = ?", (str(self.usuario.id),))
+        resultado = cur.fetchone()
+        con.close()
+        return resultado[0] if resultado else None
+
+    def construir_botoes(self):
+        self.clear_items()
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        pagina_banners = self.banners[inicio:fim]
+        ativo_id = self.banner_ativo_id()
+
+        for banner_id, nome in pagina_banners:
+            eh_ativo = banner_id == ativo_id
+            botao = discord.ui.Button(
+                label=nome,
+                style=discord.ButtonStyle.success if eh_ativo else discord.ButtonStyle.primary,
+                disabled=eh_ativo,
+                row=len(self.children) // 3
+            )
+            async def callback(interaction, bid=banner_id, bnome=nome):
+                con2 = sqlite3.connect("/data/jogadorbot.db")
+                cur2 = con2.cursor()
+                cur2.execute("INSERT OR REPLACE INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)",
+                             (str(interaction.user.id), bid))
+                con2.commit()
+                con2.close()
+                # Reconstrói os botões para atualizar qual está ativo
+                self.banners = self.carregar_banners()
+                self.construir_botoes()
+                await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+            botao.callback = callback
+            self.add_item(botao)
+
+        # Linha de navegação
+        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary,
+                                          disabled=self.pagina == 0, row=3)
+        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
+                                         disabled=self.pagina >= self.total_paginas - 1, row=3)
+        btn_voltar = discord.ui.Button(label="🔙 Voltar ao Perfil", style=discord.ButtonStyle.danger, row=3)
+
+        async def anterior_callback(interaction):
+            self.pagina -= 1
+            self.banners = self.carregar_banners()
+            self.construir_botoes()
+            await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+
+        async def proximo_callback(interaction):
+            self.pagina += 1
+            self.banners = self.carregar_banners()
+            self.construir_botoes()
+            await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+
+        async def voltar_callback(interaction):
+            buffer, total = await gerar_card_perfil(self.usuario)
+            arquivo = discord.File(buffer, filename="perfil.png")
+            embed = discord.Embed(color=discord.Color.blurple())
+            embed.set_image(url="attachment://perfil.png")
+            view = ViewPerfil(self.usuario)
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+
+        btn_anterior.callback = anterior_callback
+        btn_proximo.callback = proximo_callback
+        btn_voltar.callback = voltar_callback
+
+        self.add_item(btn_anterior)
+        self.add_item(btn_proximo)
+        self.add_item(btn_voltar)
+
+    def gerar_embed(self):
+        ativo_id = self.banner_ativo_id()
+        embed = discord.Embed(
+            title=f"🖼️ Banners de {self.usuario.display_name}",
+            description="Selecione um banner para equipar no seu perfil.\nO banner ativo aparece em verde.",
+            color=discord.Color.purple()
+        )
+        embed.set_thumbnail(url=self.usuario.display_avatar.url)
+        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.banners)} banner(s) no total")
+        return embed
+
+# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
@@ -455,9 +526,32 @@ async def on_ready():
 # ============================================================
 # COMANDOS DE PREFIXO
 # ============================================================
-@bot.command(name="oi")
-async def oi(ctx):
-    await ctx.send(f"Olá, {ctx.author.mention}! 👋 Tudo bem?")
+@bot.remove_command("help")
+@bot.command(name="ajuda")
+async def ajuda(ctx):
+    embed = discord.Embed(
+        title="📖 Lista de Comandos",
+        description=f"Todos os comandos usam o prefixo `{PREFIX}`",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
+    embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
+    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
+    embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
+    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
+    embed.add_field(name="!perfil [@usuario]", value="Mostra o perfil com conquistas do usuário", inline=False)
+    embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
+    embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
+    embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
+    embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
+    embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
+    embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
+    embed.add_field(name="!banner", value="Gerencia seus banners", inline=False)
+    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
+    embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
+    embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
+    embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
+    await ctx.send(embed=embed)
 
 @bot.command(name="dado")
 async def dado(ctx, lados: int = 6):
@@ -471,11 +565,6 @@ async def dado(ctx, lados: int = 6):
 async def moeda(ctx):
     resultado = random.choice(["🪙 Cara!", "🪙 Coroa!"])
     await ctx.send(resultado)
-
-@bot.command(name="hora")
-async def hora(ctx):
-    agora = datetime.datetime.now().strftime("%d/%m/%Y às %H:%M:%S")
-    await ctx.send(f"🕐 Agora são: **{agora}**")
 
 @bot.command(name="userinfo")
 async def userinfo(ctx, membro: discord.Member = None):
@@ -509,19 +598,6 @@ async def enquete(ctx, *, pergunta: str):
     await mensagem.add_reaction("❌")
     await ctx.message.delete()
 
-@bot.command(name="coelho")
-async def coelho(ctx):
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://some-random-api.com/animal/rabbit") as resposta:
-            if resposta.status == 200:
-                dados = await resposta.json()
-                embed = discord.Embed(title="🐰 Coelho aleatório!", color=discord.Color.pink())
-                embed.set_image(url=dados["image"])
-                embed.set_footer(text=f"Pedido por {ctx.author.display_name}")
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("❌ Não consegui buscar um coelho agora. Tenta de novo!")
-
 @bot.command(name="perfil")
 async def perfil(ctx, membro: discord.Member = None):
     if membro is None:
@@ -537,36 +613,6 @@ async def perfil(ctx, membro: discord.Member = None):
         except Exception as e:
             await ctx.send(f"❌ Erro ao gerar perfil: `{e}`")
             
-@bot.remove_command("help")
-@bot.command(name="ajuda")
-async def ajuda(ctx):
-    embed = discord.Embed(
-        title="📖 Lista de Comandos",
-        description=f"Todos os comandos usam o prefixo `{PREFIX}`",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
-    embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
-    embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed.add_field(name="!hora", value="Mostra a data e hora atual", inline=False)
-    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
-    embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
-    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
-    embed.add_field(name="!coelho", value="Manda uma foto aleatória de coelho", inline=False)
-    embed.add_field(name="!perfil [@usuario]", value="Mostra o perfil com conquistas do usuário", inline=False)
-    embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
-    embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
-    embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
-    embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
-    embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
-    embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
-    embed.add_field(name="!banner", value="Gerencia seus banners", inline=False)
-    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
-    embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
-    embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
-    embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
-    await ctx.send(embed=embed)
-
 @bot.command(name="diario")
 async def diario(ctx):
     con = sqlite3.connect("/data/jogadorbot.db")
@@ -611,35 +657,6 @@ async def loja(ctx):
     embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
     view = ViewMenuLoja(ctx.author.id)
-    await ctx.send(embed=embed, view=view)
-
-@bot.command(name="banner")
-async def banner_cmd(ctx):
-    con = sqlite3.connect("/data/jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        SELECT b.id, b.nome FROM banners_usuarios bu
-        JOIN banners b ON bu.banner_id = b.id
-        WHERE bu.usuario_id = ?
-    """, (str(ctx.author.id),))
-    banners = cur.fetchall()
-    con.close()
-    if not banners:
-        await ctx.send("Você não tem nenhum banner! Use `!loja` para comprar.")
-        return
-    embed = discord.Embed(title="🖼️ Seus Banners", description="Escolha um banner para equipar:", color=discord.Color.purple())
-    view = discord.ui.View(timeout=60)
-    for banner_id, nome in banners:
-        async def equipar_callback(interaction, bid=banner_id, bnome=nome):
-            con2 = sqlite3.connect("/data/jogadorbot.db")
-            cur2 = con2.cursor()
-            cur2.execute("INSERT OR REPLACE INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)", (str(interaction.user.id), bid))
-            con2.commit()
-            con2.close()
-            await interaction.response.send_message(f"✅ Banner **{bnome}** equipado! Aparecerá no seu `!perfil`.", ephemeral=True)
-        botao = discord.ui.Button(label=nome, style=discord.ButtonStyle.primary)
-        botao.callback = equipar_callback
-        view.add_item(botao)
     await ctx.send(embed=embed, view=view)
 
 @bot.command(name="addjoyens")
