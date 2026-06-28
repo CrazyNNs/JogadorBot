@@ -328,9 +328,9 @@ async def verificar_rotacao():
         precisa_rotacionar = True
     else:
         expira = datetime.datetime.fromisoformat(resultado[0])
-        fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
+    fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
     if datetime.datetime.now(fuso_brasilia) >= expira:
-            precisa_rotacionar = True
+        precisa_rotacionar = True
 
     if precisa_rotacionar:
         ids_sorteados, expira = sortear_nova_rotacao()
