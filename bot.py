@@ -84,6 +84,17 @@ def iniciar_banco():
             expira TEXT
         )
     """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS categorias_banner (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            emoji TEXT NOT NULL
+        )
+    """)
+    cur.execute("""
+        ALTER TABLE banners ADD COLUMN categoria_id INTEGER REFERENCES categorias_banner(id)
+    """)
     
     con.commit()
     con.close()
@@ -264,6 +275,26 @@ async def verificar_admins_expirados():
     con.close()
 
 # ============================================================
+# FUNÇÕES AUXILIARES - Categorias banner
+# ============================================================
+
+def buscar_todas_categorias():
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, nome, emoji FROM categorias_banner ORDER BY nome")
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def buscar_banners_por_categoria(categoria_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, nome, descricao, preco, arquivo FROM banners WHERE categoria_id = ? ORDER BY id", (categoria_id,))
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+# ============================================================
 # VIEWS (BOTÕES) - Perfil
 # ============================================================
 class ViewPerfil(discord.ui.View):
@@ -304,11 +335,12 @@ class ViewPerfil(discord.ui.View):
 # ============================================================
 
 class ViewLoja(discord.ui.View):
-    def __init__(self, usuario_id, banners, index=0):
+    def __init__(self, usuario_id, banners, categoria_nome=""):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.banners = banners
-        self.index = index
+        self.categoria_nome = categoria_nome
+        self.index = 0
         self.atualizar_botoes()
 
     def atualizar_botoes(self):
@@ -327,6 +359,7 @@ class ViewLoja(discord.ui.View):
             description=descricao,
             color=discord.Color.purple()
         )
+        embed.add_field(name="Categoria", value=self.categoria_nome, inline=True)
         embed.add_field(name="Preço", value=f"{preco} Joyens", inline=True)
         embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
         if tem:
@@ -334,51 +367,63 @@ class ViewLoja(discord.ui.View):
         elif joyens < preco:
             embed.add_field(name="Status", value="❌ Joyens insuficientes", inline=False)
         if os.path.exists(arquivo):
-            file = discord.File(arquivo, filename="preview.png")
             embed.set_image(url="attachment://preview.png")
         embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
         return embed
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index -= 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
-        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        _, _, _, _, arquivo = self.banners[self.index]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename="preview.png")
             await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
         else:
             await interaction.response.edit_message(embed=embed, view=self, attachments=[])
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index += 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
-        banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
+        _, _, _, _, arquivo = self.banners[self.index]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename="preview.png")
             await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
         else:
             await interaction.response.edit_message(embed=embed, view=self, attachments=[])
 
-    @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success, row=0)
     async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
         banner_id, nome, descricao, preco, arquivo = self.banners[self.index]
         joyens = buscar_joyens(self.usuario_id)
         if joyens < preco:
-            await interaction.response.send_message(f"❌ Você não tem Joyens suficientes! Você tem {joyens} e precisa de {preco}.", ephemeral=True)
+            await interaction.response.send_message(
+                f"❌ Você não tem Joyens suficientes! Você tem {joyens} e precisa de {preco}.",
+                ephemeral=True
+            )
             return
         remover_joyens(self.usuario_id, preco)
         con = sqlite3.connect("/data/jogadorbot.db")
         cur = con.cursor()
-        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)", (str(self.usuario_id), banner_id))
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                    (str(self.usuario_id), banner_id))
         con.commit()
         con.close()
         self.atualizar_botoes()
-        await interaction.response.send_message(f"✅ Banner **{nome}** comprado com sucesso! Use `!banner` para equipá-lo no seu perfil.", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Banner **{nome}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
+            ephemeral=True
+        )
         await interaction.message.edit(view=self)
+
+    @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
+    async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewCategoriasLoja(self.usuario_id)
+        embed = view.gerar_embed()
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 
 class ViewMenuLoja(discord.ui.View):
@@ -388,18 +433,15 @@ class ViewMenuLoja(discord.ui.View):
 
     @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
     async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
-        banners = buscar_todos_banners()
-        if not banners:
-            await interaction.response.send_message("Nenhum banner disponível na loja ainda!", ephemeral=True)
+        categorias = buscar_todas_categorias()
+        if not categorias:
+            await interaction.response.send_message(
+                "Nenhuma categoria de banners disponível ainda!", ephemeral=True
+            )
             return
-        view = ViewLoja(self.usuario_id, banners)
+        view = ViewCategoriasLoja(self.usuario_id)
         embed = view.gerar_embed()
-        banner_id, nome, descricao, preco, arquivo = banners[0]
-        if os.path.exists(arquivo):
-            arquivo_discord = discord.File(arquivo, filename="preview.png")
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Inventário de banner
@@ -512,6 +554,82 @@ class ViewInventarioBanners(discord.ui.View):
         return embed
 
 # ============================================================
+# VIEW (BOTÕES) - Categoria de banner
+# ============================================================
+
+class ViewCategoriasLoja(discord.ui.View):
+    def __init__(self, usuario_id, pagina=0):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.pagina = pagina
+        self.por_pagina = 9
+        self.categorias = buscar_todas_categorias()
+        self.total_paginas = max(1, -(-len(self.categorias) // self.por_pagina))
+        self.construir_botoes()
+
+    def construir_botoes(self):
+        self.clear_items()
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        pagina_cats = self.categorias[inicio:fim]
+
+        for cat_id, nome, emoji in pagina_cats:
+            botao = discord.ui.Button(
+                label=f"{emoji} {nome}",
+                style=discord.ButtonStyle.primary,
+                row=len(self.children) // 3
+            )
+            async def callback(interaction, cid=cat_id, cnome=nome, cemoji=emoji):
+                banners = buscar_banners_por_categoria(cid)
+                if not banners:
+                    await interaction.response.send_message(
+                        f"Nenhum banner disponível na categoria **{cemoji} {cnome}** ainda!",
+                        ephemeral=True
+                    )
+                    return
+                view = ViewLoja(self.usuario_id, banners, categoria_nome=f"{cemoji} {cnome}")
+                embed = view.gerar_embed()
+                banner_id, nome_b, descricao, preco, arquivo = banners[0]
+                if os.path.exists(arquivo):
+                    arquivo_discord = discord.File(arquivo, filename="preview.png")
+                    await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
+                else:
+                    await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+            botao.callback = callback
+            self.add_item(botao)
+
+        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary,
+                                          disabled=self.pagina == 0, row=3)
+        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
+                                         disabled=self.pagina >= self.total_paginas - 1, row=3)
+
+        async def anterior_callback(interaction):
+            self.pagina -= 1
+            self.categorias = buscar_todas_categorias()
+            self.construir_botoes()
+            await interaction.response.edit_message(embed=self.gerar_embed(), view=self, attachments=[])
+
+        async def proximo_callback(interaction):
+            self.pagina += 1
+            self.categorias = buscar_todas_categorias()
+            self.construir_botoes()
+            await interaction.response.edit_message(embed=self.gerar_embed(), view=self, attachments=[])
+
+        btn_anterior.callback = anterior_callback
+        btn_proximo.callback = proximo_callback
+        self.add_item(btn_anterior)
+        self.add_item(btn_proximo)
+
+    def gerar_embed(self):
+        embed = discord.Embed(
+            title="🏪 Loja — Banners",
+            description="Escolha uma categoria para ver os banners disponíveis:",
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.categorias)} categoria(s)")
+        return embed
+
+# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
@@ -551,6 +669,9 @@ async def ajuda(ctx):
     embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
     embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
     embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
+    embed.add_field(name="/categoria criar", value="Cria uma categoria de banners (admin)", inline=False)
+    embed.add_field(name="/categoria deletar", value="Deleta uma categoria e seus banners (admin)", inline=False)
+    embed.add_field(name="/categoria lista", value="Lista todas as categorias", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -763,17 +884,28 @@ async def conquista_lista(interaction: discord.Interaction):
 # COMANDOS SLASH — Loja de banners
 # ============================================================
 
-banner_group = app_commands.Group(name="banner", description="Gerenciamento de banners")
-
 @banner_group.command(name="adicionar", description="Adiciona um novo banner à loja (admin)")
 @app_commands.describe(
     nome="Nome do banner",
     descricao="Descrição do banner",
     preco="Preço em Joyens",
+    categoria="Nome exato da categoria",
     imagem="Imagem do banner"
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
-async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, imagem: discord.Attachment):
+async def banner_adicionar(interaction: discord.Interaction, nome: str, descricao: str, preco: int, categoria: str, imagem: discord.Attachment):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(
+            f"❌ Categoria **{categoria}** não encontrada. Use `/categoria lista` para ver as disponíveis.",
+            ephemeral=True
+        )
+        con.close()
+        return
+    cat_id = resultado[0]
     os.makedirs("/data/banners", exist_ok=True)
     arquivo_path = f"/data/banners/{nome.replace(' ', '_')}.png"
     async with aiohttp.ClientSession() as session:
@@ -781,12 +913,13 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
             imagem_bytes = await resp.read()
     with open(arquivo_path, "wb") as f:
         f.write(imagem_bytes)
-    con = sqlite3.connect("/data/jogadorbot.db")
-    cur = con.cursor()
     try:
-        cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo) VALUES (?, ?, ?, ?)", (nome, descricao, preco, arquivo_path))
+        cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo, categoria_id) VALUES (?, ?, ?, ?, ?)",
+                    (nome, descricao, preco, arquivo_path, cat_id))
         con.commit()
-        await interaction.response.send_message(f"✅ Banner **{nome}** adicionado à loja por {preco} Joyens!", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Banner **{nome}** adicionado à categoria **{categoria}** por {preco} Joyens!", ephemeral=True
+        )
     except sqlite3.IntegrityError:
         await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
     finally:
@@ -869,6 +1002,62 @@ async def adminbot_lista(interaction: discord.Interaction):
         expira_texto = "Permanente" if expira is None else datetime.datetime.fromisoformat(expira).strftime("%d/%m/%Y às %H:%M")
         embed.add_field(name=nome, value=f"Expira: {expira_texto}", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+categoria_group = app_commands.Group(name="categoria", description="Gerenciamento de categorias de banners")
+
+@categoria_group.command(name="criar", description="Cria uma nova categoria de banners")
+@app_commands.describe(nome="Nome da categoria", emoji="Emoji da categoria")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def categoria_criar(interaction: discord.Interaction, nome: str, emoji: str):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    try:
+        cur.execute("INSERT INTO categorias_banner (nome, emoji) VALUES (?, ?)", (nome, emoji))
+        con.commit()
+        await interaction.response.send_message(f"✅ Categoria **{emoji} {nome}** criada!", ephemeral=True)
+    except sqlite3.IntegrityError:
+        await interaction.response.send_message(f"❌ Já existe uma categoria com o nome **{nome}**.", ephemeral=True)
+    finally:
+        con.close()
+
+@categoria_group.command(name="deletar", description="Deleta uma categoria e todos os seus banners")
+@app_commands.describe(nome="Nome da categoria a deletar")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def categoria_deletar(interaction: discord.Interaction, nome: str):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(f"❌ Categoria **{nome}** não encontrada.", ephemeral=True)
+        con.close()
+        return
+    cat_id = resultado[0]
+    cur.execute("SELECT id FROM banners WHERE categoria_id = ?", (cat_id,))
+    banner_ids = [row[0] for row in cur.fetchall()]
+    for bid in banner_ids:
+        cur.execute("DELETE FROM banners_usuarios WHERE banner_id = ?", (bid,))
+        cur.execute("DELETE FROM banner_ativo WHERE banner_id = ?", (bid,))
+    cur.execute("DELETE FROM banners WHERE categoria_id = ?", (cat_id,))
+    cur.execute("DELETE FROM categorias_banner WHERE id = ?", (cat_id,))
+    con.commit()
+    con.close()
+    await interaction.response.send_message(
+        f"✅ Categoria **{nome}** e todos os seus banners foram deletados.", ephemeral=True
+    )
+
+@categoria_group.command(name="lista", description="Lista todas as categorias disponíveis")
+async def categoria_lista(interaction: discord.Interaction):
+    categorias = buscar_todas_categorias()
+    if not categorias:
+        await interaction.response.send_message("Nenhuma categoria criada ainda.", ephemeral=True)
+        return
+    embed = discord.Embed(title="📋 Categorias de Banners", color=discord.Color.purple())
+    for _, nome, emoji in categorias:
+        embed.add_field(name=f"{emoji} {nome}", value="\u200b", inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+bot.tree.add_command(categoria_group)
 
 bot.tree.add_command(admin_group)
 
