@@ -92,7 +92,7 @@ def iniciar_banco():
             emoji TEXT NOT NULL
         )
     """)
-   try:
+    try:
         cur.execute("ALTER TABLE banners ADD COLUMN categoria_id INTEGER REFERENCES categorias_banner(id)")
     except:
         pass
