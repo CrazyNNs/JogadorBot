@@ -328,7 +328,8 @@ async def verificar_rotacao():
         precisa_rotacionar = True
     else:
         expira = datetime.datetime.fromisoformat(resultado[0])
-        if datetime.datetime.now() >= expira:
+        fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
+    if datetime.datetime.now(fuso_brasilia) >= expira:
             precisa_rotacionar = True
 
     if precisa_rotacionar:
@@ -453,7 +454,8 @@ def sortear_nova_rotacao():
         pool = [p for p in pool if p[0] != escolhido]
 
     # Atualiza a rotação
-    expira = (datetime.datetime.now() + datetime.timedelta(hours=DURACAO_ROTACAO_HORAS)).isoformat()
+    fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
+    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(hours=DURACAO_ROTACAO_HORAS)).isoformat()
     cur.execute("DELETE FROM rotacao_atual")
     for bid in ids_sorteados:
         cur.execute("INSERT INTO rotacao_atual (banner_id, expira) VALUES (?, ?)", (bid, expira))
