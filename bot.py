@@ -1221,8 +1221,6 @@ async def editar(
     embed.set_footer(text=f"Produto: {nome}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-bot.tree.add_command(editar)
-
 bot.tree.add_command(categoria_group)
 
 bot.tree.add_command(admin_group)
