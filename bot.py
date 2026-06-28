@@ -611,7 +611,7 @@ class ViewMenuLoja(discord.ui.View):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
 
-    @discord.ui.button(label="🖼️ Banners da Semana", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🖼️ Banners da rotação", style=discord.ButtonStyle.primary)
     async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
         banners, expira = buscar_banners_rotacao()
         if not banners:
