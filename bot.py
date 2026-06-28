@@ -315,7 +315,7 @@ async def verificar_admins_expirados():
     con.commit()
     con.close()
 
-    @tasks.loop(minutes=10)
+@tasks.loop(minutes=10)
 async def verificar_rotacao():
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
