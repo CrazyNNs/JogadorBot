@@ -312,6 +312,8 @@ async def verificar_admins_expirados():
             await usuario.send("⏰ Seu acesso de admin no **JogadorBot** expirou.")
         except:
             pass
+    con.commit()
+    con.close()
 
     @tasks.loop(minutes=10)
 async def verificar_rotacao():
@@ -357,9 +359,6 @@ async def verificar_rotacao():
             embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
         await canal.send(embed=embed)
-        
-    con.commit()
-    con.close()
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
