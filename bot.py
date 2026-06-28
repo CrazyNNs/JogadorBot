@@ -600,7 +600,7 @@ class ViewLoja(discord.ui.View):
             description="Bem-vindo à loja! Use seus Joyens para comprar itens exclusivos.\nEscolha uma categoria abaixo:",
             color=discord.Color.purple()
         )
-        embed.add_field(name="🖼️ Banners da Semana", value="Banners exclusivos por tempo limitado!", inline=False)
+        embed.add_field(name="🖼️ Banners da rotação", value="Banners exclusivos por tempo limitado!", inline=False)
         embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
         view = ViewMenuLoja(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
