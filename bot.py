@@ -672,6 +672,7 @@ async def ajuda(ctx):
     embed.add_field(name="/categoria criar", value="Cria uma categoria de banners (admin)", inline=False)
     embed.add_field(name="/categoria deletar", value="Deleta uma categoria e seus banners (admin)", inline=False)
     embed.add_field(name="/categoria lista", value="Lista todas as categorias", inline=False)
+    embed.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -926,6 +927,28 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
         await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
+
+@banner_group.command(name="deletar", description="Deleta um banner da loja (admin)")
+@app_commands.describe(nome="Nome exato do banner a deletar")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def banner_deletar(interaction: discord.Interaction, nome: str):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, arquivo FROM banners WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(f"❌ Banner **{nome}** não encontrado.", ephemeral=True)
+        con.close()
+        return
+    banner_id, arquivo_path = resultado
+    cur.execute("DELETE FROM banners_usuarios WHERE banner_id = ?", (banner_id,))
+    cur.execute("DELETE FROM banner_ativo WHERE banner_id = ?", (banner_id,))
+    cur.execute("DELETE FROM banners WHERE id = ?", (banner_id,))
+    con.commit()
+    con.close()
+    if os.path.exists(arquivo_path):
+        os.remove(arquivo_path)
+    await interaction.response.send_message(f"✅ Banner **{nome}** deletado da loja e removido de todos os usuários.", ephemeral=True)
 
 # ============================================================
 # COMANDOS SLASH — Medida de proteção
