@@ -260,17 +260,22 @@ def eh_admin(usuario_id):
 async def gerar_card_perfil(usuario: discord.Member):
     """
     Retorna (arquivo_discord, is_gif)
-    - Se is_gif=True: arquivo é um .gif (apenas o banner animado)
-    - Se is_gif=False: arquivo é um .png (perfil completo com avatar e textos)
+    - Se is_gif=True: arquivo é um .gif animado (perfil completo com banner animado)
+    - Se is_gif=False: arquivo é um .png (perfil completo estático)
     """
     avatar_url = str(usuario.display_avatar.url)
     banner_arquivo = buscar_banner_ativo(usuario.id)
     
-    # === Se for GIF, anexa o arquivo original animado ===
-    if banner_arquivo and os.path.exists(banner_arquivo) and banner_arquivo.lower().endswith('.gif'):
-        return discord.File(banner_arquivo, filename="banner.gif"), True
+    # Verifica se é GIF
+    eh_gif = (banner_arquivo and os.path.exists(banner_arquivo) 
+              and banner_arquivo.lower().endswith('.gif'))
     
-    # === Se for PNG ou não tiver banner, gera o card com Pillow ===
+    # === Se for GIF, gera perfil animado completo ===
+    if eh_gif:
+        buffer = await gerar_card_perfil_gif(usuario, avatar_url, banner_arquivo)
+        return discord.File(buffer, filename="perfil.gif"), True
+    
+    # === Se for PNG, usa o Pillow normalmente ===
     async with aiohttp.ClientSession() as session:
         async with session.get(avatar_url) as resp:
             avatar_bytes = await resp.read()
@@ -307,6 +312,76 @@ async def gerar_card_perfil(usuario: discord.Member):
     card.save(buffer, format="PNG")
     buffer.seek(0)
     return discord.File(buffer, filename="perfil.png"), False
+
+
+async def gerar_card_perfil_gif(usuario: discord.Member, avatar_url: str, banner_arquivo: str):
+    """
+    Gera um GIF animado com avatar + textos sobre o banner GIF.
+    Versão otimizada para reduzir tamanho do GIF.
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.get(avatar_url) as resp:
+            avatar_bytes = await resp.read()
+    
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
+    mascara = Image.new("L", (120, 120), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
+    avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
+    avatar_circular.paste(avatar, mask=mascara)
+    
+    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
+    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
+    
+    conquistas = buscar_conquistas_usuario(usuario.id)
+    joyens = buscar_joyens(usuario.id)
+    
+    gif = Image.open(banner_arquivo)
+    n_frames = getattr(gif, 'n_frames', 1)
+    
+    # Limita a 30 frames para não ficar muito pesado
+    max_frames = min(n_frames, 30)
+    frame_step = max(1, n_frames // max_frames)
+    
+    durations = []
+    frames_processados = []
+    
+    print(f"🎬 Processando GIF: {n_frames} frames (usando {max_frames})")
+    
+    for i in range(0, n_frames, frame_step):
+        gif.seek(i)
+        duration = gif.info.get('duration', 100) * frame_step
+        durations.append(duration)
+        
+        frame_banner = gif.convert("RGBA").resize((800, 263))
+        
+        card = Image.new("RGBA", (800, 400), (0, 0, 0, 0))
+        card.paste(frame_banner, (0, 137), frame_banner)
+        card.paste(avatar_circular, (8, 8), avatar_circular)
+        
+        draw = ImageDraw.Draw(card)
+        draw.text((140, 10), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
+        draw.text((140, 40), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
+        draw.text((140, 97), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 255))
+        draw.text((345, 97), f"{joyens} Joyens", font=fonte_info, fill=(255, 255, 255))
+        
+        # Reduz cores para diminuir tamanho
+        frame_p = card.convert("RGB").convert("P", palette=Image.ADAPTIVE, colors=128)
+        frames_processados.append(frame_p)
+    
+    buffer = io.BytesIO()
+    frames_processados[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=frames_processados[1:],
+        duration=durations,
+        loop=0,
+        disposal=2,
+        optimize=True
+    )
+    buffer.seek(0)
+    print(f"✅ GIF gerado: {len(buffer.getvalue()) / 1024:.1f} KB")
+    return buffer
 
 from discord.ext import tasks
 
@@ -1147,6 +1222,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
             ephemeral=True
         )
         return
+    
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
@@ -1158,14 +1234,29 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
         )
         con.close()
         return
+    
     cat_id = resultado[0]
     os.makedirs("/data/banners", exist_ok=True)
-    arquivo_path = f"/data/banners/{nome.replace(' ', '_')}.png"
+    
+    # ✅ Detecta extensão correta
+    if imagem.content_type and "gif" in imagem.content_type:
+        extensao = ".gif"
+    elif imagem.content_type and "png" in imagem.content_type:
+        extensao = ".png"
+    elif imagem.content_type and ("jpeg" in imagem.content_type or "jpg" in imagem.content_type):
+        extensao = ".jpg"
+    else:
+        extensao = ".png"  # padrão
+    
+    arquivo_path = f"/data/banners/{nome.replace(' ', '_')}{extensao}"
+    
     async with aiohttp.ClientSession() as session:
         async with session.get(imagem.url) as resp:
             imagem_bytes = await resp.read()
+    
     with open(arquivo_path, "wb") as f:
         f.write(imagem_bytes)
+    
     try:
         cur.execute("INSERT INTO banners (nome, descricao, preco, arquivo, categoria_id, raridade) VALUES (?, ?, ?, ?, ?, ?)",
                     (nome, descricao, preco, arquivo_path, cat_id, raridade))
