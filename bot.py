@@ -846,6 +846,7 @@ async def ajuda(ctx):
     embed.add_field(name="/editar tipo nome", value="Edita um produto (banner ou conquista)", inline=False)
     embed.add_field(name="/rotacao ver", value="Mostra os banners da rotação atual", inline=False)
     embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
+    embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -962,6 +963,43 @@ async def addjoyens(ctx, membro: discord.Member, quantidade: int):
     adicionar_joyens(membro.id, quantidade)
     novo_saldo = buscar_joyens(membro.id)
     await ctx.send(f"✅ **{quantidade} Joyens** adicionados para {membro.mention}! Novo saldo: **{novo_saldo} Joyens**.")
+
+@bot.command(name="apostar")
+async def apostar(ctx, quantidade: int):
+    if quantidade <= 0:
+        await ctx.send(f"{ctx.author.mention} A aposta precisa ser maior que 0 Joyens!")
+        return
+
+    saldo = buscar_joyens(ctx.author.id)
+    if quantidade > saldo:
+        await ctx.send(f"{ctx.author.mention} Você não tem Joyens suficientes! Seu saldo é de **{saldo} Joyens**.")
+        return
+
+    ganhou = random.random() < 0.5
+
+    if ganhou:
+        adicionar_joyens(ctx.author.id, quantidade)
+        novo_saldo = buscar_joyens(ctx.author.id)
+        embed = discord.Embed(
+            title="🎰 Você ganhou!",
+            description=f"A sorte estava do seu lado!",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Ganho", value=f"+{quantidade} Joyens", inline=True)
+        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
+    else:
+        remover_joyens(ctx.author.id, quantidade)
+        novo_saldo = buscar_joyens(ctx.author.id)
+        embed = discord.Embed(
+            title="🎰 Você perdeu!",
+            description=f"Mais sorte na próxima vez!",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Perda", value=f"-{quantidade} Joyens", inline=True)
+        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
+
+    embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
+    await ctx.send(embed=embed)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
