@@ -545,15 +545,11 @@ class ViewConquistas(discord.ui.View):
         await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
     @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):  # ✅ 4 espaços
-        arquivo, is_gif = await gerar_card_perfil(self.usuario)
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        buffer, total = await gerar_card_perfil(self.usuario)
+        arquivo = discord.File(buffer, filename="perfil.png")
         embed = discord.Embed(color=discord.Color.blurple())
-        
-        if is_gif:
-            embed.set_image(url="attachment://banner.gif")
-        else:
-            embed.set_image(url="attachment://perfil.png")
-        
+        embed.set_image(url="attachment://perfil.png")
         view = ViewPerfil(self.usuario)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
@@ -770,14 +766,10 @@ class ViewInventarioBanners(discord.ui.View):
             await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
         async def voltar_callback(interaction):
-            arquivo, is_gif = await gerar_card_perfil(self.usuario)
+            buffer, total = await gerar_card_perfil(self.usuario)
+            arquivo = discord.File(buffer, filename="perfil.png")
             embed = discord.Embed(color=discord.Color.blurple())
-            
-            if is_gif:
-                embed.set_image(url="attachment://perfil.gif")
-            else:
-                embed.set_image(url="attachment://perfil.png")
-            
+            embed.set_image(url="attachment://perfil.png")
             view = ViewPerfil(self.usuario)
             await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
@@ -904,14 +896,10 @@ async def perfil(ctx, membro: discord.Member = None):
         membro = ctx.author
     async with ctx.typing():
         try:
-            arquivo, is_gif = await gerar_card_perfil(membro)
+            buffer, total = await gerar_card_perfil(membro)
+            arquivo = discord.File(buffer, filename="perfil.png")
             embed = discord.Embed(color=discord.Color.blurple())
-            
-            if is_gif:
-                embed.set_image(url="attachment://banner.gif")
-            else:
-                embed.set_image(url="attachment://perfil.png")
-            
+            embed.set_image(url="attachment://perfil.png")
             view = ViewPerfil(membro)
             await ctx.send(file=arquivo, embed=embed, view=view)
         except Exception as e:
