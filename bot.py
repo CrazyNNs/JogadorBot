@@ -315,7 +315,7 @@ async def verificar_admins_expirados():
     con.commit()
     con.close()
 
-@tasks.loop(minutes=1)
+@tasks.loop(hours=1)
 async def verificar_rotacao():
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
@@ -457,7 +457,7 @@ def sortear_nova_rotacao():
 
     # Atualiza a rotação
     fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
-    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(minutes=DURACAO_ROTACAO_HORAS)).isoformat()
+    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(hours=DURACAO_ROTACAO_HORAS)).isoformat()
     cur.execute("DELETE FROM rotacao_atual")
     for bid in ids_sorteados:
         cur.execute("INSERT INTO rotacao_atual (banner_id, expira) VALUES (?, ?)", (bid, expira))
