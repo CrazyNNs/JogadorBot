@@ -149,7 +149,7 @@ def iniciar_banco():
     con.close()
 
 # ============================================================
-# FUNÇÕES AUXILIARES
+# FUNÇÕES AUXILIARES - Conquistas
 # ============================================================
 def buscar_conquistas_usuario(usuario_id):
     con = sqlite3.connect("/data/jogadorbot.db")
@@ -355,8 +355,8 @@ async def verificar_rotacao():
         expira_dt = datetime.datetime.fromisoformat(expira)
         embed = discord.Embed(
             title="🔄 Nova Rotação da Loja!",
-            description="Os banners disponíveis na loja mudaram! Corra para conferir antes que acabe.",
-            color=discord.Color.purple()
+            description="> Os banners da loja mudaram! Corra para conferir antes que acabe.",
+            color=discord.Color.yellow()
         )
         for nome, raridade in banners:
             embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
@@ -550,7 +550,7 @@ class ViewConquistas(discord.ui.View):
         self.atualizar_botoes()
         await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
-    @discord.ui.button(label="🔙 Voltar ao Perfil", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         buffer, total = await gerar_card_perfil(self.usuario)
         arquivo = discord.File(buffer, filename="perfil.png")
@@ -587,7 +587,7 @@ class ViewLoja(discord.ui.View):
         embed = discord.Embed(
             title=f"🖼️ {nome}",
             description=descricao,
-            color=discord.Color.purple()
+            color=discord.Color.gold()
         )
         embed.add_field(name="Raridade", value=f"**{raridade}**", inline=True)
         embed.add_field(name="Preço", value=f"{preco} Joyens", inline=True)
@@ -657,10 +657,10 @@ class ViewLoja(discord.ui.View):
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="🏪 Loja do JogadorBot",
-            description="Bem-vindo à loja! Use seus Joyens para comprar itens exclusivos.\nEscolha uma categoria abaixo:",
-            color=discord.Color.purple()
+            description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
+            color=discord.Color.gold()
         )
-        embed.add_field(name="🖼️ Banners da rotação", value="Banners exclusivos por tempo limitado!", inline=False)
+        embed.add_field(name="🖼️ Banners", value="Banners exclusivos por tempo limitado!", inline=False)
         embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
         view = ViewMenuLoja(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
@@ -671,7 +671,7 @@ class ViewMenuLoja(discord.ui.View):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
 
-    @discord.ui.button(label="🖼️ Banners da rotação", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
     async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
         banners, expira = buscar_banners_rotacao()
         if not banners:
@@ -757,7 +757,7 @@ class ViewInventarioBanners(discord.ui.View):
                                           disabled=self.pagina == 0, row=3)
         btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
                                          disabled=self.pagina >= self.total_paginas - 1, row=3)
-        btn_voltar = discord.ui.Button(label="🔙 Voltar ao Perfil", style=discord.ButtonStyle.danger, row=3)
+        btn_voltar = discord.ui.Button(label="🔙 Perfil", style=discord.ButtonStyle.danger, row=3)
 
         async def anterior_callback(interaction):
             self.pagina -= 1
@@ -791,8 +791,8 @@ class ViewInventarioBanners(discord.ui.View):
         ativo_id = self.banner_ativo_id()
         embed = discord.Embed(
             title=f"🖼️ Banners de {self.usuario.display_name}",
-            description="Selecione um banner para equipar no seu perfil.\nO banner ativo aparece em verde.",
-            color=discord.Color.purple()
+            description="Selecione um banner para equipar no seu perfil.\n> O banner ativo aparece em verde.",
+            color=discord.Color.blue()
         )
         embed.set_thumbnail(url=self.usuario.display_avatar.url)
         embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.banners)} banner(s) no total")
@@ -809,7 +809,7 @@ async def on_ready():
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
-    await bot.change_presence(activity=discord.Game(name="!perfil para ver seu perfil"))
+    await bot.change_presence(activity=discord.Game(name="!ajuda para ver os comandos."))
 
 # ============================================================
 # COMANDOS DE PREFIXO
@@ -878,8 +878,8 @@ async def userinfo(ctx, membro: discord.Member = None):
 @bot.command(name="limpar")
 @commands.has_permissions(manage_messages=True)
 async def limpar(ctx, quantidade: int = 5):
-    if quantidade > 100:
-        await ctx.send("Você pode apagar no máximo 100 mensagens de uma vez.")
+    if quantidade > 1000:
+        await ctx.send("Você pode apagar no máximo 1000 mensagens de uma vez.")
         return
     await ctx.channel.purge(limit=quantidade + 1)
     confirmacao = await ctx.send(f"🗑️ {quantidade} mensagens apagadas!")
@@ -887,7 +887,7 @@ async def limpar(ctx, quantidade: int = 5):
 
 @bot.command(name="enquete")
 async def enquete(ctx, *, pergunta: str):
-    embed = discord.Embed(title="📊 Enquete", description=pergunta, color=discord.Color.gold())
+    embed = discord.Embed(title="📊 Enquete", description=pergunta, color=discord.Color.blue())
     embed.set_footer(text=f"Pergunta feita por {ctx.author.display_name}")
     mensagem = await ctx.send(embed=embed)
     await mensagem.add_reaction("✅")
@@ -947,8 +947,8 @@ async def saldo(ctx, membro: discord.Member = None):
 async def loja(ctx):
     embed = discord.Embed(
         title="🏪 Loja do JogadorBot",
-        description="Bem-vindo à loja! Use seus Joyens para comprar itens exclusivos.\nEscolha uma categoria abaixo:",
-        color=discord.Color.purple()
+        description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\n> Escolha uma categoria:",
+        color=discord.Color.gold()
     )
     embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
@@ -962,12 +962,12 @@ async def addjoyens(ctx, membro: discord.Member, quantidade: int):
         return
     adicionar_joyens(membro.id, quantidade)
     novo_saldo = buscar_joyens(membro.id)
-    await ctx.send(f"✅ **{quantidade} Joyens** adicionados para {membro.mention}! Novo saldo: **{novo_saldo} Joyens**.")
+    await ctx.send(f"✅ **{quantidade} Joyens** adicionados para {membro.mention}!\nNovo saldo: **{novo_saldo} Joyens**.")
 
 @bot.command(name="apostar")
 async def apostar(ctx, quantidade: int):
     if quantidade <= 0:
-        await ctx.send(f"{ctx.author.mention} A aposta precisa ser maior que 0 Joyens!")
+        await ctx.send(f"{ctx.author.mention} tá liso? Dorme. Não dá para apostar 0 Joyens!")
         return
 
     saldo = buscar_joyens(ctx.author.id)
@@ -1008,9 +1008,9 @@ conquista_group = app_commands.Group(name="conquista", description="Sistema de c
 
 @conquista_group.command(name="criar", description="Cria uma nova conquista no catálogo")
 @app_commands.describe(
-    nome="Nome da conquista (ex: Sortudo)",
+    nome="Nome da conquista",
     descricao="Descrição da conquista",
-    emoji="Emoji que representa a conquista (ex: 🍀)"
+    emoji="Emoji que representa a conquista"
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def conquista_criar(interaction: discord.Interaction, nome: str, descricao: str, emoji: str):
