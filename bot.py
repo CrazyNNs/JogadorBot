@@ -21,7 +21,7 @@ CANAL_CONQUISTAS_ID = 1517028501356806144
 CANAL_NOTIFICACOES_ID = 1520676033425313885
 
 # Rotação da loja
-DURACAO_ROTACAO_HORAS = 6
+DURACAO_ROTACAO_HORAS = 1
 BANNERS_POR_ROTACAO = 4
 
 # Raridades disponíveis e suas chances na rotação
@@ -457,7 +457,7 @@ def sortear_nova_rotacao():
 
     # Atualiza a rotação
     fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
-    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(hours=DURACAO_ROTACAO_HORAS)).isoformat()
+    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(minutes=DURACAO_ROTACAO_HORAS)).isoformat()
     cur.execute("DELETE FROM rotacao_atual")
     for bid in ids_sorteados:
         cur.execute("INSERT INTO rotacao_atual (banner_id, expira) VALUES (?, ?)", (bid, expira))
