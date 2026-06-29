@@ -258,8 +258,26 @@ def eh_admin(usuario_id):
     return datetime.datetime.fromisoformat(expira) > datetime.datetime.now()
 
 async def gerar_card_perfil(usuario: discord.Member):
+    """
+    Retorna (arquivo_discord, is_gif) ou (buffer, False)
+    """
+    avatar_url = str(usuario.display_avatar.url)
+    
+    # Pega o banner ativo do usuário
+    banner_arquivo = buscar_banner_ativo(usuario.id)
+    
+    # Se for GIF, retorna direto sem processar com Pillow
+    if banner_arquivo and banner_arquivo.lower().endswith('.gif'):
     async with aiohttp.ClientSession() as session:
         async with session.get(str(usuario.display_avatar.url)) as resp:
+            avatar_bytes = await resp.read()
+
+# Retorna o GIF original como arquivo
+        return discord.File(banner_arquivo, filename="banner.gif"), True, avatar_bytes
+    
+# Se for PNG, usa o Pillow normalmente
+    async with aiohttp.ClientSession() as session:
+        async with session.get(avatar_url) as resp:
             avatar_bytes = await resp.read()
 
 # Dados foto de perfil
