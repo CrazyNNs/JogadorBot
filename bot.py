@@ -315,7 +315,7 @@ async def verificar_admins_expirados():
     con.commit()
     con.close()
 
-@tasks.loop(minutes=10)
+@tasks.loop(minutes=1)
 async def verificar_rotacao():
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
@@ -502,6 +502,62 @@ class ViewPerfil(discord.ui.View):
         view = ViewInventarioBanners(self.usuario)
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+# ============================================================
+# VIEW (BOTÕES) - Conquistas de usuário
+# ============================================================
+class ViewConquistas(discord.ui.View):
+    def __init__(self, usuario: discord.Member, conquistas: list, pagina: int):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.conquistas = conquistas
+        self.pagina = pagina
+        self.por_pagina = 10
+        self.total_paginas = max(1, -(-len(conquistas) // self.por_pagina))
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.pagina == 0
+        self.proximo.disabled = self.pagina >= self.total_paginas - 1
+
+    def gerar_embed(self):
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        pagina_conquistas = self.conquistas[inicio:fim]
+        embed = discord.Embed(
+            title=f"🏆 Conquistas de {self.usuario.display_name}",
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=self.usuario.display_avatar.url)
+        for nome, descricao, emoji, data in pagina_conquistas:
+            embed.add_field(
+                name=f"{emoji} {nome}",
+                value=f"{descricao}\n📅 {data}",
+                inline=False
+            )
+        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.conquistas)} conquista(s) no total")
+        return embed
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina -= 1
+        self.atualizar_botoes()
+        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        self.atualizar_botoes()
+        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+
+    @discord.ui.button(label="🔙 Voltar ao Perfil", style=discord.ButtonStyle.danger)
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        buffer, total = await gerar_card_perfil(self.usuario)
+        arquivo = discord.File(buffer, filename="perfil.png")
+        embed = discord.Embed(color=discord.Color.blurple())
+        embed.set_image(url="attachment://perfil.png")
+        view = ViewPerfil(self.usuario)
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
