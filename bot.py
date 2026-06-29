@@ -41,7 +41,7 @@ RARIDADES = {
 TIPOS_EDITAVEIS = {
     "banner": {
         "tabela": "banners",
-        "campos": ["novo_nome", "descricao", "preco", "categoria", "imagem"]
+        "campos": ["novo_nome", "descricao", "preco", "raridade", "categoria", "imagem"]
     },
     "conquista": {
         "tabela": "conquistas",
