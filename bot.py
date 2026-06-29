@@ -258,130 +258,43 @@ def eh_admin(usuario_id):
     return datetime.datetime.fromisoformat(expira) > datetime.datetime.now()
 
 async def gerar_card_perfil(usuario: discord.Member):
-    """
-    Retorna (arquivo_discord, is_gif)
-    - Se is_gif=True: arquivo é um .gif animado (perfil completo com banner animado)
-    - Se is_gif=False: arquivo é um .png (perfil completo estático)
-    """
-    avatar_url = str(usuario.display_avatar.url)
-    banner_arquivo = buscar_banner_ativo(usuario.id)
-    
-    # Verifica se é GIF
-    eh_gif = (banner_arquivo and os.path.exists(banner_arquivo) 
-              and banner_arquivo.lower().endswith('.gif'))
-    
-    # === Se for GIF, gera perfil animado completo ===
-    if eh_gif:
-        buffer = await gerar_card_perfil_gif(usuario, avatar_url, banner_arquivo)
-        return discord.File(buffer, filename="perfil.gif"), True
-    
-    # === Se for PNG, usa o Pillow normalmente ===
     async with aiohttp.ClientSession() as session:
-        async with session.get(avatar_url) as resp:
+        async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
-    
-    # Foto de perfil circular
+
+# Dados foto de perfil
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
     mascara = Image.new("L", (120, 120), 0)
     ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
     avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
     
-    # Card base
+# Banner de perfil
     card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
+
     draw = ImageDraw.Draw(card)
     card.paste(avatar_circular, (8, 8), avatar_circular)
     
-    # Banner (apenas PNG)
+    banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
         banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 263))
         card.paste(banner, (0, 137), banner)
-    
-    # Textos
+
+# Textos de perfil
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
     fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
-    
+
     draw.text((140, 10), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((140, 40), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((140, 97), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 255))
     joyens = buscar_joyens(usuario.id)
     draw.text((345, 97), f"{joyens} Joyens", font=fonte_info, fill=(255, 255, 255))
-    
+
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
     buffer.seek(0)
-    return discord.File(buffer, filename="perfil.png"), False
-
-
-async def gerar_card_perfil_gif(usuario: discord.Member, avatar_url: str, banner_arquivo: str):
-    """
-    Gera um GIF animado com avatar + textos sobre o banner GIF.
-    Versão otimizada para reduzir tamanho do GIF.
-    """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(avatar_url) as resp:
-            avatar_bytes = await resp.read()
-    
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
-    mascara = Image.new("L", (120, 120), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
-    avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
-    avatar_circular.paste(avatar, mask=mascara)
-    
-    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
-    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
-    
-    conquistas = buscar_conquistas_usuario(usuario.id)
-    joyens = buscar_joyens(usuario.id)
-    
-    gif = Image.open(banner_arquivo)
-    n_frames = getattr(gif, 'n_frames', 1)
-    
-    # Limita a 30 frames para não ficar muito pesado
-    max_frames = min(n_frames, 30)
-    frame_step = max(1, n_frames // max_frames)
-    
-    durations = []
-    frames_processados = []
-    
-    print(f"🎬 Processando GIF: {n_frames} frames (usando {max_frames})")
-    
-    for i in range(0, n_frames, frame_step):
-        gif.seek(i)
-        duration = gif.info.get('duration', 100) * frame_step
-        durations.append(duration)
-        
-        frame_banner = gif.convert("RGBA").resize((800, 263))
-        
-        card = Image.new("RGBA", (800, 400), (0, 0, 0, 0))
-        card.paste(frame_banner, (0, 137), frame_banner)
-        card.paste(avatar_circular, (8, 8), avatar_circular)
-        
-        draw = ImageDraw.Draw(card)
-        draw.text((140, 10), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-        draw.text((140, 40), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
-        draw.text((140, 97), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 255))
-        draw.text((345, 97), f"{joyens} Joyens", font=fonte_info, fill=(255, 255, 255))
-        
-        # Reduz cores para diminuir tamanho
-        frame_p = card.convert("RGB").convert("P", palette=Image.ADAPTIVE, colors=128)
-        frames_processados.append(frame_p)
-    
-    buffer = io.BytesIO()
-    frames_processados[0].save(
-        buffer,
-        format="GIF",
-        save_all=True,
-        append_images=frames_processados[1:],
-        duration=durations,
-        loop=0,
-        disposal=2,
-        optimize=True
-    )
-    buffer.seek(0)
-    print(f"✅ GIF gerado: {len(buffer.getvalue()) / 1024:.1f} KB")
-    return buffer
+    return buffer, len(conquistas)
 
 from discord.ext import tasks
 
@@ -857,16 +770,16 @@ class ViewInventarioBanners(discord.ui.View):
             await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
         async def voltar_callback(interaction):
-            arquivo, is_gif = await gerar_card_perfil(self.usuario)  # ✅ Mudou
+            arquivo, is_gif = await gerar_card_perfil(self.usuario)
             embed = discord.Embed(color=discord.Color.blurple())
             
             if is_gif:
-                embed.set_image(url="attachment://banner.gif")
+                embed.set_image(url="attachment://perfil.gif")
             else:
                 embed.set_image(url="attachment://perfil.png")
-                
-                view = ViewPerfil(self.usuario)
-                await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+            
+            view = ViewPerfil(self.usuario)
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
         btn_anterior.callback = anterior_callback
         btn_proximo.callback = proximo_callback
