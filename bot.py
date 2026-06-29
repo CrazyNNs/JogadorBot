@@ -327,10 +327,12 @@ async def verificar_rotacao():
     if not resultado:
         precisa_rotacionar = True
     else:
+        fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
         expira = datetime.datetime.fromisoformat(resultado[0])
-    fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
-    if datetime.datetime.now(fuso_brasilia) >= expira:
-        precisa_rotacionar = True
+        if expira.tzinfo is None:
+            expira = expira.replace(tzinfo=fuso_brasilia)
+        if datetime.datetime.now(fuso_brasilia) >= expira:
+            precisa_rotacionar = True
 
     if precisa_rotacionar:
         ids_sorteados, expira = sortear_nova_rotacao()
