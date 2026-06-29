@@ -386,12 +386,6 @@ def buscar_banners_por_categoria(categoria_id):
 def buscar_banners_rotacao():
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
-    cur.execute("""
-        SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
-        FROM rotacao_atual ra
-        JOIN banners b ON ra.banner_id = b.id
-        LIMIT 1
-    """)
     expira_row = cur.execute("SELECT expira FROM rotacao_atual LIMIT 1").fetchone()
     cur.execute("""
         SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
@@ -834,7 +828,6 @@ async def ajuda(ctx):
     embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
     embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
     embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
-    embed.add_field(name="!banner", value="Gerencia seus banners", inline=False)
     embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
     embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
     embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
@@ -878,6 +871,9 @@ async def userinfo(ctx, membro: discord.Member = None):
 @bot.command(name="limpar")
 @commands.has_permissions(manage_messages=True)
 async def limpar(ctx, quantidade: int = 5):
+    if not ctx.guild.me.guild_permissions.manage_messages:
+        await ctx.send("❌ Eu não tenho permissão para apagar mensagens aqui.")
+        return
     if quantidade > 1000:
         await ctx.send("Você pode apagar no máximo 1000 mensagens de uma vez.")
         return
@@ -1046,6 +1042,17 @@ async def conquista_dar(interaction: discord.Interaction, membro: discord.Member
 
     conquista_id, c_nome, c_descricao, c_emoji = conquista
     data_atual = datetime.datetime.now().strftime("%d/%m/%Y")
+
+    # ✅ Verifica ANTES de inserir
+    cur.execute("SELECT 1 FROM conquistas_usuarios WHERE usuario_id = ? AND conquista_id = ?",
+                (str(membro.id), conquista_id))
+    if cur.fetchone():
+        await interaction.response.send_message(
+            f"⚠️ {membro.mention} já possui a conquista **{c_emoji} {c_nome}**!",
+            ephemeral=True
+        )
+        con.close()
+        return
 
     cur.execute("INSERT INTO conquistas_usuarios (usuario_id, conquista_id, data) VALUES (?, ?, ?)",
                 (str(membro.id), conquista_id, data_atual))
@@ -1277,6 +1284,10 @@ async def categoria_deletar(interaction: discord.Interaction, nome: str):
         con.close()
         return
     cat_id = resultado[0]
+    # ✅ Buscar arquivos ANTES de deletar
+    cur.execute("SELECT arquivo FROM banners WHERE categoria_id = ?", (cat_id,))
+    arquivos = [row[0] for row in cur.fetchall()]
+    
     cur.execute("SELECT id FROM banners WHERE categoria_id = ?", (cat_id,))
     banner_ids = [row[0] for row in cur.fetchall()]
     for bid in banner_ids:
@@ -1286,6 +1297,14 @@ async def categoria_deletar(interaction: discord.Interaction, nome: str):
     cur.execute("DELETE FROM categorias_banner WHERE id = ?", (cat_id,))
     con.commit()
     con.close()
+    
+    # ✅ Remover arquivos do disco
+    for arquivo in arquivos:
+        if os.path.exists(arquivo):
+            try:
+                os.remove(arquivo)
+            except OSError:
+                pass
     await interaction.response.send_message(
         f"✅ Categoria **{nome}** e todos os seus banners foram deletados.", ephemeral=True
     )
@@ -1510,5 +1529,19 @@ async def on_command_error(ctx, error):
         await ctx.send("❌ Argumento inválido. Verifique se digitou corretamente.")
     elif isinstance(error, commands.CommandNotFound):
         pass
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "❌ Você não tem permissão para usar este comando.", ephemeral=True
+            )
+    elif isinstance(error, app_commands.MissingPermissions):
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "❌ Permissões insuficientes.", ephemeral=True
+            )
+
 
 bot.run(TOKEN)
