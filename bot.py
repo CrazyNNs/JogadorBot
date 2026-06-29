@@ -259,60 +259,54 @@ def eh_admin(usuario_id):
 
 async def gerar_card_perfil(usuario: discord.Member):
     """
-    Retorna (arquivo_discord, is_gif) ou (buffer, False)
+    Retorna (arquivo_discord, is_gif)
+    - Se is_gif=True: arquivo é um .gif (apenas o banner animado)
+    - Se is_gif=False: arquivo é um .png (perfil completo com avatar e textos)
     """
     avatar_url = str(usuario.display_avatar.url)
-    
-    # Pega o banner ativo do usuário
     banner_arquivo = buscar_banner_ativo(usuario.id)
     
-    # Se for GIF, retorna direto sem processar com Pillow
-    if banner_arquivo and banner_arquivo.lower().endswith('.gif'):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(str(usuario.display_avatar.url)) as resp:
-            avatar_bytes = await resp.read()
-
-# Retorna o GIF original como arquivo
-        return discord.File(banner_arquivo, filename="banner.gif"), True, avatar_bytes
+    # === Se for GIF, anexa o arquivo original animado ===
+    if banner_arquivo and os.path.exists(banner_arquivo) and banner_arquivo.lower().endswith('.gif'):
+        return discord.File(banner_arquivo, filename="banner.gif"), True
     
-# Se for PNG, usa o Pillow normalmente
+    # === Se for PNG ou não tiver banner, gera o card com Pillow ===
     async with aiohttp.ClientSession() as session:
         async with session.get(avatar_url) as resp:
             avatar_bytes = await resp.read()
-
-# Dados foto de perfil
+    
+    # Foto de perfil circular
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
     mascara = Image.new("L", (120, 120), 0)
     ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
     avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
     
-# Banner de perfil
+    # Card base
     card = Image.open("perfil.png").convert("RGBA").resize((800, 400))
-
     draw = ImageDraw.Draw(card)
     card.paste(avatar_circular, (8, 8), avatar_circular)
     
-    banner_arquivo = buscar_banner_ativo(usuario.id)
+    # Banner (apenas PNG)
     if banner_arquivo and os.path.exists(banner_arquivo):
         banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 263))
         card.paste(banner, (0, 137), banner)
-
-# Textos de perfil
+    
+    # Textos
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
     fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
-
+    
     draw.text((140, 10), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((140, 40), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((140, 97), f"{len(conquistas)} Conquistas", font=fonte_info, fill=(255, 255, 255))
     joyens = buscar_joyens(usuario.id)
     draw.text((345, 97), f"{joyens} Joyens", font=fonte_info, fill=(255, 255, 255))
-
+    
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
     buffer.seek(0)
-    return buffer, len(conquistas)
+    return discord.File(buffer, filename="perfil.png"), False
 
 from discord.ext import tasks
 
@@ -563,11 +557,15 @@ class ViewConquistas(discord.ui.View):
         await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
     @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        buffer, total = await gerar_card_perfil(self.usuario)
-        arquivo = discord.File(buffer, filename="perfil.png")
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):  # ✅ 4 espaços
+        arquivo, is_gif = await gerar_card_perfil(self.usuario)
         embed = discord.Embed(color=discord.Color.blurple())
-        embed.set_image(url="attachment://perfil.png")
+        
+        if is_gif:
+            embed.set_image(url="attachment://banner.gif")
+        else:
+            embed.set_image(url="attachment://perfil.png")
+        
         view = ViewPerfil(self.usuario)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
@@ -784,12 +782,16 @@ class ViewInventarioBanners(discord.ui.View):
             await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
         async def voltar_callback(interaction):
-            buffer, total = await gerar_card_perfil(self.usuario)
-            arquivo = discord.File(buffer, filename="perfil.png")
+            arquivo, is_gif = await gerar_card_perfil(self.usuario)  # ✅ Mudou
             embed = discord.Embed(color=discord.Color.blurple())
-            embed.set_image(url="attachment://perfil.png")
-            view = ViewPerfil(self.usuario)
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+            
+            if is_gif:
+                embed.set_image(url="attachment://banner.gif")
+            else:
+                embed.set_image(url="attachment://perfil.png")
+                
+                view = ViewPerfil(self.usuario)
+                await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
         btn_anterior.callback = anterior_callback
         btn_proximo.callback = proximo_callback
@@ -914,10 +916,14 @@ async def perfil(ctx, membro: discord.Member = None):
         membro = ctx.author
     async with ctx.typing():
         try:
-            buffer, total = await gerar_card_perfil(membro)
-            arquivo = discord.File(buffer, filename="perfil.png")
+            arquivo, is_gif = await gerar_card_perfil(membro)
             embed = discord.Embed(color=discord.Color.blurple())
-            embed.set_image(url="attachment://perfil.png")
+            
+            if is_gif:
+                embed.set_image(url="attachment://banner.gif")
+            else:
+                embed.set_image(url="attachment://perfil.png")
+            
             view = ViewPerfil(membro)
             await ctx.send(file=arquivo, embed=embed, view=view)
         except Exception as e:
