@@ -1,3 +1,4 @@
 discord.py
 aiohttp
 Pillow
+flask==3.0.0
