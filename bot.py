@@ -8,6 +8,8 @@ import os
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 import io
+from flask import Flask, render_template
+import threading
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -55,6 +57,18 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+
+app = Flask(__name__)
+
+@app.route("/snake")
+def snake():
+    return render_template("snake.html")
+
+def iniciar_site():
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8080))
+    )
 
 # ============================================================
 # BANCO DE DADOS
@@ -809,11 +823,9 @@ async def on_ready():
     verificar_admins_expirados.start()
     verificar_rotacao.start()
     await bot.tree.sync()
+    threading.Thread(target=iniciar_site, daemon=True).start()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
-    print(f"🌐 Domínio Railway: {os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'NÃO CONFIGURADO')}")
-    print(f"🔧 Porta: {os.environ.get('PORT', '8080')}")
-    print("=" * 50)
     await bot.change_presence(activity=discord.Game(name="!ajuda para ver os comandos."))
 
 # ============================================================
