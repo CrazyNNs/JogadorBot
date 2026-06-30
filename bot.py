@@ -370,6 +370,7 @@ async def verificar_rotacao():
 # SERVIDOR HTTP PARA O JOGO DA COBRINHA
 # ============================================================
 from flask_cors import CORS
+from flask import Flask
 
 app = Flask(__name__)
 CORS(app)
