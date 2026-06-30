@@ -8,6 +8,9 @@ import os
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 import io
+import secrets
+import threading
+from flask import Flask, request, jsonify, send_from_directory
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -362,6 +365,55 @@ async def verificar_rotacao():
             embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
         await canal.send(embed=embed)
+
+# ============================================================
+# JOGO DA COBRINHA — Servidor HTTP
+# ============================================================
+
+app = Flask(__name__)
+tokens_jogo = {}  # user_id -> token
+
+@app.route('/snake_eat', methods=['POST'])
+def snake_eat():
+    """Endpoint que o jogo chama quando o jogador come uma maçã."""
+    try:
+        data = request.json
+        user_id = str(data.get('user_id', ''))
+        token = data.get('token', '')
+        apples = int(data.get('apples', 0))
+        
+        if tokens_jogo.get(user_id) != token:
+            return jsonify({"success": False, "error": "Token inválido"}), 403
+        
+        if apples <= 0 or apples > 50:
+            return jsonify({"success": False, "error": "Quantidade inválida"}), 400
+        
+        reward = apples * 10
+        adicionar_joyens(user_id, reward)
+        
+        return jsonify({"success": True, "reward": reward})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/snake_game.html')
+def snake_game():
+    """Serve o jogo da cobrinha."""
+    return send_from_directory('.', 'snake_game.html')
+
+@app.route('/')
+def home():
+    """Página inicial para testar se está online."""
+    return "🐍 JogadorBot ativo! Use !snake no Discord para jogar."
+
+def run_flask():
+    """Roda o Flask em thread separada."""
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Flask iniciando na porta {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# Inicia o Flask em background
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
@@ -1344,7 +1396,7 @@ async def snake(ctx):
     tokens_jogo[str(ctx.author.id)] = token
     
     # Pega a URL pública do bot (Railway fornece automaticamente)
-    public_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:5000")
+    public_url = os.environ.get("jogadorbot-production.up.railway.app", "http://localhost:5000")
     if not public_url.startswith("http"):
         public_url = f"https://{public_url}"
     
