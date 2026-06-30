@@ -84,12 +84,12 @@
 </head>
 <body>
     <div class="container">
-        <h1>🐍 Cobrinha do JogadorBot</h1>
+        <h1>🐍 Jogo da Cobrinha</h1>
         <p style="color: #aaa;">Cada maçã = <strong style="color:#ffdd00;">10 Joyens</strong></p>
         
         <div class="info">
             <div class="score-box">🍎 <span id="score">0</span></div>
-            <div class="score-box">🪙 <span id="joyens">0</span> Joyens</div>
+            <div class="score-box">💰 <span id="joyens">0</span> Joyens</div>
         </div>
         
         <canvas id="game" width="400" height="400"></canvas>
@@ -127,8 +127,8 @@
         
         let snake = [{x: 10, y: 10}];
         let food = {x: 5, y: 5};
-        let dx = 1;  // ✅ Começa indo para a DIREITA
-        let dy = 0;
+        let dx = 0;  // ✅ Começa indo para a DIREITA
+        let dy = 1;
         let score = 0;
         let totalJoyens = 0;
         let gameLoop = null;
