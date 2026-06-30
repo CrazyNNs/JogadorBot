@@ -28,7 +28,7 @@ BANNERS_POR_ROTACAO = 4
 RARIDADES = {
     "Comum":    0.50,
     "Incomum":  0.25,
-    ":large_blue_diamond:Raro":     0.15,
+    "Raro":     0.15,
     "Epico":    0.07,
     "Lendario": 0.03,
 }
@@ -287,9 +287,9 @@ async def gerar_card_perfil(usuario: discord.Member):
     draw.text((210, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((210, 80), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
     conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((520, 97), f"{len(conquistas)}", font=fonte_info, fill=(255, 255, 255))
+    draw.text((540, 97), f"{len(conquistas)}", font=fonte_info, fill=(255, 255, 255))
     joyens = buscar_joyens(usuario.id)
-    draw.text((520, 25), f"{joyens}", font=fonte_info, fill=(255, 255, 255))
+    draw.text((540, 27), f"{joyens}", font=fonte_info, fill=(255, 255, 255))
 
     buffer = io.BytesIO()
     card.save(buffer, format="PNG")
