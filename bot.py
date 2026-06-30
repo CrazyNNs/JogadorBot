@@ -1336,6 +1336,31 @@ async def categoria_lista(interaction: discord.Interaction):
         embed.add_field(name=f"{emoji} {nome}", value="\u200b", inline=True)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.command(name="snake")
+async def snake(ctx):
+    """Envia o link do jogo da cobrinha para o usuário."""
+    # Gera um token único para o usuário
+    token = secrets.token_urlsafe(32)
+    tokens_jogo[str(ctx.author.id)] = token
+    
+    # Pega a URL pública do bot (Railway fornece automaticamente)
+    public_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "http://localhost:5000")
+    if not public_url.startswith("http"):
+        public_url = f"https://{public_url}"
+    
+    game_url = f"{public_url}/snake_game.html?user={ctx.author.id}&token={token}&api={public_url}"
+    
+    embed = discord.Embed(
+        title="🐍 Jogo da Cobrinha!",
+        description="Cada maçã que você comer te dá **10 Joyens**!\nClique no link abaixo para jogar:",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="🎮 Link do Jogo", value=f"[Jogar agora!]({game_url})", inline=False)
+    embed.add_field(name="📜 Regras", value="• Não saia do campo\n• Não bata em si mesmo\n• Coma o máximo de maçãs que puder!", inline=False)
+    embed.set_footer(text=f"Cada maçã = 10 Joyens • Seu ID: {ctx.author.id}")
+    
+    await ctx.send(embed=embed)
+
 # ============================================================
 # COMANDOS SLASH — Edição de produtos
 # ============================================================
@@ -1559,5 +1584,54 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
                 "❌ Permissões insuficientes.", ephemeral=True
             )
 
+# ============================================================
+# SERVIDOR HTTP (para o jogo da cobrinha)
+# ============================================================
+from flask import Flask, request, jsonify, send_from_directory
+import secrets
+
+app = Flask(__name__)
+
+# Armazena tokens válidos (user_id -> token)
+tokens_jogo = {}
+
+@app.route('/snake_eat', methods=['POST'])
+def snake_eat():
+    """Endpoint que o jogo chama quando o jogador come uma maçã."""
+    try:
+        data = request.json
+        user_id = str(data.get('user_id'))
+        token = data.get('token')
+        apples = int(data.get('apples', 0))
+        
+        # Valida o token
+        if tokens_jogo.get(user_id) != token:
+            return jsonify({"success": False, "error": "Token inválido"}), 403
+        
+        # Valida quantidade (anti-trapaça)
+        if apples <= 0 or apples > 100:
+            return jsonify({"success": False, "error": "Quantidade inválida"}), 400
+        
+        # Adiciona Joyens
+        reward = apples * 10
+        adicionar_joyens(user_id, reward)
+        
+        return jsonify({"success": True, "reward": reward})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/snake_game.html')
+def snake_game():
+    """Serve o jogo da cobrinha."""
+    return send_from_directory('.', 'snake_game.html')
+
+import threading
+def run_flask():
+    """Roda o Flask em thread separada."""
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+
+# Inicia o Flask em background
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
 
 bot.run(TOKEN)
