@@ -1074,11 +1074,13 @@ async def apostar(ctx, quantidade: int):
 @bot.command(name="snake")
 async def snake(ctx):
     token = secrets.token_urlsafe(16)
-    tokens_jogo[str(ctx.author.id)] = token
+    
+    # Salva em arquivo compartilhado
+    tokens_file = "/tmp/snake_tokens.txt"
+    with open(tokens_file, 'a') as f:
+        f.write(f"{ctx.author.id}:{token}\n")
     
     public_url = "https://jogadorbot-production.up.railway.app"
-    
-    # ✅ Inclui o api na URL também
     game_url = f"{public_url}/snake_game.html?user={ctx.author.id}&token={token}&api={public_url}"
     
     embed = discord.Embed(
@@ -1086,11 +1088,7 @@ async def snake(ctx):
         description=f"Cada maçã = **5 Joyens**!",
         color=discord.Color.green()
     )
-    embed.add_field(
-        name="🎮 Jogue Agora",
-        value=f"[**👉 Clique Aqui**]({game_url})",
-        inline=False
-    )
+    embed.add_field(name="🎮 Jogar", value=f"[**👉 Clique Aqui**]({game_url})", inline=False)
     
     await ctx.send(embed=embed)
 
