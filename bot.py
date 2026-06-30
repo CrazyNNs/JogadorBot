@@ -869,6 +869,9 @@ async def on_ready():
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"   Servidores: {len(bot.guilds)}")
+    print(f"🌐 Domínio Railway: {os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'NÃO CONFIGURADO')}")
+    print(f"🔧 Porta: {os.environ.get('PORT', '8080')}")
+    print("=" * 50)
     await bot.change_presence(activity=discord.Game(name="!ajuda para ver os comandos."))
 
 # ============================================================
