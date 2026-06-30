@@ -277,7 +277,7 @@ async def gerar_card_perfil(usuario: discord.Member):
     
     banner_arquivo = buscar_banner_ativo(usuario.id)
     if banner_arquivo and os.path.exists(banner_arquivo):
-        banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 600))
+        banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 375))
         card.paste(banner, (0, 225), banner)
 
 # Textos de perfil
