@@ -263,10 +263,10 @@ async def gerar_card_perfil(usuario: discord.Member):
             avatar_bytes = await resp.read()
 
 # Dados foto de perfil
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((120, 120))
-    mascara = Image.new("L", (120, 120), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 120, 120), fill=255)
-    avatar_circular = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((180, 180))
+    mascara = Image.new("L", (180, 180), 0)
+    ImageDraw.Draw(mascara).ellipse((0, 0, 180, 180), fill=255)
+    avatar_circular = Image.new("RGBA", (180, 180), (0, 0, 0, 0))
     avatar_circular.paste(avatar, mask=mascara)
     
 # Banner de perfil
