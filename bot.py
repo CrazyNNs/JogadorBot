@@ -364,71 +364,6 @@ async def verificar_rotacao():
         await canal.send(embed=embed)
 
 # ============================================================
-# SERVIDOR HTTP PARA O JOGO DA COBRINHA
-# ============================================================
-CORS(app)
-
-tokens_jogo = {}
-
-@app.route('/snake_eat', methods=['POST', 'OPTIONS'])
-def snake_eat():
-    if request.method == 'OPTIONS':
-        return '', 204
-    
-    try:
-        data = request.json or {}
-        user_id = str(data.get('user_id', ''))
-        token = data.get('token', '')
-        apples = int(data.get('apples', 0))
-        
-        print(f"📥 Snake: user={user_id}, apples={apples}")
-        
-        if tokens_jogo.get(user_id) != token:
-            print(f"❌ Token inválido")
-            return jsonify({"success": False, "error": "Token inválido"}), 403
-        
-        if apples <= 0 or apples > 50:
-            return jsonify({"success": False, "error": "Qtd inválida"}), 400
-        
-        reward = apples * 5
-        adicionar_joyens(user_id, reward)
-        print(f"✅ +{reward} Joyens para {user_id}")
-        
-        return jsonify({"success": True, "reward": reward})
-    except Exception as e:
-        print(f"❌ Erro snake_eat: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/snake_game.html')
-def snake_game():
-    try:
-        return send_from_directory('.', 'snake_game.html')
-    except Exception as e:
-        print(f"❌ Erro ao servir HTML: {e}")
-        return f"Erro: {e}", 500
-
-@app.route('/')
-def home():
-    return "🐍 Bot ativo!"
-
-def run_flask():
-    """Roda o Flask de forma robusta."""
-    import time
-    while True:
-        try:
-            port = int(os.environ.get("PORT", 8080))
-            print(f"🌐 Tentando iniciar Flask na porta {port}...")
-            # use_reloader=False é IMPORTANTE para thread
-            app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-        except Exception as e:
-            print(f"❌ Flask crashou: {e}")
-            print("🔄 Reiniciando em 5s...")
-            time.sleep(5)
-
-flask_thread = threading.Thread(target=run_flask, daemon=True)
-flask_thread.start()
-
-# ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
 
@@ -1063,27 +998,6 @@ async def apostar(ctx, quantidade: int):
         embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
 
     embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
-    await ctx.send(embed=embed)
-
-@bot.command(name="snake")
-async def snake(ctx):
-    token = secrets.token_urlsafe(16)
-    
-    # Salva em arquivo compartilhado
-    tokens_file = "/tmp/snake_tokens.txt"
-    with open(tokens_file, 'a') as f:
-        f.write(f"{ctx.author.id}:{token}\n")
-    
-    public_url = "https://jogadorbot-production.up.railway.app"
-    game_url = f"{public_url}/snake_game.html?user={ctx.author.id}&token={token}&api={public_url}"
-    
-    embed = discord.Embed(
-        title="🐍 Jogo da Cobrinha!",
-        description=f"Cada maçã = **5 Joyens**!",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="🎮 Jogar", value=f"[**👉 Clique Aqui**]({game_url})", inline=False)
-    
     await ctx.send(embed=embed)
 
 # ============================================================
