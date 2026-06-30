@@ -144,6 +144,14 @@ def iniciar_banco():
         cur.execute("ALTER TABLE banners ADD COLUMN raridade TEXT DEFAULT 'Comum'")
     except:
         pass
+        
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS snake_stats(
+        usuario_id TEXT PRIMARY KEY,
+        total_macas INTEGER DEFAULT 0,
+        total_joyens INTEGER DEFAULT 0
+    )
+    """)
     
     con.commit()
     con.close()
