@@ -127,8 +127,8 @@
         
         let snake = [{x: 10, y: 10}];
         let food = {x: 5, y: 5};
-        let dx = 0;  // ✅ Começa indo para a DIREITA
-        let dy = 1;
+        let dx = 1;  // ✅ Começa indo para a DIREITA
+        let dy = 0;
         let score = 0;
         let totalJoyens = 0;
         let gameLoop = null;
@@ -212,7 +212,7 @@
             const applesEaten = newScore - lastSyncScore;
             if (applesEaten <= 0) return;
             
-            const reward = applesEaten * 10;
+            const reward = applesEaten * 5;
             totalJoyens += reward;
             joyensEl.textContent = totalJoyens;
             
