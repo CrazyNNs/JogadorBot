@@ -8,9 +8,6 @@ import os
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 import io
-import secrets
-import threading
-from flask import Flask, request, jsonify
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -369,10 +366,6 @@ async def verificar_rotacao():
 # ============================================================
 # SERVIDOR HTTP PARA O JOGO DA COBRINHA
 # ============================================================
-from flask_cors import CORS
-from flask import Flask
-
-app = Flask(__name__)
 CORS(app)
 
 tokens_jogo = {}
