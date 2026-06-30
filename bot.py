@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import secrets
 import threading
+from flask import Flask, request, jsonify
 
 # ============================================================
 # CONFIGURAÇÃO
