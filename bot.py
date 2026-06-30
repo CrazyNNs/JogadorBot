@@ -367,64 +367,69 @@ async def verificar_rotacao():
         await canal.send(embed=embed)
 
 # ============================================================
-# FUNÇÕES AUXILIARES - SERVIDOR HTTP PARA O JOGO DA COBRINHA
+# SERVIDOR HTTP PARA O JOGO DA COBRINHA
 # ============================================================
-import secrets
-import threading
-from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # ✅ Habilita CORS - permite requisições do navegador
+CORS(app)
 
 tokens_jogo = {}
 
 @app.route('/snake_eat', methods=['POST', 'OPTIONS'])
 def snake_eat():
-    """Endpoint que o jogo chama quando o jogador come uma maçã."""
-    # Responder preflight CORS
     if request.method == 'OPTIONS':
         return '', 204
     
     try:
-        data = request.json
+        data = request.json or {}
         user_id = str(data.get('user_id', ''))
         token = data.get('token', '')
         apples = int(data.get('apples', 0))
         
-        print(f"📥 Recebido: user={user_id}, apples={apples}")
+        print(f"📥 Snake: user={user_id}, apples={apples}")
         
-        # Valida token
         if tokens_jogo.get(user_id) != token:
-            print(f"❌ Token inválido para {user_id}")
+            print(f"❌ Token inválido")
             return jsonify({"success": False, "error": "Token inválido"}), 403
         
-        # Valida quantidade
         if apples <= 0 or apples > 50:
-            return jsonify({"success": False, "error": "Quantidade inválida"}), 400
+            return jsonify({"success": False, "error": "Qtd inválida"}), 400
         
-        # Adiciona Joyens
-        reward = apples * 5  # ✅ 5 joyens por maçã
+        reward = apples * 5
         adicionar_joyens(user_id, reward)
-        print(f"✅ {user_id} ganhou {reward} Joyens!")
+        print(f"✅ +{reward} Joyens para {user_id}")
         
         return jsonify({"success": True, "reward": reward})
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"❌ Erro snake_eat: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/snake_game.html')
 def snake_game():
-    return send_from_directory('.', 'snake_game.html')
+    try:
+        return send_from_directory('.', 'snake_game.html')
+    except Exception as e:
+        print(f"❌ Erro ao servir HTML: {e}")
+        return f"Erro: {e}", 500
 
 @app.route('/')
 def home():
-    return "🐍 JogadorBot ativo! Use !snake no Discord."
+    return "🐍 Bot ativo!"
 
 def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🌐 Flask iniciando na porta {port}")
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    """Roda o Flask de forma robusta."""
+    import time
+    while True:
+        try:
+            port = int(os.environ.get("PORT", 8080))
+            print(f"🌐 Tentando iniciar Flask na porta {port}...")
+            # use_reloader=False é IMPORTANTE para thread
+            app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        except Exception as e:
+            print(f"❌ Flask crashou: {e}")
+            print("🔄 Reiniciando em 5s...")
+            time.sleep(5)
 
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 flask_thread.start()
