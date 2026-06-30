@@ -367,51 +367,65 @@ async def verificar_rotacao():
         await canal.send(embed=embed)
 
 # ============================================================
-# JOGO DA COBRINHA — Servidor HTTP
+# FUNÇÕES AUXILIARES - SERVIDOR HTTP PARA O JOGO DA COBRINHA
 # ============================================================
+import secrets
+import threading
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 
 app = Flask(__name__)
-tokens_jogo = {}  # user_id -> token
+CORS(app)  # ✅ Habilita CORS - permite requisições do navegador
 
-@app.route('/snake_eat', methods=['POST'])
+tokens_jogo = {}
+
+@app.route('/snake_eat', methods=['POST', 'OPTIONS'])
 def snake_eat():
     """Endpoint que o jogo chama quando o jogador come uma maçã."""
+    # Responder preflight CORS
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     try:
         data = request.json
         user_id = str(data.get('user_id', ''))
         token = data.get('token', '')
         apples = int(data.get('apples', 0))
         
+        print(f"📥 Recebido: user={user_id}, apples={apples}")
+        
+        # Valida token
         if tokens_jogo.get(user_id) != token:
+            print(f"❌ Token inválido para {user_id}")
             return jsonify({"success": False, "error": "Token inválido"}), 403
         
+        # Valida quantidade
         if apples <= 0 or apples > 50:
             return jsonify({"success": False, "error": "Quantidade inválida"}), 400
         
-        reward = apples * 10
+        # Adiciona Joyens
+        reward = apples * 5  # ✅ 5 joyens por maçã
         adicionar_joyens(user_id, reward)
+        print(f"✅ {user_id} ganhou {reward} Joyens!")
         
         return jsonify({"success": True, "reward": reward})
     except Exception as e:
+        print(f"❌ Erro: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/snake_game.html')
 def snake_game():
-    """Serve o jogo da cobrinha."""
     return send_from_directory('.', 'snake_game.html')
 
 @app.route('/')
 def home():
-    """Página inicial para testar se está online."""
-    return "🐍 JogadorBot ativo! Use !snake no Discord para jogar."
+    return "🐍 JogadorBot ativo! Use !snake no Discord."
 
 def run_flask():
-    """Roda o Flask em thread separada."""
     port = int(os.environ.get("PORT", 5000))
     print(f"🌐 Flask iniciando na porta {port}")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-# Inicia o Flask em background
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 flask_thread.start()
 
@@ -1051,27 +1065,24 @@ async def apostar(ctx, quantidade: int):
 
 @bot.command(name="snake")
 async def snake(ctx):
-    """Envia o link do jogo da cobrinha."""
-    # Gera token único
     token = secrets.token_urlsafe(16)
     tokens_jogo[str(ctx.author.id)] = token
     
-    # ⬇️ COLOQUE SEU DOMÍNIO AQUI ⬇️
     public_url = "https://jogadorbot-production.up.railway.app"
     
-    game_url = f"{public_url}/snake_game.html?user={ctx.author.id}&token={token}"
+    # ✅ Inclui o api na URL também
+    game_url = f"{public_url}/snake_game.html?user={ctx.author.id}&token={token}&api={public_url}"
     
     embed = discord.Embed(
         title="🐍 Jogo da Cobrinha!",
-        description="Cada maçã que você comer = **10 Joyens**!",
+        description=f"Cada maçã = **5 Joyens**!",
         color=discord.Color.green()
     )
     embed.add_field(
         name="🎮 Jogue Agora",
-        value=f"[**👉 Clique Aqui para Jogar**]({game_url})",
+        value=f"[**👉 Clique Aqui**]({game_url})",
         inline=False
     )
-    embed.set_footer(text="Cada maçã = 10 Joyens")
     
     await ctx.send(embed=embed)
 
