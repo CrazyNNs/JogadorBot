@@ -1301,7 +1301,7 @@ async def pay(ctx, membro: discord.Member = None, quantidade: int = None):
 
     embed = discord.Embed(
         title="💸 Solicitação de Pagamento",
-        description=f"{membro.mention}, você recebeu uma solicitação de pagamento!",
+        description=f"**{ctx.author.display_name}**, você recebeu uma solicitação de pagamento!",
         color=discord.Color.blue()
     )
     embed.add_field(name="De", value=ctx.author.mention, inline=True)
