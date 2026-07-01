@@ -8,8 +8,6 @@ import os
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont
 import io
-from flask import Flask, render_template
-import threading
 
 # ============================================================
 # CONFIGURAÇÃO
