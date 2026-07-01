@@ -1366,14 +1366,14 @@ async def perfil(ctx, membro: discord.Member = None):
 
 # Primeira embed — Informações gerais
     embed1 = discord.Embed(
-        title=f"Perfil — Level {level}",
+        title=f"Perfil — Lvl.``{level}``",
         color=discord.Color.blurple()
     )
     embed1.set_thumbnail(url=membro.display_avatar.url)
     embed1.description = (
-        f"**Nickname:** {membro.display_name}\n"
-        f"**@:** {membro.name}\n"
-        f"**ID:** {membro.id}"
+        f"**{membro.display_name}**\n"
+        f"> {membro.name}\n"
+        f"**ID:** ``{membro.id}``"
     )
     if xp_prox:
         porcentagem = int((xp / xp_prox) * 100)
@@ -1387,14 +1387,14 @@ async def perfil(ctx, membro: discord.Member = None):
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="💰 Economia",
-        value=f"**Joyens:** {joyens}",
+        value=f"> **Joyens:** ``{joyens}``",
         inline=False
     )
     embed2.add_field(
         name="📊 Outros",
         value=(
-            f"**Conquistas:** {len(conquistas)}\n"
-            f"**Banners:** {total_banners}"
+            f"> **Conquistas:** ``{len(conquistas)}``\n"
+            f"> **Banners:** ``{total_banners}``"
         ),
         inline=False
     )
