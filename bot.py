@@ -1185,7 +1185,6 @@ async def ajuda(ctx):
     embed.add_field(name="!pagar", value="Envie uma solicitação de pagamento para um membro", inline=False)
     embed.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
     embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
-    embed.add_field(name="Comandos de Slash:", inline=False)
     embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
     embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
     embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
