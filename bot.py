@@ -1310,6 +1310,7 @@ async def pay(ctx, membro: discord.Member = None, quantidade: int = None):
     embed.set_footer(text="Aguardando resposta • Expira em 60 segundos")
 
     view = ViewPagamento(ctx.author, membro, quantidade)
+    mensagem = await ctx.send(embed=embed, view=view)
     view.mensagem = mensagem
 
 # ============================================================
