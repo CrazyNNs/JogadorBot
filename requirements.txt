@@ -1,5 +1,3 @@
 discord.py
 aiohttp
 Pillow
-Flask
-Flask-Cors
