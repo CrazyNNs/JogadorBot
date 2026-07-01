@@ -1291,10 +1291,10 @@ async def diario(ctx):
     embed.add_field(name="Joyens recebidos", value=f"+{quantidade} Joyens", inline=True)
     embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
     embed.set_footer(text="Volte amanhã para mais Joyens!")
-    xp_ganho = random.randint(5, 15)
-    await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
+    xp_ganho = random.randint(50, 150)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
     await ctx.send(embed=embed)
+    await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
 @bot.command(name="saldo")
 async def saldo(ctx, membro: discord.Member = None):
