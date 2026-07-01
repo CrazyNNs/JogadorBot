@@ -930,12 +930,40 @@ class ViewInventarioBanners(discord.ui.View):
             await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
         async def voltar_callback(interaction):
-            buffer, total = await gerar_card_perfil(self.usuario)
-            arquivo = discord.File(buffer, filename="perfil.png")
-            embed = discord.Embed(color=discord.Color.blurple())
-            embed.set_image(url="attachment://perfil.png")
-            view = ViewPerfil(self.usuario)
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+            level, xp = buscar_level(self.usuario.id)
+            xp_prox = xp_necessario(level)
+            joyens = buscar_joyens(self.usuario.id)
+            conquistas = buscar_conquistas_usuario(self.usuario.id)
+            con = sqlite3.connect("/data/jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(self.usuario.id),))
+            qtd_banners = cur.fetchone()[0]
+            con.close()
+            embed1 = discord.Embed(title=f"Perfil — Level {level}", color=discord.Color.blurple())
+            embed1.set_thumbnail(url=self.usuario.display_avatar.url)
+            embed1.description = (
+                f"**Nickname:** {self.usuario.display_name}\n"
+                f"**@:** {self.usuario.name}\n"
+                f"**ID:** {self.usuario.id}"
+            )
+            if xp_prox:
+                porcentagem = int((xp / xp_prox) * 100)
+                blocos_cheios = porcentagem // 10
+                barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+                embed1.set_footer(text=f"XP: {xp}/{xp_prox} ({porcentagem}%) {barra}")
+            else:
+                embed1.set_footer(text="Level MAX 🏆")
+            embed2 = discord.Embed(color=discord.Color.blurple())
+            embed2.add_field(name="💰 Economia", value=f"**Joyens:** {joyens}", inline=False)
+            embed2.add_field(name="📊 Outros", value=f"**Conquistas:** {len(conquistas)}\n**Banners:** {qtd_banners}", inline=False)
+            banner_arquivo = buscar_banner_ativo(self.usuario.id)
+            if banner_arquivo and os.path.exists(banner_arquivo):
+                nome_arquivo = os.path.basename(banner_arquivo)
+                arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
+                embed2.set_image(url=f"attachment://{nome_arquivo}")
+                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(self.usuario), attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(self.usuario), attachments=[])
 
         btn_anterior.callback = anterior_callback
         btn_proximo.callback = proximo_callback
