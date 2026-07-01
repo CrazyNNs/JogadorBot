@@ -1154,9 +1154,8 @@ async def on_ready():
     verificar_admins_expirados.start()
     verificar_rotacao.start()
     await bot.tree.sync()
-    threading.Thread(target=iniciar_site, daemon=True).start()
     print(f"✅ Bot conectado como: {bot.user}")
-    print(f"   Servidores: {len(bot.guilds)}")
+    print(f"Servidores: {len(bot.guilds)}")
     await bot.change_presence(activity=discord.Game(name="!ajuda para ver os comandos."))
 
 # ============================================================
