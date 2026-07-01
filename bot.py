@@ -33,6 +33,9 @@ RARIDADES = {
     "Lendario": 0.03,
 }
 
+# Variavéis de level
+LEVEL_MAX = 100
+
 # ============================================================
 # TIPOS EDITÁVEIS — Para adicionar novo tipo, copie um bloco
 # e ajuste o nome e os campos. "tabela" é o nome da tabela
@@ -144,6 +147,14 @@ def iniciar_banco():
         cur.execute("ALTER TABLE banners ADD COLUMN raridade TEXT DEFAULT 'Comum'")
     except:
         pass
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS level_usuarios (
+            usuario_id TEXT PRIMARY KEY,
+            level INTEGER DEFAULT 0,
+            xp INTEGER DEFAULT 0
+        )
+    """)
     
     con.commit()
     con.close()
@@ -262,6 +273,76 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
+    def xp_necessario(level):
+    """Calcula o XP necessário para atingir o próximo level."""
+    if level >= LEVEL_MAX:
+        return None
+    xp = 1000
+    for _ in range(level):
+        xp = int(xp * 1.1)
+    return xp
+
+def buscar_level(usuario_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT level, xp FROM level_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado if resultado else (0, 0)
+
+async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
+    """Adiciona XP ao usuário e verifica se subiu de level."""
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+
+    cur.execute("""
+        INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
+        ON CONFLICT(usuario_id) DO NOTHING
+    """, (str(usuario_id),))
+
+    cur.execute("SELECT level, xp FROM level_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+    level_atual, xp_atual = cur.fetchone()
+
+    if level_atual >= LEVEL_MAX:
+        con.close()
+        return
+
+    novo_xp = xp_atual + quantidade
+    subiu_level = False
+    levels_ganhos = 0
+
+    while True:
+        if level_atual >= LEVEL_MAX:
+            break
+        xp_prox = xp_necessario(level_atual)
+        if novo_xp >= xp_prox:
+            novo_xp -= xp_prox
+            level_atual += 1
+            subiu_level = True
+            levels_ganhos += 1
+        else:
+            break
+
+    cur.execute("UPDATE level_usuarios SET level = ?, xp = ? WHERE usuario_id = ?",
+                (level_atual, novo_xp, str(usuario_id)))
+    con.commit()
+    con.close()
+
+    if subiu_level:
+        canal = ctx_ou_channel if isinstance(ctx_ou_channel, discord.TextChannel) else ctx_ou_channel.channel
+        usuario = await bot.fetch_user(int(usuario_id))
+        embed = discord.Embed(
+            title="🎉 Level Up!",
+            description=f"{usuario.mention} subiu para o **Level {level_atual}**!",
+            color=discord.Color.gold()
+        )
+        if level_atual < LEVEL_MAX:
+            embed.add_field(name="Próximo level", value=f"{xp_necessario(level_atual)} XP necessários", inline=False)
+        else:
+            embed.add_field(name="🏆 Level máximo atingido!", value="Parabéns, você chegou ao topo!", inline=False)
+        mensagem = await canal.send(embed=embed)
+        await mensagem.delete(delay=60)
+
 # Dados foto de perfil
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((180, 180))
     mascara = Image.new("L", (180, 180), 0)
@@ -283,11 +364,19 @@ async def gerar_card_perfil(usuario: discord.Member):
 # Textos de perfil
     fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
     fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
-
+# Level do usuário
+    level, xp = buscar_level(usuario.id)
+    xp_prox = xp_necessario(level)
+    xp_texto = f"XP: {xp}/{xp_prox}" if xp_prox else "Level MAX"
+    draw.text((400, 140), f"Level {level}", font=fonte_nome, fill=(255, 215, 0))
+    draw.text((400, 175), xp_texto, font=fonte_info, fill=(200, 200, 200))
+# Nickname e @ do usuário
     draw.text((210, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
     draw.text((210, 80), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
+# Quantidade de conquistas
     conquistas = buscar_conquistas_usuario(usuario.id)
     draw.text((540, 97), f"{len(conquistas)}", font=fonte_info, fill=(255, 255, 255))
+# Quantidade de Joyens do usuário
     joyens = buscar_joyens(usuario.id)
     draw.text((540, 27), f"{joyens}", font=fonte_info, fill=(255, 255, 255))
 
@@ -1087,14 +1176,19 @@ async def ajuda(ctx):
     embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
     embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
     embed.add_field(name="!perfil [@usuario]", value="Mostra o perfil com conquistas do usuário", inline=False)
-    embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
-    embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
-    embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
     embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
     embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
     embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
-    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
     embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
+    embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
+    embed.add_field(name="!catalogo", value="Abre o catálogo de banners e mais", inline=False)
+    embed.add_field(name="!pagar", value="Envie uma solicitação de pagamento para um membro", inline=False)
+    embed.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
+    embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
+    embed.add_field(name="Comandos de Slash:", inline=False)
+    embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
+    embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
+    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
     embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
     embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
     embed.add_field(name="/categoria criar", value="Cria uma categoria de banners (admin)", inline=False)
@@ -1104,9 +1198,6 @@ async def ajuda(ctx):
     embed.add_field(name="/editar tipo nome", value="Edita um produto (banner ou conquista)", inline=False)
     embed.add_field(name="/rotacao ver", value="Mostra os banners da rotação atual", inline=False)
     embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
-    embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
-    embed.add_field(name="!catalogo", value="Abre o catálogo de banners e mais", inline=False)
-    embed.add_field(name="!pagar", value="Envie uma solicitação de pagamento para um membro", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -1195,6 +1286,9 @@ async def diario(ctx):
     embed.add_field(name="Joyens recebidos", value=f"+{quantidade} Joyens", inline=True)
     embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
     embed.set_footer(text="Volte amanhã para mais Joyens!")
+    xp_ganho = random.randint(5, 15)
+    await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
+    embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="saldo")
@@ -1312,6 +1406,31 @@ async def pay(ctx, membro: discord.Member = None, quantidade: int = None):
     view = ViewPagamento(ctx.author, membro, quantidade)
     mensagem = await ctx.send(embed=embed, view=view)
     view.mensagem = mensagem
+
+@bot.command(name="level")
+async def level_cmd(ctx, membro: discord.Member = None):
+    if membro is None:
+        membro = ctx.author
+    level, xp = buscar_level(membro.id)
+    xp_prox = xp_necessario(level)
+
+    embed = discord.Embed(
+        title=f"⭐ Level de {membro.display_name}",
+        color=discord.Color.gold()
+    )
+    embed.set_thumbnail(url=membro.display_avatar.url)
+    embed.add_field(name="Level", value=f"**{level}**", inline=True)
+    embed.add_field(name="XP atual", value=f"**{xp} XP**", inline=True)
+
+    if xp_prox:
+        porcentagem = int((xp / xp_prox) * 100)
+        blocos_cheios = porcentagem // 10
+        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+        embed.add_field(name="Próximo level", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+    else:
+        embed.add_field(name="🏆 Level máximo!", value="Você chegou ao nível máximo!", inline=False)
+
+    await ctx.send(embed=embed)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
