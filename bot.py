@@ -1164,39 +1164,46 @@ async def on_ready():
 @bot.remove_command("help")
 @bot.command(name="ajuda")
 async def ajuda(ctx):
-    embed = discord.Embed(
-        title="📖 Lista de Comandos",
-        description=f"Todos os comandos usam o prefixo `{PREFIX}`",
+    embed1 = discord.Embed(
+        title="📖 Lista de Comandos — Página 1",
+        description=f"Comandos com prefixo `{PREFIX}`",
         color=discord.Color.green()
     )
-    embed.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
-    embed.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
-    embed.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
-    embed.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
-    embed.add_field(name="!perfil [@usuario]", value="Mostra o perfil com conquistas do usuário", inline=False)
-    embed.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
-    embed.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
-    embed.add_field(name="!loja", value="Abre a loja do bot", inline=False)
-    embed.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens a um usuário (admin)", inline=False)
-    embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
-    embed.add_field(name="!catalogo", value="Abre o catálogo de banners e mais", inline=False)
-    embed.add_field(name="!pagar", value="Envie uma solicitação de pagamento para um membro", inline=False)
-    embed.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
-    embed.add_field(name="/conquista criar", value="Cria uma nova conquista (admin)", inline=False)
-    embed.add_field(name="/conquista dar", value="Dá uma conquista para um usuário (admin)", inline=False)
-    embed.add_field(name="/conquista lista", value="Mostra todas as conquistas disponíveis", inline=False)
-    embed.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
-    embed.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
-    embed.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
-    embed.add_field(name="/categoria criar", value="Cria uma categoria de banners (admin)", inline=False)
-    embed.add_field(name="/categoria deletar", value="Deleta uma categoria e seus banners (admin)", inline=False)
-    embed.add_field(name="/categoria lista", value="Lista todas as categorias", inline=False)
-    embed.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
-    embed.add_field(name="/editar tipo nome", value="Edita um produto (banner ou conquista)", inline=False)
-    embed.add_field(name="/rotacao ver", value="Mostra os banners da rotação atual", inline=False)
-    embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
-    await ctx.send(embed=embed)
+    embed1.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
+    embed1.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
+    embed1.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
+    embed1.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
+    embed1.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
+    embed1.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
+    embed1.add_field(name="!perfil [@usuario]", value="Mostra o perfil do usuário", inline=False)
+    embed1.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
+    embed1.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
+    embed1.add_field(name="!loja", value="Abre a loja do bot", inline=False)
+    embed1.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance", inline=False)
+    embed1.add_field(name="!catalogo", value="Abre o catálogo", inline=False)
+    embed1.add_field(name="!pagar @usuario quantidade", value="Envia Joyens para outro usuário", inline=False)
+    embed1.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
+    embed1.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens (admin)", inline=False)
+
+    embed2 = discord.Embed(
+        title="📖 Lista de Comandos — Página 2",
+        description="Comandos Slash `/`",
+        color=discord.Color.blue()
+    )
+    embed2.add_field(name="/conquista criar", value="Cria uma conquista (admin)", inline=False)
+    embed2.add_field(name="/conquista dar", value="Dá uma conquista a um usuário (admin)", inline=False)
+    embed2.add_field(name="/conquista lista", value="Lista todas as conquistas", inline=False)
+    embed2.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
+    embed2.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
+    embed2.add_field(name="/categoria criar/deletar/lista", value="Gerencia categorias (admin)", inline=False)
+    embed2.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
+    embed2.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
+    embed2.add_field(name="/editar tipo nome", value="Edita um produto (admin)", inline=False)
+    embed2.add_field(name="/rotacao ver", value="Mostra a rotação atual da loja", inline=False)
+    embed2.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
+
+    await ctx.send(embed=embed1)
+    await ctx.send(embed=embed2)
 
 @bot.command(name="dado")
 async def dado(ctx, lados: int = 6):
