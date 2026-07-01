@@ -975,6 +975,88 @@ class ViewCatalogoBanners(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
+# VIEW (BOTÕES) - Pagamento entre usuários
+# ============================================================
+
+class ViewPagamento(discord.ui.View):
+    def __init__(self, remetente: discord.Member, destinatario: discord.Member, quantidade: int):
+        super().__init__(timeout=60)
+        self.remetente = remetente
+        self.destinatario = destinatario
+        self.quantidade = quantidade
+        self.mensagem = None  # definida logo após o envio, usada no on_timeout
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Apenas quem vai RECEBER o pagamento pode aceitar/recusar
+        if interaction.user.id != self.destinatario.id:
+            await interaction.response.send_message(
+                "❌ Apenas o destinatário pode responder a esta solicitação de pagamento.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.mensagem:
+            try:
+                embed = self.mensagem.embeds[0]
+                embed.color = discord.Color.greyple()
+                embed.add_field(name="Status", value="⌛ Solicitação expirada.", inline=False)
+                await self.mensagem.edit(embed=embed, view=self)
+            except Exception:
+                pass
+
+    @discord.ui.button(label="✅ Aceitar", style=discord.ButtonStyle.success)
+    async def aceitar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+
+        # Reconfere o saldo do remetente no exato momento da aceitação,
+        # já que ele pode ter gasto os Joyens enquanto o pedido estava pendente
+        saldo_remetente = buscar_joyens(self.remetente.id)
+        if saldo_remetente < self.quantidade:
+            for item in self.children:
+                item.disabled = True
+            embed = interaction.message.embeds[0]
+            embed.color = discord.Color.red()
+            embed.add_field(
+                name="Status",
+                value=f"❌ Pagamento cancelado: {self.remetente.mention} não tem mais Joyens suficientes.",
+                inline=False
+            )
+            await interaction.response.edit_message(embed=embed, view=self)
+            return
+
+        remover_joyens(self.remetente.id, self.quantidade)
+        adicionar_joyens(self.destinatario.id, self.quantidade)
+
+        for item in self.children:
+            item.disabled = True
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        embed.add_field(
+            name="Status",
+            value=f"✅ Pagamento aceito por {self.destinatario.mention}!",
+            inline=False
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger)
+    async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        for item in self.children:
+            item.disabled = True
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.red()
+        embed.add_field(
+            name="Status",
+            value=f"❌ Pagamento recusado por {self.destinatario.mention}.",
+            inline=False
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
@@ -1024,6 +1106,7 @@ async def ajuda(ctx):
     embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
     embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
     embed.add_field(name="!catalogo", value="Abre o catálogo de banners e mais", inline=False)
+    embed.add_field(name="!pagar", value="Envie uma solicitação de pagamento para um membro", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -1190,6 +1273,45 @@ async def catalogo(ctx):
     )
     view = ViewMenuCatalogo(ctx.author.id)
     await ctx.send(embed=embed, view=view)
+
+@bot.command(name="pagar")
+async def pay(ctx, membro: discord.Member = None, quantidade: int = None):
+    if membro is None or quantidade is None:
+        await ctx.send("❌ Uso correto: `!pagar @usuário quantidade`")
+        return
+
+    if membro.id == ctx.author.id:
+        await ctx.send(f"{ctx.author.mention} Você não pode pagar a si mesmo!")
+        return
+
+    if membro.bot:
+        await ctx.send(f"{ctx.author.mention} Você não pode pagar um bot!")
+        return
+
+    if quantidade <= 0:
+        await ctx.send(f"{ctx.author.mention} A quantidade deve ser maior que 0!")
+        return
+
+    saldo = buscar_joyens(ctx.author.id)
+    if quantidade > saldo:
+        await ctx.send(
+            f"{ctx.author.mention} Você não tem Joyens suficientes! Seu saldo é de **{saldo} Joyens**."
+        )
+        return
+
+    embed = discord.Embed(
+        title="💸 Solicitação de Pagamento",
+        description=f"{membro.mention}, você recebeu uma solicitação de pagamento!",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="De", value=ctx.author.mention, inline=True)
+    embed.add_field(name="Para", value=membro.mention, inline=True)
+    embed.add_field(name="Quantidade", value=f"{quantidade} Joyens", inline=True)
+    embed.set_footer(text="Aguardando resposta • Expira em 60 segundos")
+
+    view = ViewPagamento(ctx.author, membro, quantidade)
+    mensagem = await ctx.send(content=membro.mention, embed=embed, view=view)
+    view.mensagem = mensagem
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
