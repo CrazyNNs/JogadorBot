@@ -52,6 +52,24 @@ TIPOS_EDITAVEIS = {
         "campos": ["novo_nome", "descricao", "emoji"]
     },
 }
+
+# ============================================================
+# CATEGORIAS VENDÁVEIS — Para adicionar nova categoria,
+# copie um bloco e ajuste o nome, tabela, coluna de nome,
+# coluna de preço e a tabela de posse do usuário.
+# ============================================================
+CATEGORIAS_VENDAVEIS = {
+    "banner": {
+        "tabela": "banners",
+        "coluna_nome": "nome",
+        "coluna_preco": "preco",
+        "tabela_usuarios": "banners_usuarios",
+        "coluna_id_usuario": "banner_id",
+        "tabela_ativo": "banner_ativo",
+        "coluna_ativo_id": "banner_id",
+    },
+    # Adicione novos tipos aqui no futuro
+}
 # ============================================================
 
 intents = discord.Intents.default()
@@ -240,7 +258,9 @@ def buscar_banner_ativo(usuario_id):
     """, (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
-    return resultado[0] if resultado else None
+    if resultado and os.path.exists(resultado[0]):
+        return resultado[0]
+    return "bannerbot.png"
 
 def parsear_tempo(tempo_str):
     """Converte string como 1d5h30m para segundos. Retorna None se for 'infinito'."""
@@ -1361,6 +1381,7 @@ async def ajuda(ctx):
     embed1.add_field(name="!pagar @usuario quantidade", value="Envia Joyens para outro usuário", inline=False)
     embed1.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
     embed1.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens (admin)", inline=False)
+    embed.add_field(name="!vender (categoria) (nome)", value="Vende um produto por metade do preço", inline=False)
 
     embed2 = discord.Embed(
         title="📖 Lista de Comandos — Página 2",
@@ -1660,6 +1681,84 @@ async def level_cmd(ctx, membro: discord.Member = None):
     else:
         embed.add_field(name="🏆 Level máximo!", value="Você chegou ao nível máximo!", inline=False)
 
+    await ctx.send(embed=embed)
+
+@bot.command(name="vender")
+async def vender(ctx, categoria: str, *, nome_produto: str):
+    categoria = categoria.lower()
+
+    if categoria not in CATEGORIAS_VENDAVEIS:
+        categorias_disponiveis = ", ".join(CATEGORIAS_VENDAVEIS.keys())
+        await ctx.send(f"❌ Categoria **{categoria}** inválida! Categorias disponíveis: `{categorias_disponiveis}`")
+        return
+
+    config = CATEGORIAS_VENDAVEIS[categoria]
+    tabela = config["tabela"]
+    coluna_nome = config["coluna_nome"]
+    coluna_preco = config["coluna_preco"]
+    tabela_usuarios = config["tabela_usuarios"]
+    coluna_id = config["coluna_id_usuario"]
+    tabela_ativo = config["tabela_ativo"]
+    coluna_ativo_id = config["coluna_ativo_id"]
+
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+
+    # Verifica se o produto existe no catálogo
+    cur.execute(f"SELECT id, {coluna_nome}, {coluna_preco} FROM {tabela} WHERE LOWER({coluna_nome}) = LOWER(?)",
+                (nome_produto,))
+    produto = cur.fetchone()
+
+    if not produto:
+        await ctx.send(f"❌ Produto **{nome_produto}** não encontrado na categoria **{categoria}**.")
+        con.close()
+        return
+
+    produto_id, produto_nome, produto_preco = produto
+
+    # Verifica se o usuário possui o produto
+    cur.execute(f"SELECT 1 FROM {tabela_usuarios} WHERE usuario_id = ? AND {coluna_id} = ?",
+                (str(ctx.author.id), produto_id))
+    possui = cur.fetchone()
+
+    if not possui:
+        await ctx.send(f"❌ Você não possui o produto **{produto_nome}**!")
+        con.close()
+        return
+
+    valor_venda = produto_preco // 2
+
+    # Remove o produto do inventário do usuário
+    cur.execute(f"DELETE FROM {tabela_usuarios} WHERE usuario_id = ? AND {coluna_id} = ?",
+                (str(ctx.author.id), produto_id))
+
+    # Remove dos favoritos se for banner
+    if categoria == "banner":
+        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                    (str(ctx.author.id), produto_id))
+
+    # Remove o produto ativo se for o que está sendo vendido
+    cur.execute(f"SELECT {coluna_ativo_id} FROM {tabela_ativo} WHERE usuario_id = ?",
+                (str(ctx.author.id),))
+    ativo = cur.fetchone()
+    if ativo and ativo[0] == produto_id:
+        cur.execute(f"DELETE FROM {tabela_ativo} WHERE usuario_id = ?", (str(ctx.author.id),))
+
+    con.commit()
+    con.close()
+
+    adicionar_joyens(ctx.author.id, valor_venda)
+    novo_saldo = buscar_joyens(ctx.author.id)
+
+    embed = discord.Embed(
+        title="💸 Produto Vendido!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Produto", value=f"{produto_nome}", inline=True)
+    embed.add_field(name="Categoria", value=categoria.capitalize(), inline=True)
+    embed.add_field(name="Valor recebido", value=f"{valor_venda} Joyens", inline=True)
+    embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=False)
+    embed.set_footer(text=f"Preço original: {produto_preco} Joyens — vendido por metade do valor")
     await ctx.send(embed=embed)
 
 # ============================================================
