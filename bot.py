@@ -58,18 +58,6 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
-app = Flask(__name__)
-
-@app.route("/snake")
-def snake():
-    return render_template("snake.html")
-
-def iniciar_site():
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080))
-    )
-
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
@@ -158,14 +146,6 @@ def iniciar_banco():
         cur.execute("ALTER TABLE banners ADD COLUMN raridade TEXT DEFAULT 'Comum'")
     except:
         pass
-        
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS snake_stats(
-        usuario_id TEXT PRIMARY KEY,
-        total_macas INTEGER DEFAULT 0,
-        total_joyens INTEGER DEFAULT 0
-    )
-    """)
     
     con.commit()
     con.close()
