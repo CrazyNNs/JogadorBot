@@ -397,6 +397,48 @@ def buscar_banners_rotacao():
     expira = expira_row[0] if expira_row else None
     return banners, expira
 
+def buscar_banners_categoria_catalogo(categoria_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
+        FROM banners b
+        WHERE b.categoria_id = ?
+        ORDER BY b.id
+    """, (categoria_id,))
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def banner_em_rotacao(banner_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM rotacao_atual WHERE banner_id = ?", (banner_id,))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado is not None
+
+async def gerar_imagem_catalogo(banners_pagina):
+    """Gera a imagem do catálogo com até 3 banners empilhados."""
+    card = Image.open("catalogo.png").convert("RGBA")
+    largura, altura = card.size
+    
+    altura_por_banner = altura // 3
+    
+    for i, (banner_id, nome, descricao, preco, arquivo, raridade) in enumerate(banners_pagina):
+        if os.path.exists(arquivo):
+            try:
+                banner_img = Image.open(arquivo).convert("RGBA")
+                banner_img = banner_img.resize((largura, altura_por_banner), Image.LANCZOS)
+                card.paste(banner_img, (0, i * altura_por_banner), banner_img)
+            except:
+                pass
+    
+    buffer = io.BytesIO()
+    card.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+
 # ============================================================
 # FUNÇÕES AUXILIARES - Rotação de banner na loja
 # ============================================================
@@ -792,6 +834,146 @@ class ViewInventarioBanners(discord.ui.View):
         embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.banners)} banner(s) no total")
         return embed
 
+class SelectCategoriaCatalogo(discord.ui.Select):
+    def __init__(self, usuario_id):
+        self.usuario_id = usuario_id
+        categorias = buscar_todas_categorias()
+        options = []
+        for cat_id, nome, emoji in categorias:
+            options.append(discord.SelectOption(label=nome, value=str(cat_id), emoji=emoji))
+        if not options:
+            options.append(discord.SelectOption(label="Nenhuma categoria disponível", value="0"))
+        super().__init__(placeholder="Escolha uma categoria...", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        categoria_id = int(self.values[0])
+        if categoria_id == 0:
+            await interaction.response.send_message("Nenhuma categoria disponível!", ephemeral=True)
+            return
+        banners = buscar_banners_categoria_catalogo(categoria_id)
+        if not banners:
+            await interaction.response.send_message("❌ Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
+            return
+        view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
+        embed, arquivo = await view.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+
+
+class ViewMenuCatalogo(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.add_item(SelectMenuCatalogo(usuario_id))
+
+
+class SelectMenuCatalogo(discord.ui.Select):
+    def __init__(self, usuario_id):
+        self.usuario_id = usuario_id
+        options = [
+            discord.SelectOption(label="Banners", value="banners", emoji="🖼️",
+                                 description="Ver o catálogo completo de banners"),
+        ]
+        super().__init__(placeholder="O que você quer ver?", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "banners":
+            categorias = buscar_todas_categorias()
+            if not categorias:
+                await interaction.response.send_message("❌ Nenhuma categoria de banners criada ainda!", ephemeral=True)
+                return
+            view = ViewCategoriaCatalogo(self.usuario_id)
+            embed = discord.Embed(
+                title="📖 Catálogo de Banners",
+                description="Escolha uma categoria para ver os banners disponíveis:",
+                color=discord.Color.blue()
+            )
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+
+class ViewCategoriaCatalogo(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.add_item(SelectCategoriaCatalogo(usuario_id))
+
+    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="📖 Catálogo do JogadorBot",
+            description="Bem-vindo ao catálogo! Escolha o que deseja ver:",
+            color=discord.Color.blue()
+        )
+        view = ViewMenuCatalogo(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+
+class ViewCatalogoBanners(discord.ui.View):
+    def __init__(self, usuario_id, banners, pagina=0):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.banners = banners
+        self.pagina = pagina
+        self.por_pagina = 3
+        self.total_paginas = max(1, -(-len(banners) // self.por_pagina))
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.pagina == 0
+        self.proximo.disabled = self.pagina >= self.total_paginas - 1
+
+    async def gerar_embed_e_imagem(self):
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        pagina_banners = self.banners[inicio:fim]
+
+        # Verifica quais estão em rotação
+        ids_rotacao = [b[0] for b in pagina_banners if banner_em_rotacao(b[0])]
+
+        embed = discord.Embed(
+            title="🖼️ Catálogo de Banners",
+            color=discord.Color.blue()
+        )
+
+        for banner_id, nome, descricao, preco, arquivo, raridade in pagina_banners:
+            em_rotacao = banner_em_rotacao(banner_id)
+            status = "🟢 Na loja agora!" if em_rotacao else "🔴 Fora de rotação"
+            embed.add_field(
+                name=f"**{nome}** — {raridade}",
+                value=f"{descricao}\n💰 **{preco} Joyens** | {status}",
+                inline=False
+            )
+
+        embed.set_image(url="attachment://catalogo_page.png")
+        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.banners)} banner(s) no total")
+
+        buffer = await gerar_imagem_catalogo(pagina_banners)
+        arquivo_discord = discord.File(buffer, filename="catalogo_page.png")
+        return embed, arquivo_discord
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina -= 1
+        self.atualizar_botoes()
+        embed, arquivo = await self.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        self.atualizar_botoes()
+        embed, arquivo = await self.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+
+    @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
+    async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewCategoriaCatalogo(self.usuario_id)
+        embed = discord.Embed(
+            title="📖 Catálogo de Banners",
+            description="Escolha uma categoria para ver os banners disponíveis:",
+            color=discord.Color.blue()
+        )
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
 # ============================================================
 # EVENTOS
 # ============================================================
@@ -841,6 +1023,7 @@ async def ajuda(ctx):
     embed.add_field(name="/rotacao ver", value="Mostra os banners da rotação atual", inline=False)
     embed.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
     embed.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
+    embed.add_field(name="!catalogo", value="Abre o catálogo de banners e mais", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="dado")
@@ -997,6 +1180,16 @@ async def apostar(ctx, quantidade: int):
 
     embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
     await ctx.send(embed=embed)
+
+@bot.command(name="catalogo")
+async def catalogo(ctx):
+    embed = discord.Embed(
+        title="📖 Catálogo do JogadorBot",
+        description="Bem-vindo ao catálogo! Escolha o que deseja ver:",
+        color=discord.Color.blue()
+    )
+    view = ViewMenuCatalogo(ctx.author.id)
+    await ctx.send(embed=embed, view=view)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
