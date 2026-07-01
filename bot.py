@@ -677,12 +677,45 @@ class ViewConquistas(discord.ui.View):
 
     @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        buffer, total = await gerar_card_perfil(self.usuario)
-        arquivo = discord.File(buffer, filename="perfil.png")
-        embed = discord.Embed(color=discord.Color.blurple())
-        embed.set_image(url="attachment://perfil.png")
-        view = ViewPerfil(self.usuario)
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+        membro = self.usuario
+        level, xp = buscar_level(membro.id)
+        xp_prox = xp_necessario(level)
+        joyens = buscar_joyens(membro.id)
+        conquistas = buscar_conquistas_usuario(membro.id)
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+        total_banners = cur.fetchone()[0]
+        con.close()
+        banner_arquivo = buscar_banner_ativo(membro.id)
+
+        embed1 = discord.Embed(title=f"Perfil — Level {level}", color=discord.Color.blurple())
+        embed1.set_thumbnail(url=membro.display_avatar.url)
+        embed1.description = (
+            f"**Nickname:** {membro.display_name}\n"
+            f"**@:** {membro.name}\n"
+            f"**ID:** {membro.id}"
+        )
+        if xp_prox:
+            porcentagem = int((xp / xp_prox) * 100)
+            blocos_cheios = porcentagem // 10
+            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+            embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+        else:
+            embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
+
+        embed2 = discord.Embed(color=discord.Color.blurple())
+        embed2.add_field(name="💰 Economia", value=f"**Joyens:** {joyens}", inline=False)
+        embed2.add_field(name="📊 Outros", value=f"**Conquistas:** {len(conquistas)}\n**Banners:** {total_banners}", inline=False)
+
+        if banner_arquivo and os.path.exists(banner_arquivo):
+            arquivo_discord = discord.File(banner_arquivo, filename="banner.png")
+            embed2.set_image(url="attachment://banner.png")
+            view = ViewPerfil(membro)
+            await interaction.response.edit_message(embeds=[embed1, embed2], view=view, attachments=[arquivo_discord])
+        else:
+            view = ViewPerfil(membro)
+            await interaction.response.edit_message(embeds=[embed1, embed2], view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
@@ -985,15 +1018,47 @@ class ViewCategoriaCatalogo(discord.ui.View):
         self.usuario_id = usuario_id
         self.add_item(SelectCategoriaCatalogo(usuario_id))
 
-    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="📖 Catálogo do JogadorBot",
-            description="Bem-vindo ao catálogo! Escolha o que deseja ver:",
-            color=discord.Color.blue()
+        membro = self.usuario
+        level, xp = buscar_level(membro.id)
+        xp_prox = xp_necessario(level)
+        joyens = buscar_joyens(membro.id)
+        conquistas = buscar_conquistas_usuario(membro.id)
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+        total_banners = cur.fetchone()[0]
+        con.close()
+        banner_arquivo = buscar_banner_ativo(membro.id)
+
+        embed1 = discord.Embed(title=f"Perfil — Level {level}", color=discord.Color.blurple())
+        embed1.set_thumbnail(url=membro.display_avatar.url)
+        embed1.description = (
+            f"**Nickname:** {membro.display_name}\n"
+            f"**@:** {membro.name}\n"
+            f"**ID:** {membro.id}"
         )
-        view = ViewMenuCatalogo(self.usuario_id)
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        if xp_prox:
+            porcentagem = int((xp / xp_prox) * 100)
+            blocos_cheios = porcentagem // 10
+            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+            embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+        else:
+            embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
+
+        embed2 = discord.Embed(color=discord.Color.blurple())
+        embed2.add_field(name="💰 Economia", value=f"**Joyens:** {joyens}", inline=False)
+        embed2.add_field(name="📊 Outros", value=f"**Conquistas:** {len(conquistas)}\n**Banners:** {total_banners}", inline=False)
+
+        if banner_arquivo and os.path.exists(banner_arquivo):
+            arquivo_discord = discord.File(banner_arquivo, filename="banner.png")
+            embed2.set_image(url="attachment://banner.png")
+            view = ViewPerfil(membro)
+            await interaction.response.edit_message(embeds=[embed1, embed2], view=view, attachments=[arquivo_discord])
+        else:
+            view = ViewPerfil(membro)
+            await interaction.response.edit_message(embeds=[embed1, embed2], view=view, attachments=[])
 
 
 class ViewCatalogoBanners(discord.ui.View):
@@ -1257,16 +1322,64 @@ async def enquete(ctx, *, pergunta: str):
 async def perfil(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
-    async with ctx.typing():
-        try:
-            buffer, total = await gerar_card_perfil(membro)
-            arquivo = discord.File(buffer, filename="perfil.png")
-            embed = discord.Embed(color=discord.Color.blurple())
-            embed.set_image(url="attachment://perfil.png")
-            view = ViewPerfil(membro)
-            await ctx.send(file=arquivo, embed=embed, view=view)
-        except Exception as e:
-            await ctx.send(f"❌ Erro ao gerar perfil: `{e}`")
+
+    level, xp = buscar_level(membro.id)
+    xp_prox = xp_necessario(level)
+    joyens = buscar_joyens(membro.id)
+    conquistas = buscar_conquistas_usuario(membro.id)
+    banner_arquivo = buscar_banner_ativo(membro.id)
+
+ # Quantidade de banners do usuário
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+    total_banners = cur.fetchone()[0]
+    con.close()
+
+# Primeira embed — Informações gerais
+    embed1 = discord.Embed(
+        title=f"Perfil — Level {level}",
+        color=discord.Color.blurple()
+    )
+    embed1.set_thumbnail(url=membro.display_avatar.url)
+    embed1.description = (
+        f"**Nickname:** {membro.display_name}\n"
+        f"**@:** {membro.name}\n"
+        f"**ID:** {membro.id}"
+    )
+    if xp_prox:
+        porcentagem = int((xp / xp_prox) * 100)
+        blocos_cheios = porcentagem // 10
+        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+        embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+    else:
+        embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
+
+# Segunda embed — Economia e outros
+    embed2 = discord.Embed(color=discord.Color.blurple())
+    embed2.add_field(
+        name="💰 Economia",
+        value=f"**Joyens:** {joyens}",
+        inline=False
+    )
+    embed2.add_field(
+        name="📊 Outros",
+        value=(
+            f"**Conquistas:** {len(conquistas)}\n"
+            f"**Banners:** {total_banners}"
+        ),
+        inline=False
+    )
+
+# Banner ativo como imagem
+    if banner_arquivo and os.path.exists(banner_arquivo):
+        arquivo_discord = discord.File(banner_arquivo, filename="banner.png")
+        embed2.set_image(url="attachment://banner.png")
+        view = ViewPerfil(membro)
+        await ctx.send(embeds=[embed1, embed2], file=arquivo_discord, view=view)
+    else:
+        view = ViewPerfil(membro)
+        await ctx.send(embeds=[embed1, embed2], view=view)
             
 @bot.command(name="diario")
 async def diario(ctx):
