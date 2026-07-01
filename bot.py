@@ -1,13 +1,14 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from PIL import Image, ImageDraw, ImageFont
 import random
 import datetime
 import sqlite3
 import os
 import aiohttp
-from PIL import Image, ImageDraw, ImageFont
 import io
+import asyncio
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -153,6 +154,14 @@ def iniciar_banco():
             usuario_id TEXT PRIMARY KEY,
             level INTEGER DEFAULT 0,
             xp INTEGER DEFAULT 0
+        )
+    """)
+    
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS banners_favoritos (
+            usuario_id TEXT NOT NULL,
+            banner_id INTEGER NOT NULL,
+            PRIMARY KEY (usuario_id, banner_id)
         )
     """)
     
@@ -451,6 +460,33 @@ async def verificar_rotacao():
             embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
         await canal.send(embed=embed)
+        verificar_favoritos_rotacao.start()
+
+@tasks.loop(seconds=1)
+async def verificar_favoritos_rotacao():
+    await asyncio.sleep(5)
+    verificar_favoritos_rotacao.stop()
+
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT bf.usuario_id, b.id, b.nome
+        FROM banners_favoritos bf
+        JOIN banners b ON bf.banner_id = b.id
+        JOIN rotacao_atual ra ON b.id = ra.banner_id
+    """)
+    resultados = cur.fetchall()
+    con.close()
+
+    for usuario_id, banner_id, banner_nome in resultados:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            membro_nome = usuario.display_name if hasattr(usuario, 'display_name') else usuario.name
+            await usuario.send(
+                f"🔔 **{membro_nome}**, o banner **{banner_nome}** está disponível na loja! Corra para comprar antes que a rotação mude."
+            )
+        except:
+            pass
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
@@ -503,6 +539,15 @@ def banner_em_rotacao(banner_id):
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT 1 FROM rotacao_atual WHERE banner_id = ?", (banner_id,))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado is not None
+
+def usuario_favoritou_banner(usuario_id, banner_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                (str(usuario_id), banner_id))
     resultado = cur.fetchone()
     con.close()
     return resultado is not None
@@ -1103,24 +1148,26 @@ class ViewCatalogoBanners(discord.ui.View):
         self.anterior.disabled = self.pagina == 0
         self.proximo.disabled = self.pagina >= self.total_paginas - 1
 
-    async def gerar_embed_e_imagem(self):
+    def pagina_atual(self):
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
-        pagina_banners = self.banners[inicio:fim]
+        return self.banners[inicio:fim]
 
-        # Verifica quais estão em rotação
-        ids_rotacao = [b[0] for b in pagina_banners if banner_em_rotacao(b[0])]
+    async def gerar_embed_e_imagem(self):
+        pagina_banners = self.pagina_atual()
 
         embed = discord.Embed(
             title="🖼️ Catálogo de Banners",
             color=discord.Color.blue()
         )
 
-        for banner_id, nome, descricao, preco, arquivo, raridade in pagina_banners:
+        for i, (banner_id, nome, descricao, preco, arquivo, raridade) in enumerate(pagina_banners):
             em_rotacao = banner_em_rotacao(banner_id)
+            favoritado = usuario_favoritou_banner(self.usuario_id, banner_id)
             status = "🟢 Na loja agora!" if em_rotacao else "🔴 Fora de rotação"
+            fav_texto = " ⭐ Favoritado" if favoritado else ""
             embed.add_field(
-                name=f"**{nome}** — {raridade}",
+                name=f"**{i+1}.** {nome} — {raridade}{fav_texto}",
                 value=f"{descricao}\n💰 **{preco} Joyens** | {status}",
                 inline=False
             )
@@ -1132,19 +1179,21 @@ class ViewCatalogoBanners(discord.ui.View):
         arquivo_discord = discord.File(buffer, filename="catalogo_page.png")
         return embed, arquivo_discord
 
+    async def atualizar_mensagem(self, interaction):
+        embed, arquivo = await self.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.pagina -= 1
         self.atualizar_botoes()
-        embed, arquivo = await self.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+        await self.atualizar_mensagem(interaction)
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.pagina += 1
         self.atualizar_botoes()
-        embed, arquivo = await self.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+        await self.atualizar_mensagem(interaction)
 
     @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1155,6 +1204,41 @@ class ViewCatalogoBanners(discord.ui.View):
             color=discord.Color.blue()
         )
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+    @discord.ui.button(label="⭐ Favoritar Banner 1", style=discord.ButtonStyle.primary, row=1)
+    async def favoritar_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_favorito(interaction, 0)
+
+    @discord.ui.button(label="⭐ Favoritar Banner 2", style=discord.ButtonStyle.primary, row=1)
+    async def favoritar_2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_favorito(interaction, 1)
+
+    @discord.ui.button(label="⭐ Favoritar Banner 3", style=discord.ButtonStyle.primary, row=1)
+    async def favoritar_3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_favorito(interaction, 2)
+
+    async def toggle_favorito(self, interaction: discord.Interaction, indice: int):
+        pagina_banners = self.pagina_atual()
+        if indice >= len(pagina_banners):
+            await interaction.response.send_message("❌ Não há banner nessa posição!", ephemeral=True)
+            return
+
+        banner_id, nome, _, _, _, _ = pagina_banners[indice]
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+
+        if usuario_favoritou_banner(self.usuario_id, banner_id):
+            cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                        (str(self.usuario_id), banner_id))
+            con.commit()
+            con.close()
+            await interaction.response.send_message(f"💔 Banner **{nome}** removido dos favoritos.", ephemeral=True)
+        else:
+            cur.execute("INSERT OR IGNORE INTO banners_favoritos (usuario_id, banner_id) VALUES (?, ?)",
+                        (str(self.usuario_id), banner_id))
+            con.commit()
+            con.close()
+            await interaction.response.send_message(f"⭐ Banner **{nome}** favoritado! Você será avisado quando ele estiver na loja.", ephemeral=True)
 
 # ============================================================
 # VIEW (BOTÕES) - Pagamento entre usuários
