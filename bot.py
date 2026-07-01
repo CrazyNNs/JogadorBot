@@ -273,7 +273,7 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
-    def xp_necessario(level):
+def xp_necessario(level):
     """Calcula o XP necessário para atingir o próximo level."""
     if level >= LEVEL_MAX:
         return None
