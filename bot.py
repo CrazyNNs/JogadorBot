@@ -1107,7 +1107,7 @@ class ViewInventarioBanners(discord.ui.View):
             total_banners = cur.fetchone()[0]
             con.close()
             banner_arquivo = buscar_banner_ativo(membro.id)
-            
+
             embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
             embed1.set_thumbnail(url=membro.display_avatar.url)
             embed1.description = (
@@ -1115,41 +1115,42 @@ class ViewInventarioBanners(discord.ui.View):
                 f"> {membro.name}\n"
                 f"**ID:** ``{membro.id}``"
             )
-        if xp_prox:
-            porcentagem = int((xp / xp_prox) * 100)
-            blocos_cheios = porcentagem // 10
-            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-            embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
-        else:
-            embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-            
+            if xp_prox:
+                porcentagem = int((xp / xp_prox) * 100)
+                blocos_cheios = porcentagem // 10
+                barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+                embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+            else:
+                embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
+
             embed2 = discord.Embed(color=discord.Color.blurple())
             embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
             embed2.add_field(
                 name="📊 Outros",
                 value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
                 inline=False
-        )
-            emprego_dados = buscar_emprego(membro.id)
-        if emprego_dados:
-            emprego_nome, vezes_trabalhadas, _ = emprego_dados
-            emprego_info = EMPREGOS.get(emprego_nome)
-            emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
-            embed2.add_field(
-                name="💼 Emprego",
-                value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
-                inline=False
             )
-        else:
-            embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
 
-        if banner_arquivo and os.path.exists(banner_arquivo):
-            nome_arquivo = os.path.basename(banner_arquivo)
-            arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
-            embed2.set_image(url=f"attachment://{nome_arquivo}")
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[])
+            emprego_dados = buscar_emprego(membro.id)
+            if emprego_dados:
+                emprego_nome, vezes_trabalhadas, _ = emprego_dados
+                emprego_info = EMPREGOS.get(emprego_nome)
+                emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
+                embed2.add_field(
+                    name="💼 Emprego",
+                    value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
+                    inline=False
+                )
+            else:
+                embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
+
+            if banner_arquivo and os.path.exists(banner_arquivo):
+                nome_arquivo = os.path.basename(banner_arquivo)
+                arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
+                embed2.set_image(url=f"attachment://{nome_arquivo}")
+                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[])
 
         btn_anterior.callback = anterior_callback
         btn_proximo.callback = proximo_callback
