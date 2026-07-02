@@ -70,6 +70,51 @@ CATEGORIAS_VENDAVEIS = {
     },
     # Adicione novos tipos aqui no futuro
 }
+
+# ============================================================
+# EMPREGOS — Para adicionar novo emprego, copie um bloco
+# e ajuste nome, salario_min, salario_max, level_necessario
+# e as mensagens de ação.
+# ============================================================
+EMPREGOS = {
+    "Gari": {
+        "salario_min": 1250,
+        "salario_max": 1450,
+        "level_necessario": 0,
+        "emoji": "🧹",
+        "descricao": "Mantém as ruas limpas da cidade.",
+        "acoes": [
+            "Você varreu as ruas do centro e ganhou {salario} Joyens!",
+            "Você recolheu o lixo do bairro e ganhou {salario} Joyens!",
+            "Você limpou a praça principal e ganhou {salario} Joyens!",
+        ]
+    },
+    "Fotografo": {
+        "salario_min": 1600,
+        "salario_max": 1800,
+        "level_necessario": 5,
+        "emoji": "📷",
+        "descricao": "Registra momentos especiais com sua câmera.",
+        "acoes": [
+            "Você fotografou um casamento e ganhou {salario} Joyens!",
+            "Você fez um ensaio fotográfico e ganhou {salario} Joyens!",
+            "Você fotografou um evento corporativo e ganhou {salario} Joyens!",
+        ]
+    },
+    "Barman": {
+        "salario_min": 2000,
+        "salario_max": 2200,
+        "level_necessario": 10,
+        "emoji": "🍹",
+        "descricao": "Prepara drinks e anima o bar todas as noites.",
+        "acoes": [
+            "Você preparou drinks a noite toda e ganhou {salario} Joyens!",
+            "Você atendeu uma festa VIP no bar e ganhou {salario} Joyens!",
+            "Você criou um novo drink especial e ganhou {salario} Joyens!",
+        ]
+    },
+}
+
 # ============================================================
 
 intents = discord.Intents.default()
@@ -180,6 +225,15 @@ def iniciar_banco():
             usuario_id TEXT NOT NULL,
             banner_id INTEGER NOT NULL,
             PRIMARY KEY (usuario_id, banner_id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS empregos_usuarios (
+            usuario_id TEXT PRIMARY KEY,
+            emprego TEXT NOT NULL,
+            vezes_trabalhadas INTEGER DEFAULT 0,
+            ultimo_trabalho TEXT
         )
     """)
     
@@ -656,6 +710,32 @@ def sortear_nova_rotacao():
     con.commit()
     con.close()
     return ids_sorteados, expira
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Empregos e Trabalhar
+# ============================================================
+
+def buscar_emprego(usuario_id):
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT emprego, vezes_trabalhadas, ultimo_trabalho FROM empregos_usuarios WHERE usuario_id = ?",
+                (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado
+
+def tempo_restante_trabalho(ultimo_trabalho):
+    """Retorna o tempo restante em minutos ou 0 se já pode trabalhar."""
+    if not ultimo_trabalho:
+        return 0
+    ultimo = datetime.datetime.fromisoformat(ultimo_trabalho)
+    agora = datetime.datetime.now()
+    diferenca = (ultimo + datetime.timedelta(minutes=40)) - agora
+    if diferenca.total_seconds() <= 0:
+        return 0
+    minutos = int(diferenca.total_seconds() // 60)
+    segundos = int(diferenca.total_seconds() % 60)
+    return f"{minutos}m {segundos}s"
 
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
@@ -1342,6 +1422,76 @@ class ViewPagamento(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=self)
 
+class SelectEmprego(discord.ui.Select):
+    def __init__(self, usuario_id, level_usuario):
+        self.usuario_id = usuario_id
+        options = []
+        for nome, dados in EMPREGOS.items():
+            level_req = dados["level_necessario"]
+            pode = level_usuario >= level_req
+            options.append(discord.SelectOption(
+                label=f"{dados['emoji']} {nome}",
+                value=nome,
+                description=f"Salário: {dados['salario_min']}-{dados['salario_max']}J | Level {level_req}{'✅' if pode else '❌'}",
+                default=False
+            ))
+        super().__init__(placeholder="Escolha um emprego...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        emprego_nome = self.values[0]
+        emprego = EMPREGOS[emprego_nome]
+        level_usuario, _ = buscar_level(self.usuario_id)
+
+        if level_usuario < emprego["level_necessario"]:
+            await interaction.response.send_message(
+                f"❌ Você precisa ser **Level {emprego['level_necessario']}** para se tornar {emprego_nome}! Seu level atual é **{level_usuario}**.",
+                ephemeral=True
+            )
+            return
+
+        con = sqlite3.connect("/data/jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
+            VALUES (?, ?, 0)
+            ON CONFLICT(usuario_id) DO UPDATE SET emprego = ?, vezes_trabalhadas = 0, ultimo_trabalho = NULL
+        """, (str(self.usuario_id), emprego_nome, emprego_nome))
+        con.commit()
+        con.close()
+
+        embed = discord.Embed(
+            title=f"{emprego['emoji']} Empregado como {emprego_nome}!",
+            description=f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Salário", value=f"{emprego['salario_min']} - {emprego['salario_max']} Joyens", inline=True)
+        embed.add_field(name="Level necessário", value=f"Level {emprego['level_necessario']}", inline=True)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+# ============================================================
+# VIEW (BOTÕES) - Empregos e Trabalhar
+# ============================================================
+
+class ViewEmpregos(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        level_usuario, _ = buscar_level(usuario_id)
+        self.add_item(SelectEmprego(usuario_id, level_usuario))
+
+    def gerar_embed(self):
+        embed = discord.Embed(
+            title="💼 Menu de Empregos",
+            description="Escolha um emprego abaixo! Empregos com ❌ precisam de level maior.",
+            color=discord.Color.blue()
+        )
+        for nome, dados in EMPREGOS.items():
+            embed.add_field(
+                name=f"{dados['emoji']} {nome}",
+                value=f"{dados['descricao']}\n💰 {dados['salario_min']}-{dados['salario_max']} Joyens | Level {dados['level_necessario']}",
+                inline=False
+            )
+        return embed
+
 # ============================================================
 # EVENTOS
 # ============================================================
@@ -1382,6 +1532,9 @@ async def ajuda(ctx):
     embed1.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
     embed1.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens (admin)", inline=False)
     embed.add_field(name="!vender (categoria) (nome)", value="Vende um produto por metade do preço", inline=False)
+    embed.add_field(name="!trabalhar", value="Trabalha e ganha Joyens", inline=False)
+    embed.add_field(name="!empregos", value="Abre o menu de empregos", inline=False)
+    embed.add_field(name="!infojob [@usuario]", value="Mostra informações do emprego", inline=False)
 
     embed2 = discord.Embed(
         title="📖 Lista de Comandos — Página 2",
@@ -1503,6 +1656,19 @@ async def perfil(ctx, membro: discord.Member = None):
         ),
         inline=False
     )
+
+    emprego_dados = buscar_emprego(membro.id)
+    if emprego_dados:
+        emprego_nome, vezes_trabalhadas, _ = emprego_dados
+        emprego_info = EMPREGOS.get(emprego_nome)
+        emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
+        embed2.add_field(
+            name="💼 Emprego",
+            value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
+            inline=False
+        )
+    else:
+        embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
 
 # Banner ativo como imagem
     if banner_arquivo and os.path.exists(banner_arquivo):
@@ -1759,6 +1925,100 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
     embed.add_field(name="Valor recebido", value=f"{valor_venda} Joyens", inline=True)
     embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=False)
     embed.set_footer(text=f"Preço original: {produto_preco} Joyens — vendido por metade do valor")
+    await ctx.send(embed=embed)
+
+@bot.command(name="empregos")
+async def empregos(ctx):
+    view = ViewEmpregos(ctx.author.id)
+    embed = view.gerar_embed()
+    await ctx.send(embed=embed, view=view)
+
+@bot.command(name="trabalhar")
+async def trabalhar(ctx):
+    emprego_dados = buscar_emprego(ctx.author.id)
+
+    # Se não tiver emprego, redireciona para o menu
+    if not emprego_dados:
+        view = ViewEmpregos(ctx.author.id)
+        embed = view.gerar_embed()
+        await ctx.send("Você ainda não tem um emprego! Escolha um abaixo:", embed=embed, view=view)
+        return
+
+    emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
+
+    # Verifica cooldown
+    restante = tempo_restante_trabalho(ultimo_trabalho)
+    if restante != 0:
+        await ctx.send(f"⏰ {ctx.author.mention} Você precisa descansar! Pode trabalhar novamente em **{restante}**.")
+        return
+
+    emprego = EMPREGOS.get(emprego_nome)
+    if not emprego:
+        await ctx.send("❌ Seu emprego não foi encontrado! Use `!empregos` para escolher um novo.")
+        return
+
+    # Calcula salário e XP
+    salario = random.randint(emprego["salario_min"], emprego["salario_max"])
+    xp_ganho = random.randint(50, 100)
+    acao = random.choice(emprego["acoes"]).format(salario=salario)
+
+    # Atualiza banco
+    con = sqlite3.connect("/data/jogadorbot.db")
+    cur = con.cursor()
+    agora = datetime.datetime.now().isoformat()
+    cur.execute("""
+        UPDATE empregos_usuarios
+        SET vezes_trabalhadas = vezes_trabalhadas + 1, ultimo_trabalho = ?
+        WHERE usuario_id = ?
+    """, (agora, str(ctx.author.id)))
+    con.commit()
+    con.close()
+
+    adicionar_joyens(ctx.author.id, salario)
+    novo_saldo = buscar_joyens(ctx.author.id)
+
+    embed = discord.Embed(
+        title=f"{emprego['emoji']} {emprego_nome}",
+        description=acao,
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Salário recebido", value=f"{salario} Joyens", inline=True)
+    embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
+    embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
+    embed.set_footer(text=f"Próximo trabalho em 40 minutos")
+    await ctx.send(embed=embed)
+    await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
+
+@bot.command(name="infojob")
+async def infojob(ctx, membro: discord.Member = None):
+    if membro is None:
+        membro = ctx.author
+
+    emprego_dados = buscar_emprego(membro.id)
+    if not emprego_dados:
+        await ctx.send(f"**{membro.display_name}** não tem emprego! Use `!empregos` para escolher um.")
+        return
+
+    emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
+    emprego = EMPREGOS.get(emprego_nome)
+    if not emprego:
+        await ctx.send("❌ Emprego não encontrado no sistema.")
+        return
+
+    restante = tempo_restante_trabalho(ultimo_trabalho)
+    disponivel = "Disponível agora!" if restante == 0 else f"Disponível em {restante}"
+
+    embed = discord.Embed(
+        title=f"{emprego['emoji']} Informações de Emprego",
+        color=discord.Color.blue()
+    )
+    embed.set_thumbnail(url=membro.display_avatar.url)
+    embed.add_field(name="Funcionário", value=membro.display_name, inline=True)
+    embed.add_field(name="Emprego", value=emprego_nome, inline=True)
+    embed.add_field(name="Salário", value=f"{emprego['salario_min']}-{emprego['salario_max']} Joyens", inline=True)
+    embed.add_field(name="Level necessário", value=f"Level {emprego['level_necessario']}", inline=True)
+    embed.add_field(name="Vezes trabalhadas", value=str(vezes_trabalhadas), inline=True)
+    embed.add_field(name="Próximo trabalho", value=disponivel, inline=True)
     await ctx.send(embed=embed)
 
 # ============================================================
