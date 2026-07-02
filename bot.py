@@ -1098,23 +1098,23 @@ class ViewInventarioBanners(discord.ui.View):
 
         async def voltar_callback(interaction):
             level, xp = buscar_level(membro.id)
-        xp_prox = xp_necessario(level)
-        joyens = buscar_joyens(membro.id)
-        conquistas = buscar_conquistas_usuario(membro.id)
-        con = sqlite3.connect("/data/jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-        total_banners = cur.fetchone()[0]
-        con.close()
-        banner_arquivo = buscar_banner_ativo(membro.id)
-
-        embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
-        embed1.set_thumbnail(url=membro.display_avatar.url)
-        embed1.description = (
-            f"**{membro.display_name}**\n"
-            f"> {membro.name}\n"
-            f"**ID:** ``{membro.id}``"
-        )
+            xp_prox = xp_necessario(level)
+            joyens = buscar_joyens(membro.id)
+            conquistas = buscar_conquistas_usuario(membro.id)
+            con = sqlite3.connect("/data/jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+            total_banners = cur.fetchone()[0]
+            con.close()
+            banner_arquivo = buscar_banner_ativo(membro.id)
+            
+            embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
+            embed1.set_thumbnail(url=membro.display_avatar.url)
+            embed1.description = (
+                f"**{membro.display_name}**\n"
+                f"> {membro.name}\n"
+                f"**ID:** ``{membro.id}``"
+            )
         if xp_prox:
             porcentagem = int((xp / xp_prox) * 100)
             blocos_cheios = porcentagem // 10
@@ -1122,16 +1122,15 @@ class ViewInventarioBanners(discord.ui.View):
             embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
         else:
             embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-
-        embed2 = discord.Embed(color=discord.Color.blurple())
-        embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
-        embed2.add_field(
-            name="📊 Outros",
-            value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
-            inline=False
+            
+            embed2 = discord.Embed(color=discord.Color.blurple())
+            embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
+            embed2.add_field(
+                name="📊 Outros",
+                value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
+                inline=False
         )
-
-        emprego_dados = buscar_emprego(membro.id)
+            emprego_dados = buscar_emprego(membro.id)
         if emprego_dados:
             emprego_nome, vezes_trabalhadas, _ = emprego_dados
             emprego_info = EMPREGOS.get(emprego_nome)
