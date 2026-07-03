@@ -1097,6 +1097,7 @@ class ViewInventarioBanners(discord.ui.View):
             await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
         async def voltar_callback(interaction):
+            membro = self.usuario
             level, xp = buscar_level(membro.id)
             xp_prox = xp_necessario(level)
             joyens = buscar_joyens(membro.id)
@@ -1104,9 +1105,8 @@ class ViewInventarioBanners(discord.ui.View):
             con = sqlite3.connect("/data/jogadorbot.db")
             cur = con.cursor()
             cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-            total_banners = cur.fetchone()[0]
+            qtd_banners = cur.fetchone()[0]
             con.close()
-            banner_arquivo = buscar_banner_ativo(membro.id)
 
             embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
             embed1.set_thumbnail(url=membro.display_avatar.url)
@@ -1127,7 +1127,7 @@ class ViewInventarioBanners(discord.ui.View):
             embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
             embed2.add_field(
                 name="📊 Outros",
-                value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
+                value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{qtd_banners}``",
                 inline=False
             )
 
@@ -1144,6 +1144,7 @@ class ViewInventarioBanners(discord.ui.View):
             else:
                 embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
 
+            banner_arquivo = buscar_banner_ativo(membro.id)
             if banner_arquivo and os.path.exists(banner_arquivo):
                 nome_arquivo = os.path.basename(banner_arquivo)
                 arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
