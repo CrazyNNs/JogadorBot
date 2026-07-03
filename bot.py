@@ -1234,63 +1234,15 @@ class ViewCategoriaCatalogo(discord.ui.View):
         self.usuario_id = usuario_id
         self.add_item(SelectCategoriaCatalogo(usuario_id))
 
-    @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        membro = interaction.user
-        level, xp = buscar_level(membro.id)
-        xp_prox = xp_necessario(level)
-        joyens = buscar_joyens(membro.id)
-        conquistas = buscar_conquistas_usuario(membro.id)
-        con = sqlite3.connect("/data/jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-        total_banners = cur.fetchone()[0]
-        con.close()
-        banner_arquivo = buscar_banner_ativo(membro.id)
-
-        embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
-        embed1.set_thumbnail(url=membro.display_avatar.url)
-        embed1.description = (
-            f"**{membro.display_name}**\n"
-            f"> {membro.name}\n"
-            f"**ID:** ``{membro.id}``"
+        embed = discord.Embed(
+            title="📖 Catálogo do JogadorBot",
+            description="Bem-vindo ao catálogo! Escolha o que deseja ver:",
+            color=discord.Color.blue()
         )
-        if xp_prox:
-            porcentagem = int((xp / xp_prox) * 100)
-            blocos_cheios = porcentagem // 10
-            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-            embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
-        else:
-            embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-
-        embed2 = discord.Embed(color=discord.Color.blurple())
-        embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
-        embed2.add_field(
-            name="📊 Outros",
-            value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
-            inline=False
-        )
-
-        emprego_dados = buscar_emprego(membro.id)
-        if emprego_dados:
-            emprego_nome, vezes_trabalhadas, _ = emprego_dados
-            emprego_info = EMPREGOS.get(emprego_nome)
-            emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
-            embed2.add_field(
-                name="💼 Emprego",
-                value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
-                inline=False
-            )
-        else:
-            embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
-
-        if banner_arquivo and os.path.exists(banner_arquivo):
-            nome_arquivo = os.path.basename(banner_arquivo)
-            arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
-            embed2.set_image(url=f"attachment://{nome_arquivo}")
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[])
+        view = ViewMenuCatalogo(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 class ViewCatalogoBanners(discord.ui.View):
     def __init__(self, usuario_id, banners, pagina=0):
