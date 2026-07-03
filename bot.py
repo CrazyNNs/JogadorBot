@@ -1765,7 +1765,7 @@ async def diario(ctx):
         )
         return
 
-    quantidade = random.randint(50, 150)
+    quantidade = random.randint(1200, 2000)
     cur.execute("""
         INSERT INTO economia (usuario_id, joyens, ultimo_diario) VALUES (?, ?, ?)
         ON CONFLICT(usuario_id) DO UPDATE SET joyens = joyens + ?, ultimo_diario = ?
@@ -1779,7 +1779,7 @@ async def diario(ctx):
     embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
     embed.set_footer(text="Volte amanhã para mais Joyens!")
 
-    xp_ganho = random.randint(50, 150)
+    xp_ganho = random.randint(250, 500)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
 
     await ctx.send(embed=embed)
