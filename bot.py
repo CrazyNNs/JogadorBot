@@ -972,8 +972,11 @@ class ViewLoja(discord.ui.View):
         cur = con.cursor()
         cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
                     (str(comprador_id), banner_id))
+        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                    (str(comprador_id), banner_id))
         con.commit()
         con.close()
+        
         await interaction.response.send_message(
             f"✅ Banner **{nome}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
             ephemeral=True
@@ -1260,6 +1263,33 @@ class ViewCatalogoBanners(discord.ui.View):
         self.anterior.disabled = self.pagina == 0
         self.proximo.disabled = self.pagina >= self.total_paginas - 1
 
+        pagina_banners = self.pagina_atual()
+        botoes_favoritar = [self.favoritar_1, self.favoritar_2, self.favoritar_3]
+
+        for i, botao in enumerate(botoes_favoritar):
+            if i >= len(pagina_banners):
+                botao.disabled = True
+                botao.label = "⭐ Favoritar"
+                botao.style = discord.ButtonStyle.secondary
+                continue
+
+            banner_id = pagina_banners[i][0]
+            possui = usuario_tem_banner(self.usuario_id, banner_id)
+            favoritado = usuario_favoritou_banner(self.usuario_id, banner_id)
+
+            if possui:
+                botao.disabled = True
+                botao.label = "✅ Você já possui"
+                botao.style = discord.ButtonStyle.secondary
+            elif favoritado:
+                botao.disabled = False
+                botao.label = "💔 Tirar dos Favoritos"
+                botao.style = discord.ButtonStyle.danger
+            else:
+                botao.disabled = False
+                botao.label = f"⭐ Favoritar Banner {i+1}"
+                botao.style = discord.ButtonStyle.primary
+
     def pagina_atual(self):
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
@@ -1336,6 +1366,14 @@ class ViewCatalogoBanners(discord.ui.View):
             return
 
         banner_id, nome, _, _, _, _ = pagina_banners[indice]
+
+        if usuario_tem_banner(self.usuario_id, banner_id):
+            await interaction.response.send_message(
+                f"❌ Você já possui o banner **{nome}**! Só é possível favoritar banners que você ainda não tem.",
+                ephemeral=True
+            )
+            return
+
         con = sqlite3.connect("/data/jogadorbot.db")
         cur = con.cursor()
 
@@ -1344,13 +1382,18 @@ class ViewCatalogoBanners(discord.ui.View):
                         (str(self.usuario_id), banner_id))
             con.commit()
             con.close()
-            await interaction.response.send_message(f"💔 Banner **{nome}** removido dos favoritos.", ephemeral=True)
+            mensagem_confirmacao = f"💔 Banner **{nome}** removido dos favoritos."
         else:
             cur.execute("INSERT OR IGNORE INTO banners_favoritos (usuario_id, banner_id) VALUES (?, ?)",
                         (str(self.usuario_id), banner_id))
             con.commit()
             con.close()
-            await interaction.response.send_message(f"⭐ Banner **{nome}** favoritado! Você será avisado quando ele estiver na loja.", ephemeral=True)
+            mensagem_confirmacao = f"⭐ Banner **{nome}** favoritado! Você será avisado quando ele estiver na loja."
+
+        self.atualizar_botoes()
+        embed, arquivo = await self.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+        await interaction.followup.send(mensagem_confirmacao, ephemeral=True)
 
 # ============================================================
 # VIEW (BOTÕES) - Pagamento entre usuários
