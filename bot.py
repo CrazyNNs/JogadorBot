@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from PIL import Image, ImageDraw, ImageFont
+from zoneinfo import ZoneInfo
 import random
 import datetime
 import sqlite3
@@ -16,6 +17,7 @@ import asyncio
 TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
 DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
+FUSO_BR = ZoneInfo("America/Recife")
 
 # Canais de notificação
 CANAL_CONQUISTAS_ID = 1517028501356806144
@@ -1695,13 +1697,31 @@ async def perfil(ctx, membro: discord.Member = None):
 async def diario(ctx):
     con = sqlite3.connect("/data/jogadorbot.db")
     cur = con.cursor()
-    hoje = datetime.date.today().isoformat()
+
+    agora = datetime.datetime.now(FUSO_BR)
+    hoje = agora.date().isoformat()
+
     cur.execute("SELECT ultimo_diario, joyens FROM economia WHERE usuario_id = ?", (str(ctx.author.id),))
     resultado = cur.fetchone()
+
     if resultado and resultado[0] == hoje:
         con.close()
-        await ctx.send(f"{ctx.author.mention} Você já coletou seus Joyens hoje! Volte amanhã.")
+
+        # Calcula o tempo restante até a próxima meia-noite (horário de Pernambuco/Brasília)
+        amanha = agora.date() + datetime.timedelta(days=1)
+        proxima_meia_noite = datetime.datetime.combine(amanha, datetime.time(0, 0), tzinfo=FUSO_BR)
+        restante = proxima_meia_noite - agora
+
+        horas, resto = divmod(int(restante.total_seconds()), 3600)
+        minutos, segundos = divmod(resto, 60)
+        tempo_formatado = f"{horas}h {minutos}min {segundos}s"
+
+        await ctx.send(
+            f"{ctx.author.mention} Você já coletou seus Joyens hoje! "
+            f"Volte daqui **{tempo_formatado}**."
+        )
         return
+
     quantidade = random.randint(50, 150)
     cur.execute("""
         INSERT INTO economia (usuario_id, joyens, ultimo_diario) VALUES (?, ?, ?)
@@ -1710,12 +1730,15 @@ async def diario(ctx):
     con.commit()
     novo_saldo = cur.execute("SELECT joyens FROM economia WHERE usuario_id = ?", (str(ctx.author.id),)).fetchone()[0]
     con.close()
+
     embed = discord.Embed(title="💰 Recompensa Diária!", color=discord.Color.gold())
     embed.add_field(name="Joyens recebidos", value=f"+{quantidade} Joyens", inline=True)
     embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
     embed.set_footer(text="Volte amanhã para mais Joyens!")
+
     xp_ganho = random.randint(50, 150)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
+
     await ctx.send(embed=embed)
     await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
