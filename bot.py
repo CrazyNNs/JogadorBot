@@ -564,6 +564,13 @@ async def verificar_favoritos_rotacao():
         except:
             pass
 
+@tasks.loop(minutes=1)
+async def desligar_automatico():
+    agora = datetime.datetime.now()
+    if agora.hour == 20 and agora.minute == 0:
+        print("🔴 Desligando automaticamente às 20h...")
+        await bot.close()
+
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
@@ -1555,6 +1562,7 @@ async def on_ready():
     iniciar_banco()
     verificar_admins_expirados.start()
     verificar_rotacao.start()
+    desligar_automatico.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
