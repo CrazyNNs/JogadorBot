@@ -567,7 +567,7 @@ async def verificar_favoritos_rotacao():
 @tasks.loop(minutes=1)
 async def desligar_automatico():
     agora = datetime.datetime.now()
-    if agora.hour == 22 and agora.minute == 15:
+    if agora.hour == 19 and agora.minute == 59:
         print("🔴 Desligando automaticamente às 20h...")
         await bot.close()
 
