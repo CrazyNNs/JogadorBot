@@ -1555,6 +1555,179 @@ class ViewEmpregos(discord.ui.View):
         return embed
 
 # ============================================================
+# VIEW (BOTÕES) - Comando de !ajuda
+# ============================================================
+
+class ViewAjuda(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+
+    def embed_inicial(self):
+        embed = discord.Embed(
+            title="📖 Central de Comandos",
+            description="Bem-vindo à central de comandos do **JogadorBot**!\nEscolha uma categoria abaixo para ver os comandos disponíveis.",
+            color=discord.Color.blurple()
+        )
+        embed.add_field(
+            name="💰 Economia",
+            value="Comandos relacionados a Joyens, loja e trabalho.",
+            inline=True
+        )
+        embed.add_field(
+            name="ℹ️ Informação",
+            value="Comandos para ver informações de usuários e do servidor.",
+            inline=True
+        )
+        embed.add_field(
+            name="🎮 Diversão",
+            value="Comandos de jogos e entretenimento.",
+            inline=True
+        )
+        embed.add_field(
+            name="🔧 Outros",
+            value="Comandos gerais e utilitários.",
+            inline=True
+        )
+        embed.add_field(
+            name="⚙️ Slash",
+            value="Comandos de barra disponíveis apenas para admins.",
+            inline=True
+        )
+        embed.set_footer(text="Clique em um botão para ver os comandos da categoria!")
+        return embed
+
+    def embed_economia(self):
+        embed = discord.Embed(
+            title="💰 Economia",
+            description="Comandos relacionados a Joyens, loja e trabalho.",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
+        embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens", inline=False)
+        embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance", inline=False)
+        embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}loja`", value="Abre a loja de banners", inline=False)
+        embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
+        embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
+        embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
+        embed.add_field(name=f"`{PREFIX}empregos`", value="Abre o menu de empregos", inline=False)
+        embed.add_field(name=f"`{PREFIX}infojob [@usuario]`", value="Mostra informações do emprego", inline=False)
+        embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
+        embed.set_footer(text="💰 Economia • JogadorBot")
+        return embed
+
+    def embed_informacao(self):
+        embed = discord.Embed(
+            title="ℹ️ Informação",
+            description="Comandos para ver informações de usuários e do servidor.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name=f"`{PREFIX}perfil [@usuario]`", value="Mostra o perfil completo do usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}userinfo [@usuario]`", value="Mostra informações detalhadas de um usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}level [@usuario]`", value="Mostra o level e XP do usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}infojob [@usuario]`", value="Mostra informações do emprego do usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens do usuário", inline=False)
+        embed.set_footer(text="ℹ️ Informação • JogadorBot")
+        return embed
+
+    def embed_diversao(self):
+        embed = discord.Embed(
+            title="🎮 Diversão",
+            description="Comandos de jogos e entretenimento.",
+            color=discord.Color.green()
+        )
+        embed.add_field(name=f"`{PREFIX}dado [lados]`", value="Rola um dado. Ex: `!dado 20`", inline=False)
+        embed.add_field(name=f"`{PREFIX}moeda`", value="Joga uma moeda (cara ou coroa)", inline=False)
+        embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
+        embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e ❌", inline=False)
+        embed.set_footer(text="🎮 Diversão • JogadorBot")
+        return embed
+
+    def embed_outros(self):
+        embed = discord.Embed(
+            title="🔧 Outros",
+            description="Comandos gerais e utilitários.",
+            color=discord.Color.og_blurple()
+        )
+        embed.add_field(name=f"`{PREFIX}oi`", value="Bot te cumprimenta", inline=False)
+        embed.add_field(name=f"`{PREFIX}hora`", value="Mostra a data e hora atual", inline=False)
+        embed.add_field(name=f"`{PREFIX}limpar [quantidade]`", value="Apaga mensagens (requer permissão)", inline=False)
+        embed.add_field(name=f"`{PREFIX}banner`", value="Gerencia seus banners equipados", inline=False)
+        embed.set_footer(text="🔧 Outros • JogadorBot")
+        return embed
+
+    def embed_slash(self):
+        embed = discord.Embed(
+            title="⚙️ Slash",
+            description="Comandos de barra disponíveis apenas para admins.",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="`/conquista criar`", value="Cria uma nova conquista no catálogo", inline=False)
+        embed.add_field(name="`/conquista dar`", value="Dá uma conquista para um usuário", inline=False)
+        embed.add_field(name="`/conquista lista`", value="Lista todas as conquistas disponíveis", inline=False)
+        embed.add_field(name="`/banner adicionar`", value="Adiciona um banner à loja", inline=False)
+        embed.add_field(name="`/banner deletar`", value="Deleta um banner da loja", inline=False)
+        embed.add_field(name="`/categoria criar`", value="Cria uma categoria de banners", inline=False)
+        embed.add_field(name="`/categoria deletar`", value="Deleta uma categoria e seus banners", inline=False)
+        embed.add_field(name="`/categoria lista`", value="Lista todas as categorias", inline=False)
+        embed.add_field(name="`/editar tipo nome`", value="Edita um produto (banner ou conquista)", inline=False)
+        embed.add_field(name="`/rotacao ver`", value="Mostra os banners da rotação atual", inline=False)
+        embed.add_field(name="`/rotacao forcar`", value="Força uma nova rotação imediatamente", inline=False)
+        embed.add_field(name="`/adminbot gerenciar`", value="Adiciona ou remove um admin", inline=False)
+        embed.add_field(name="`/adminbot lista`", value="Lista todos os admins ativos", inline=False)
+        embed.set_footer(text="⚙️ Slash • JogadorBot")
+        return embed
+
+    @discord.ui.button(emoji="💰", style=discord.ButtonStyle.primary, row=0)
+    async def btn_economia(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=self.embed_economia(), view=ViewAjudaCategoria())
+
+    @discord.ui.button(emoji="ℹ️", style=discord.ButtonStyle.primary, row=0)
+    async def btn_informacao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=self.embed_informacao(), view=ViewAjudaCategoria())
+
+    @discord.ui.button(emoji="🎮", style=discord.ButtonStyle.primary, row=0)
+    async def btn_diversao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=self.embed_diversao(), view=ViewAjudaCategoria())
+
+    @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.primary, row=0)
+    async def btn_outros(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=self.embed_outros(), view=ViewAjudaCategoria())
+
+    @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.primary, row=0)
+    async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=self.embed_slash(), view=ViewAjudaCategoria())
+
+
+class ViewAjudaCategoria(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+
+    @discord.ui.button(emoji="💰", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_economia(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_economia(), view=self)
+
+    @discord.ui.button(emoji="ℹ️", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_informacao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_informacao(), view=self)
+
+    @discord.ui.button(emoji="🎮", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_diversao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_diversao(), view=self)
+
+    @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_outros(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_outros(), view=self)
+
+    @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_slash(), view=self)
+
+    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
+    async def btn_voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ViewAjuda().embed_inicial(), view=ViewAjuda())
+
+# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
@@ -1574,50 +1747,8 @@ async def on_ready():
 @bot.remove_command("help")
 @bot.command(name="ajuda")
 async def ajuda(ctx):
-    embed1 = discord.Embed(
-        title="📖 Lista de Comandos — Página 1",
-        description=f"Comandos com prefixo `{PREFIX}`",
-        color=discord.Color.green()
-    )
-    embed1.add_field(name="!oi", value="Bot te cumprimenta", inline=False)
-    embed1.add_field(name="!dado [lados]", value="Rola um dado. Ex: `!dado 20`", inline=False)
-    embed1.add_field(name="!moeda", value="Joga uma moeda (cara ou coroa)", inline=False)
-    embed1.add_field(name="!userinfo [@usuario]", value="Mostra info de um usuário", inline=False)
-    embed1.add_field(name="!limpar [quantidade]", value="Apaga mensagens (requer permissão)", inline=False)
-    embed1.add_field(name="!enquete [pergunta]", value="Cria uma enquete com ✅ e ❌", inline=False)
-    embed1.add_field(name="!perfil [@usuario]", value="Mostra o perfil do usuário", inline=False)
-    embed1.add_field(name="!diario", value="Coleta seus Joyens diários", inline=False)
-    embed1.add_field(name="!saldo [@usuario]", value="Mostra o saldo de Joyens", inline=False)
-    embed1.add_field(name="!loja", value="Abre a loja do bot", inline=False)
-    embed1.add_field(name="!apostar [quantidade]", value="Aposta Joyens com 50% de chance", inline=False)
-    embed1.add_field(name="!catalogo", value="Abre o catálogo", inline=False)
-    embed1.add_field(name="!pagar @usuario quantidade", value="Envia Joyens para outro usuário", inline=False)
-    embed1.add_field(name="!level [@usuario]", value="Mostra o level e XP do usuário", inline=False)
-    embed1.add_field(name="!addjoyens @usuario quantidade", value="Adiciona Joyens (admin)", inline=False)
-    embed.add_field(name="!vender (categoria) (nome)", value="Vende um produto por metade do preço", inline=False)
-    embed.add_field(name="!trabalhar", value="Trabalha e ganha Joyens", inline=False)
-    embed.add_field(name="!empregos", value="Abre o menu de empregos", inline=False)
-    embed.add_field(name="!infojob [@usuario]", value="Mostra informações do emprego", inline=False)
-
-    embed2 = discord.Embed(
-        title="📖 Lista de Comandos — Página 2",
-        description="Comandos Slash `/`",
-        color=discord.Color.blue()
-    )
-    embed2.add_field(name="/conquista criar", value="Cria uma conquista (admin)", inline=False)
-    embed2.add_field(name="/conquista dar", value="Dá uma conquista a um usuário (admin)", inline=False)
-    embed2.add_field(name="/conquista lista", value="Lista todas as conquistas", inline=False)
-    embed2.add_field(name="/banner adicionar", value="Adiciona um banner à loja (admin)", inline=False)
-    embed2.add_field(name="/banner deletar", value="Deleta um banner da loja (admin)", inline=False)
-    embed2.add_field(name="/categoria criar/deletar/lista", value="Gerencia categorias (admin)", inline=False)
-    embed2.add_field(name="/adminbot gerenciar", value="Adiciona ou remove um admin (dono)", inline=False)
-    embed2.add_field(name="/adminbot lista", value="Lista os admins ativos (dono)", inline=False)
-    embed2.add_field(name="/editar tipo nome", value="Edita um produto (admin)", inline=False)
-    embed2.add_field(name="/rotacao ver", value="Mostra a rotação atual da loja", inline=False)
-    embed2.add_field(name="/rotacao forcar", value="Força uma nova rotação (admin)", inline=False)
-
-    await ctx.send(embed=embed1)
-    await ctx.send(embed=embed2)
+    view = ViewAjuda()
+    await ctx.send(embed=view.embed_inicial(), view=view)
 
 @bot.command(name="dado")
 async def dado(ctx, lados: int = 6):
