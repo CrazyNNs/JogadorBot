@@ -1557,7 +1557,6 @@ class ViewEmpregos(discord.ui.View):
 # ============================================================
 # VIEW (BOTÕES) - Comando de !ajuda
 # ============================================================
-
 class ViewAjuda(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=120)
