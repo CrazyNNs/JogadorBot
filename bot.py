@@ -568,7 +568,16 @@ async def verificar_favoritos_rotacao():
 async def desligar_automatico():
     agora = datetime.datetime.now()
     if agora.hour == 23 and agora.minute == 0:
-        print("🔴 Desligando automaticamente às 20h...")
+        print("🔴 Desligando projeto automaticamente...")
+        async with aiohttp.ClientSession() as session:
+            await session.post(
+                "https://backboard.railway.app/graphql/v2",
+                headers={
+                    "Authorization": f"Bearer {RAILWAY_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json={"query": f'mutation {{ serviceInstanceRedeploy(serviceId: "{RAILWAY_SERVICE_ID}") }}'}
+            )
         await bot.close()
 
 # ============================================================
@@ -1601,16 +1610,12 @@ class ViewAjuda(discord.ui.View):
             description="Comandos relacionados a Joyens, loja e trabalho.",
             color=discord.Color.gold()
         )
+        embed.add_field(name=f"`{PREFIX}empregos`", value="Abre o menu de empregos", inline=False)
+        embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
         embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
-        embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens", inline=False)
-        embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance", inline=False)
         embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}loja`", value="Abre a loja de banners", inline=False)
-        embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
-        embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
-        embed.add_field(name=f"`{PREFIX}empregos`", value="Abre o menu de empregos", inline=False)
-        embed.add_field(name=f"`{PREFIX}infojob [@usuario]`", value="Mostra informações do emprego", inline=False)
         embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
         embed.set_footer(text="💰 Economia • JogadorBot")
         return embed
@@ -1626,6 +1631,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}level [@usuario]`", value="Mostra o level e XP do usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}infojob [@usuario]`", value="Mostra informações do emprego do usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens do usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.set_footer(text="ℹ️ Informação • JogadorBot")
         return embed
 
@@ -1651,7 +1657,6 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}oi`", value="Bot te cumprimenta", inline=False)
         embed.add_field(name=f"`{PREFIX}hora`", value="Mostra a data e hora atual", inline=False)
         embed.add_field(name=f"`{PREFIX}limpar [quantidade]`", value="Apaga mensagens (requer permissão)", inline=False)
-        embed.add_field(name=f"`{PREFIX}banner`", value="Gerencia seus banners equipados", inline=False)
         embed.set_footer(text="🔧 Outros • JogadorBot")
         return embed
 
