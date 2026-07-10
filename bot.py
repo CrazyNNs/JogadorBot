@@ -2562,6 +2562,159 @@ async def categoria_lista(interaction: discord.Interaction):
         embed.add_field(name=f"{emoji} {nome}", value="\u200b", inline=True)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@admin_group.command(name="dar", description="Dá XP, Level, Joyens ou Banner para um usuário (admin)")
+@app_commands.describe(
+    categoria="O que você quer dar para o usuário",
+    valor="Quantidade (para xp/level/joyens) ou nome exato do banner (para banner)",
+    membro="Quem vai receber"
+)
+@app_commands.choices(categoria=[
+    app_commands.Choice(name="XP", value="xp"),
+    app_commands.Choice(name="Level", value="level"),
+    app_commands.Choice(name="Joyens", value="joyens"),
+    app_commands.Choice(name="Banner", value="banner"),
+])
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def adminbot_dar(
+    interaction: discord.Interaction,
+    categoria: app_commands.Choice[str],
+    valor: str,
+    membro: discord.Member
+):
+    if membro.bot:
+        await interaction.response.send_message("❌ Não é possível dar itens para um bot!", ephemeral=True)
+        return
+
+    cat = categoria.value
+
+    if cat == "xp":
+        if not valor.lstrip("-").isdigit():
+            await interaction.response.send_message("❌ Para XP, o valor deve ser um número inteiro.", ephemeral=True)
+            return
+        quantidade = int(valor)
+        if quantidade <= 0:
+            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            return
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
+            ON CONFLICT(usuario_id) DO NOTHING
+        """, (str(membro.id),))
+        con.commit()
+        con.close()
+
+        await interaction.response.send_message(
+            f"✅ **{quantidade} XP** adicionado para {membro.mention}!", ephemeral=True
+        )
+        await adicionar_xp(str(membro.id), quantidade, interaction)
+
+    elif cat == "level":
+        if not valor.lstrip("-").isdigit():
+            await interaction.response.send_message("❌ Para Level, o valor deve ser um número inteiro.", ephemeral=True)
+            return
+        quantidade = int(valor)
+        if quantidade <= 0:
+            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            return
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
+            ON CONFLICT(usuario_id) DO NOTHING
+        """, (str(membro.id),))
+        con.commit()
+        con.close()
+
+        level_atual, xp_atual = buscar_level(membro.id)
+        novo_level = min(level_atual + quantidade, LEVEL_MAX)
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("UPDATE level_usuarios SET level = ? WHERE usuario_id = ?",
+                    (novo_level, str(membro.id)))
+        con.commit()
+        con.close()
+
+        embed = discord.Embed(
+            title="⬆️ Level Concedido!",
+            description=f"{membro.mention} subiu para o **level {novo_level}**!",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    elif cat == "joyens":
+        if not valor.lstrip("-").isdigit():
+            await interaction.response.send_message("❌ Para Joyens, o valor deve ser um número inteiro.", ephemeral=True)
+            return
+        quantidade = int(valor)
+        if quantidade <= 0:
+            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            return
+
+        adicionar_joyens(membro.id, quantidade)
+        novo_saldo = buscar_joyens(membro.id)
+
+        embed = discord.Embed(
+            title="💰 Joyens Concedidos!",
+            description=f"{membro.mention} recebeu **{quantidade} Joyens**!",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens")
+        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    elif cat == "banner":
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT id, nome FROM banners WHERE LOWER(nome) = LOWER(?)", (valor,))
+        resultado = cur.fetchone()
+
+        if not resultado:
+            con.close()
+            await interaction.response.send_message(
+                f"❌ Banner **{valor}** não encontrado. Confira o nome exato no catálogo.",
+                ephemeral=True
+            )
+            return
+
+        banner_id, banner_nome = resultado
+
+        if usuario_tem_banner(membro.id, banner_id):
+            con.close()
+            await interaction.response.send_message(
+                f"❌ {membro.mention} já possui o banner **{banner_nome}**.", ephemeral=True
+            )
+            return
+
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                     (str(membro.id), banner_id))
+        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                     (str(membro.id), banner_id))
+        con.commit()
+        con.close()
+
+        embed = discord.Embed(
+            title="🖼️ Banner Concedido!",
+            description=f"{membro.mention} recebeu o banner **{banner_nome}**!",
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # 👉 PARA ADICIONAR UMA NOVA CATEGORIA NO FUTURO, cole aqui um novo bloco:
+    # elif cat == "nome_da_categoria":
+    #     ... sua lógica de banco de dados para essa categoria ...
+
+@adminbot_dar.error
+async def adminbot_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+    else:
+        raise error
 
 # ============================================================
 # COMANDOS SLASH — Edição de produtos
@@ -2811,166 +2964,6 @@ async def level_dar(interaction: discord.Interaction, tipo: app_commands.Choice[
 
 @level_dar.error
 async def level_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
-    else:
-        raise error
-
-# ============================================================
-# COMANDO SLASH — /adminbot (unificado: xp, level, joyens, banner)
-# ============================================================
-
-admin_group = app_commands.Group(name="adminbot", description="Ferramentas administrativas do bot")
-
-@admin_group.command(name="dar", description="Dá XP, Level, Joyens ou Banner para um usuário (admin)")
-@app_commands.describe(
-    categoria="O que você quer dar para o usuário",
-    valor="Quantidade (para xp/level/joyens) ou nome exato do banner (para banner)",
-    membro="Quem vai receber"
-)
-@app_commands.choices(categoria=[
-    app_commands.Choice(name="XP", value="xp"),
-    app_commands.Choice(name="Level", value="level"),
-    app_commands.Choice(name="Joyens", value="joyens"),
-    app_commands.Choice(name="Banner", value="banner"),
-])
-@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
-async def adminbot_dar(
-    interaction: discord.Interaction,
-    categoria: app_commands.Choice[str],
-    valor: str,
-    membro: discord.Member
-):
-    if membro.bot:
-        await interaction.response.send_message("❌ Não é possível dar itens para um bot!", ephemeral=True)
-        return
-
-    cat = categoria.value
-
-    if cat == "xp":
-        if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para XP, o valor deve ser um número inteiro.", ephemeral=True)
-            return
-        quantidade = int(valor)
-        if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
-            return
-
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("""
-            INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
-            ON CONFLICT(usuario_id) DO NOTHING
-        """, (str(membro.id),))
-        con.commit()
-        con.close()
-
-        await interaction.response.send_message(
-            f"✅ **{quantidade} XP** adicionado para {membro.mention}!", ephemeral=True
-        )
-        await adicionar_xp(str(membro.id), quantidade, interaction)
-
-    elif cat == "level":
-        if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para Level, o valor deve ser um número inteiro.", ephemeral=True)
-            return
-        quantidade = int(valor)
-        if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
-            return
-
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("""
-            INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
-            ON CONFLICT(usuario_id) DO NOTHING
-        """, (str(membro.id),))
-        con.commit()
-        con.close()
-
-        level_atual, xp_atual = buscar_level(membro.id)
-        novo_level = min(level_atual + quantidade, LEVEL_MAX)
-
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("UPDATE level_usuarios SET level = ? WHERE usuario_id = ?",
-                    (novo_level, str(membro.id)))
-        con.commit()
-        con.close()
-
-        embed = discord.Embed(
-            title="⬆️ Level Concedido!",
-            description=f"{membro.mention} subiu para o **level {novo_level}**!",
-            color=discord.Color.green()
-        )
-        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    elif cat == "joyens":
-        if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para Joyens, o valor deve ser um número inteiro.", ephemeral=True)
-            return
-        quantidade = int(valor)
-        if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
-            return
-
-        adicionar_joyens(membro.id, quantidade)
-        novo_saldo = buscar_joyens(membro.id)
-
-        embed = discord.Embed(
-            title="💰 Joyens Concedidos!",
-            description=f"{membro.mention} recebeu **{quantidade} Joyens**!",
-            color=discord.Color.gold()
-        )
-        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens")
-        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    elif cat == "banner":
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("SELECT id, nome FROM banners WHERE LOWER(nome) = LOWER(?)", (valor,))
-        resultado = cur.fetchone()
-
-        if not resultado:
-            con.close()
-            await interaction.response.send_message(
-                f"❌ Banner **{valor}** não encontrado. Confira o nome exato no catálogo.",
-                ephemeral=True
-            )
-            return
-
-        banner_id, banner_nome = resultado
-
-        if usuario_tem_banner(membro.id, banner_id):
-            con.close()
-            await interaction.response.send_message(
-                f"❌ {membro.mention} já possui o banner **{banner_nome}**.", ephemeral=True
-            )
-            return
-
-        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
-                     (str(membro.id), banner_id))
-        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
-                     (str(membro.id), banner_id))
-        con.commit()
-        con.close()
-
-        embed = discord.Embed(
-            title="🖼️ Banner Concedido!",
-            description=f"{membro.mention} recebeu o banner **{banner_nome}**!",
-            color=discord.Color.purple()
-        )
-        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    # 👉 PARA ADICIONAR UMA NOVA CATEGORIA NO FUTURO, cole aqui um novo bloco:
-    # elif cat == "nome_da_categoria":
-    #     ... sua lógica de banco de dados para essa categoria ...
-
-@adminbot_dar.error
-async def adminbot_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
     else:
