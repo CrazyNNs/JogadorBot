@@ -129,7 +129,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 # BANCO DE DADOS
 # ============================================================
 def iniciar_banco():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conquistas (
@@ -246,7 +246,7 @@ def iniciar_banco():
 # FUNÇÕES AUXILIARES - Conquistas
 # ============================================================
 def buscar_conquistas_usuario(usuario_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         SELECT c.nome, c.descricao, c.emoji, cu.data
@@ -260,7 +260,7 @@ def buscar_conquistas_usuario(usuario_id):
     return resultado
 
 def buscar_todas_conquistas():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id, nome, descricao, emoji FROM conquistas ORDER BY nome")
     resultado = cur.fetchall()
@@ -272,7 +272,7 @@ def buscar_todas_conquistas():
 # ============================================================
 
 def buscar_joyens(usuario_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT joyens FROM economia WHERE usuario_id = ?", (str(usuario_id),))
     resultado = cur.fetchone()
@@ -280,7 +280,7 @@ def buscar_joyens(usuario_id):
     return resultado[0] if resultado else 0
 
 def adicionar_joyens(usuario_id, quantidade):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         INSERT INTO economia (usuario_id, joyens) VALUES (?, ?)
@@ -290,14 +290,14 @@ def adicionar_joyens(usuario_id, quantidade):
     con.close()
 
 def remover_joyens(usuario_id, quantidade):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("UPDATE economia SET joyens = joyens - ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
     con.commit()
     con.close()
 
 def usuario_tem_banner(usuario_id, banner_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT 1 FROM banners_usuarios WHERE usuario_id = ? AND banner_id = ?", (str(usuario_id), banner_id))
     resultado = cur.fetchone()
@@ -305,7 +305,7 @@ def usuario_tem_banner(usuario_id, banner_id):
     return resultado is not None
 
 def buscar_banner_ativo(usuario_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         SELECT b.arquivo FROM banner_ativo ba
@@ -341,7 +341,7 @@ def eh_admin(usuario_id):
     """Verifica se o usuário é admin válido (não expirado)."""
     if usuario_id == DONO_ID:
         return True
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT expira FROM admins WHERE usuario_id = ?", (str(usuario_id),))
     resultado = cur.fetchone()
@@ -368,7 +368,7 @@ def xp_necessario(level):
     return xp
 
 def buscar_level(usuario_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT level, xp FROM level_usuarios WHERE usuario_id = ?", (str(usuario_id),))
     resultado = cur.fetchone()
@@ -377,7 +377,7 @@ def buscar_level(usuario_id):
 
 async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
     """Adiciona XP ao usuário e verifica se subiu de level."""
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     cur.execute("""
@@ -474,7 +474,7 @@ from discord.ext import tasks
 
 @tasks.loop(minutes=5)
 async def verificar_admins_expirados():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     agora = datetime.datetime.now().isoformat()
     cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
@@ -491,7 +491,7 @@ async def verificar_admins_expirados():
 
 @tasks.loop(minutes=1)
 async def verificar_rotacao():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT expira FROM rotacao_atual LIMIT 1")
     resultado = cur.fetchone()
@@ -517,7 +517,7 @@ async def verificar_rotacao():
             await canal.send(f"⚠️ {expira}")
             return
 
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             SELECT b.nome, b.raridade FROM rotacao_atual ra
@@ -543,7 +543,7 @@ async def verificar_favoritos_rotacao():
     await asyncio.sleep(5)
     verificar_favoritos_rotacao.stop()
 
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         SELECT bf.usuario_id, b.id, b.nome
@@ -585,7 +585,7 @@ async def desligar_automatico():
 # ============================================================
 
 def buscar_todas_categorias():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id, nome, emoji FROM categorias_banner ORDER BY nome")
     resultado = cur.fetchall()
@@ -593,7 +593,7 @@ def buscar_todas_categorias():
     return resultado
 
 def buscar_banners_por_categoria(categoria_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id, nome, descricao, preco, arquivo FROM banners WHERE categoria_id = ? ORDER BY id", (categoria_id,))
     resultado = cur.fetchall()
@@ -601,7 +601,7 @@ def buscar_banners_por_categoria(categoria_id):
     return resultado
 
 def buscar_banners_rotacao():
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     expira_row = cur.execute("SELECT expira FROM rotacao_atual LIMIT 1").fetchone()
     cur.execute("""
@@ -615,7 +615,7 @@ def buscar_banners_rotacao():
     return banners, expira
 
 def buscar_banners_categoria_catalogo(categoria_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
         SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
@@ -628,7 +628,7 @@ def buscar_banners_categoria_catalogo(categoria_id):
     return resultado
 
 def banner_em_rotacao(banner_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT 1 FROM rotacao_atual WHERE banner_id = ?", (banner_id,))
     resultado = cur.fetchone()
@@ -636,7 +636,7 @@ def banner_em_rotacao(banner_id):
     return resultado is not None
 
 def usuario_favoritou_banner(usuario_id, banner_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT 1 FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
                 (str(usuario_id), banner_id))
@@ -671,7 +671,7 @@ async def gerar_imagem_catalogo(banners_pagina):
 
 def sortear_nova_rotacao():
     import random as rnd
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     # Busca histórico para evitar repetição
@@ -734,7 +734,7 @@ def sortear_nova_rotacao():
 # ============================================================
 
 def buscar_emprego(usuario_id):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT emprego, vezes_trabalhadas, ultimo_trabalho FROM empregos_usuarios WHERE usuario_id = ?",
                 (str(usuario_id),))
@@ -775,7 +775,7 @@ class ViewPerfil(discord.ui.View):
 
     @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.secondary)
     async def ver_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             SELECT b.id FROM banners_usuarios bu
@@ -845,7 +845,7 @@ class ViewConquistas(discord.ui.View):
         xp_prox = xp_necessario(level)
         joyens = buscar_joyens(membro.id)
         conquistas = buscar_conquistas_usuario(membro.id)
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
         total_banners = cur.fetchone()[0]
@@ -984,7 +984,7 @@ class ViewLoja(discord.ui.View):
             )
             return
         remover_joyens(comprador_id, preco)
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
                     (str(comprador_id), banner_id))
@@ -1049,7 +1049,7 @@ class ViewInventarioBanners(discord.ui.View):
         self.construir_botoes()
 
     def carregar_banners(self):
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             SELECT b.id, b.nome FROM banners_usuarios bu
@@ -1062,7 +1062,7 @@ class ViewInventarioBanners(discord.ui.View):
         return resultado
 
     def banner_ativo_id(self):
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("SELECT banner_id FROM banner_ativo WHERE usuario_id = ?", (str(self.usuario.id),))
         resultado = cur.fetchone()
@@ -1085,7 +1085,7 @@ class ViewInventarioBanners(discord.ui.View):
                 row=len(self.children) // 3
             )
             async def callback(interaction, bid=banner_id, bnome=nome):
-                con2 = sqlite3.connect("/data/jogadorbot.db")
+                con2 = sqlite3.connect("jogadorbot.db")
                 cur2 = con2.cursor()
                 cur2.execute("INSERT OR REPLACE INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)",
                              (str(interaction.user.id), bid))
@@ -1123,7 +1123,7 @@ class ViewInventarioBanners(discord.ui.View):
             xp_prox = xp_necessario(level)
             joyens = buscar_joyens(membro.id)
             conquistas = buscar_conquistas_usuario(membro.id)
-            con = sqlite3.connect("/data/jogadorbot.db")
+            con = sqlite3.connect("jogadorbot.db")
             cur = con.cursor()
             cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
             qtd_banners = cur.fetchone()[0]
@@ -1390,7 +1390,7 @@ class ViewCatalogoBanners(discord.ui.View):
             )
             return
 
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
 
         if usuario_favoritou_banner(self.usuario_id, banner_id):
@@ -1520,7 +1520,7 @@ class SelectEmprego(discord.ui.Select):
             )
             return
 
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
@@ -1814,7 +1814,7 @@ async def perfil(ctx, membro: discord.Member = None):
     banner_arquivo = buscar_banner_ativo(membro.id)
 
  # Quantidade de banners do usuário
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
     total_banners = cur.fetchone()[0]
@@ -1881,7 +1881,7 @@ async def perfil(ctx, membro: discord.Member = None):
             
 @bot.command(name="diario")
 async def diario(ctx):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     agora = datetime.datetime.now(FUSO_BR)
@@ -2087,7 +2087,7 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
     tabela_ativo = config["tabela_ativo"]
     coluna_ativo_id = config["coluna_ativo_id"]
 
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     # Verifica se o produto existe no catálogo
@@ -2183,7 +2183,7 @@ async def trabalhar(ctx):
     acao = random.choice(emprego["acoes"]).format(salario=salario)
 
     # Atualiza banco
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     agora = datetime.datetime.now().isoformat()
     cur.execute("""
@@ -2254,7 +2254,7 @@ conquista_group = app_commands.Group(name="conquista", description="Sistema de c
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def conquista_criar(interaction: discord.Interaction, nome: str, descricao: str, emoji: str):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     try:
         cur.execute("INSERT INTO conquistas (nome, descricao, emoji) VALUES (?, ?, ?)", (nome, descricao, emoji))
@@ -2273,7 +2273,7 @@ async def conquista_criar(interaction: discord.Interaction, nome: str, descricao
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def conquista_dar(interaction: discord.Interaction, membro: discord.Member, nome: str, midia: discord.Attachment = None):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     cur.execute("SELECT id, nome, descricao, emoji FROM conquistas WHERE LOWER(nome) = LOWER(?)", (nome,))
@@ -2368,7 +2368,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
         )
         return
     
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (categoria,))
     resultado = cur.fetchone()
@@ -2381,7 +2381,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
         return
     
     cat_id = resultado[0]
-    os.makedirs("/data/banners", exist_ok=True)
+    os.makedirs("banners", exist_ok=True)
     
     # ✅ Detecta extensão correta
     if imagem.content_type and "gif" in imagem.content_type:
@@ -2393,7 +2393,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
     else:
         extensao = ".png"  # padrão
     
-    arquivo_path = f"/data/banners/{nome.replace(' ', '_')}{extensao}"
+    arquivo_path = f"banners/{nome.replace(' ', '_')}{extensao}"
     
     async with aiohttp.ClientSession() as session:
         async with session.get(imagem.url) as resp:
@@ -2418,7 +2418,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
 @app_commands.describe(nome="Nome exato do banner a deletar")
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def banner_deletar(interaction: discord.Interaction, nome: str):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id, arquivo FROM banners WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
@@ -2462,7 +2462,7 @@ async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.
 
         expira = None if segundos is None else (datetime.datetime.now() + datetime.timedelta(seconds=segundos)).isoformat()
 
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("INSERT OR REPLACE INTO admins (usuario_id, expira) VALUES (?, ?)", (str(usuario.id), expira))
         con.commit()
@@ -2477,7 +2477,7 @@ async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.
             pass
 
     elif acao.lower() == "remover":
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("DELETE FROM admins WHERE usuario_id = ?", (str(usuario.id),))
         con.commit()
@@ -2495,7 +2495,7 @@ async def adminbot_lista(interaction: discord.Interaction):
     if interaction.user.id != DONO_ID:
         await interaction.response.send_message("❌ Apenas o dono do bot pode ver esta lista.", ephemeral=True)
         return
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT usuario_id, expira FROM admins")
     admins = cur.fetchall()
@@ -2520,7 +2520,7 @@ categoria_group = app_commands.Group(name="categoria", description="Gerenciament
 @app_commands.describe(nome="Nome da categoria", emoji="Emoji da categoria")
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def categoria_criar(interaction: discord.Interaction, nome: str, emoji: str):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     try:
         cur.execute("INSERT INTO categorias_banner (nome, emoji) VALUES (?, ?)", (nome, emoji))
@@ -2535,7 +2535,7 @@ async def categoria_criar(interaction: discord.Interaction, nome: str, emoji: st
 @app_commands.describe(nome="Nome da categoria a deletar")
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def categoria_deletar(interaction: discord.Interaction, nome: str):
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
@@ -2623,7 +2623,7 @@ async def editar(
     tabela = config["tabela"]
     campos = config["campos"]
 
-    con = sqlite3.connect("/data/jogadorbot.db")
+    con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
 
     # Verifica se o produto existe
@@ -2689,7 +2689,7 @@ async def editar(
     if imagem and "imagem" in campos:
         cur.execute("SELECT arquivo FROM banners WHERE id = ?", (produto_id,))
         arquivo_antigo = cur.fetchone()[0]
-        novo_arquivo = f"/data/banners/{(novo_nome or nome).replace(' ', '_')}.png"
+        novo_arquivo = f"banners/{(novo_nome or nome).replace(' ', '_')}.png"
         async with aiohttp.ClientSession() as session:
             async with session.get(imagem.url) as resp:
                 imagem_bytes = await resp.read()
@@ -2747,7 +2747,7 @@ async def rotacao_forcar(interaction: discord.Interaction):
         return
     canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
     if canal:
-        con = sqlite3.connect("/data/jogadorbot.db")
+        con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             SELECT b.nome, b.raridade FROM rotacao_atual ra
