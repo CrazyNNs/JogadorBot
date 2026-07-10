@@ -2750,6 +2750,73 @@ async def rotacao_forcar(interaction: discord.Interaction):
     await interaction.followup.send("✅ Nova rotação forçada com sucesso!", ephemeral=True)
 
 # ============================================================
+# COMANDOS SLASH — Level e XP
+# ============================================================
+
+level_group = app_commands.Group(name="level", description="Gerenciamento de level e XP")
+
+@level_group.command(name="dar", description="Dá XP ou Level para um usuário (admin)")
+@app_commands.describe(
+    tipo="Se vai dar XP ou Level diretamente",
+    quantidade="Quantidade a ser adicionada",
+    membro="Quem vai receber o XP/Level"
+)
+@app_commands.choices(tipo=[
+    app_commands.Choice(name="XP", value="xp"),
+    app_commands.Choice(name="Level", value="level"),
+])
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def level_dar(interaction: discord.Interaction, tipo: app_commands.Choice[str], quantidade: int, membro: discord.Member):
+    if membro.bot:
+        await interaction.response.send_message("❌ Não é possível dar XP/Level para um bot!", ephemeral=True)
+        return
+
+    if quantidade <= 0:
+        await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+        return
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO level_usuarios (usuario_id, level, xp) VALUES (?, 0, 0)
+        ON CONFLICT(usuario_id) DO NOTHING
+    """, (str(membro.id),))
+    con.commit()
+    con.close()
+
+    if tipo.value == "xp":
+        await interaction.response.send_message(
+            f"✅ **{quantidade} XP** adicionado para {membro.mention}!",
+            ephemeral=True
+        )
+        await adicionar_xp(str(membro.id), quantidade, interaction)
+    else:
+        level_atual, xp_atual = buscar_level(membro.id)
+        novo_level = min(level_atual + quantidade, LEVEL_MAX)
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("UPDATE level_usuarios SET level = ? WHERE usuario_id = ?",
+                    (novo_level, str(membro.id)))
+        con.commit()
+        con.close()
+
+        embed = discord.Embed(
+            title="⬆️ Level Concedido!",
+            description=f"{membro.mention} subiu para o **level {novo_level}**!",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@level_dar.error
+async def level_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+    else:
+        raise error
+
+# ============================================================
 # COMANDO SLASH — /adminbot (unificado: xp, level, joyens, banner)
 # ============================================================
 
@@ -2912,6 +2979,8 @@ async def adminbot_dar_error(interaction: discord.Interaction, error: app_comman
 bot.tree.add_command(rotacao_group)
 
 bot.tree.add_command(categoria_group)
+
+bot.tree.add_command(level_group)
 
 bot.tree.add_command(admin_group)
 
