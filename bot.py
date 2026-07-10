@@ -2915,8 +2915,6 @@ bot.tree.add_command(categoria_group)
 
 bot.tree.add_command(admin_group)
 
-bot.tree.add_command(level_group)
-
 bot.tree.add_command(banner_group)
 
 bot.tree.add_command(conquista_group)
