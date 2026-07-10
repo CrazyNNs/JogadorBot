@@ -2820,9 +2820,9 @@ async def level_dar_error(interaction: discord.Interaction, error: app_commands.
 # COMANDO SLASH — /adminbot (unificado: xp, level, joyens, banner)
 # ============================================================
 
-adminbot_group = app_commands.Group(name="adminbot", description="Ferramentas administrativas do bot")
+admin_group = app_commands.Group(name="adminbot", description="Ferramentas administrativas do bot")
 
-@adminbot_group.command(name="dar", description="Dá XP, Level, Joyens ou Banner para um usuário (admin)")
+@admin_group.command(name="dar", description="Dá XP, Level, Joyens ou Banner para um usuário (admin)")
 @app_commands.describe(
     categoria="O que você quer dar para o usuário",
     valor="Quantidade (para xp/level/joyens) ou nome exato do banner (para banner)",
