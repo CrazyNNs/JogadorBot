@@ -563,23 +563,6 @@ async def verificar_favoritos_rotacao():
             )
         except:
             pass
-
-@tasks.loop(minutes=1)
-async def desligar_automatico():
-    agora = datetime.datetime.now()
-    if agora.hour == 23 and agora.minute == 0:
-        print("🔴 Desligando projeto automaticamente...")
-        async with aiohttp.ClientSession() as session:
-            await session.post(
-                "https://backboard.railway.app/graphql/v2",
-                headers={
-                    "Authorization": f"Bearer {RAILWAY_TOKEN}",
-                    "Content-Type": "application/json"
-                },
-                json={"query": f'mutation {{ serviceInstanceRedeploy(serviceId: "{RAILWAY_SERVICE_ID}") }}'}
-            )
-        await bot.close()
-
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
@@ -1739,7 +1722,6 @@ async def on_ready():
     iniciar_banco()
     verificar_admins_expirados.start()
     verificar_rotacao.start()
-    desligar_automatico.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
