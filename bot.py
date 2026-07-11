@@ -84,7 +84,7 @@ EMPREGOS = {
         "salario_min": 1250,
         "salario_max": 1450,
         "level_necessario": 0,
-        "emoji": "🧹",
+        "emoji": "<:GariIcon:1525340158831104060>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
             "Você varreu as ruas do centro e ganhou {salario} Joyens!",
@@ -96,7 +96,7 @@ EMPREGOS = {
         "salario_min": 1600,
         "salario_max": 1800,
         "level_necessario": 5,
-        "emoji": "📷",
+        "emoji": "<:FotografoIcon:1525345746218647593>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
             "Você fotografou um casamento e ganhou {salario} Joyens!",
@@ -108,7 +108,7 @@ EMPREGOS = {
         "salario_min": 2000,
         "salario_max": 2200,
         "level_necessario": 10,
-        "emoji": "🍹",
+        "emoji": "<:BarmanIcon:1525347726626131998>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
             "Você preparou drinks a noite toda e ganhou {salario} Joyens!",
@@ -2232,7 +2232,7 @@ class Layout(ui.LayoutView):
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        botao_1 = ui.Button(label="Botão <:GariIcon:1525340158831104060>")
+        botao_1 = ui.Button(label="Botão 1")
         botao_1.callback = self.botao_1_resposta
         
         sessao = ui.Section(ui.TextDisplay("Botão ao lado:"), accessory=botao_1)
