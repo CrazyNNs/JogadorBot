@@ -2228,7 +2228,7 @@ class Layout(ui.LayoutView):
     def __init__(self):
         super().__init__()
 
-        container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2."))
+        container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2. <:GariIcon:1525340158831104060>"))
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
