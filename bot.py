@@ -2223,6 +2223,17 @@ async def infojob(ctx, membro: discord.Member = None):
     embed.add_field(name="Próximo trabalho", value=disponivel, inline=True)
     await ctx.send(embed=embed)
 
+class Layout(ui.LayoutView):
+    def __init__(self):
+        super().__init__()
+
+        self.add_item(ui.TextDisplay("Salve! Este é um comando teste de V2."))
+
+@bot.command(name="Teste")
+async def Teste(ctx:commands.Context):
+    layout = Layout()
+    await ctx.reply(view=layout)
+
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
 # ============================================================
