@@ -2229,6 +2229,9 @@ class Layout(ui.LayoutView):
         super().__init__()
 
         container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2."))
+        container.accent_color = discord.Colour.purple()
+        container.spoiler = true
+        
         container.add_item(ui.TextDisplay("Esse é um texto extra de teste."))
         self.add_item(container)
 
