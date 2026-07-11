@@ -84,7 +84,7 @@ EMPREGOS = {
         "salario_min": 1250,
         "salario_max": 1450,
         "level_necessario": 0,
-        "emoji": "<:GariIcon:1525340158831104060>",
+        "emoji": "<:GariIcon:1525380207907704914>>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
             "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
@@ -96,7 +96,7 @@ EMPREGOS = {
         "salario_min": 1600,
         "salario_max": 1800,
         "level_necessario": 5,
-        "emoji": "<:FotografoIcon:1525345746218647593>",
+        "emoji": "<:FotografoIcon:1525381107867193354>>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
             "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
@@ -108,7 +108,7 @@ EMPREGOS = {
         "salario_min": 2000,
         "salario_max": 2200,
         "level_necessario": 10,
-        "emoji": "<:BarmanIcon:1525348561171251411>",
+        "emoji": "<:BarmanIcon:1525381712387772597>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
             "Você preparou drinks a noite toda e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
@@ -2235,7 +2235,7 @@ class Layout(ui.LayoutView):
     def __init__(self):
         super().__init__()
 
-        container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2. <:GariIcon:1525340158831104060>"))
+        container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2. <:GariIcon:1525380207907704914>>"))
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
