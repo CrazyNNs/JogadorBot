@@ -2232,7 +2232,7 @@ class Layout(ui.LayoutView):
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        botao_1 = ui.Button(label="Botão 1")
+        botao_1 = ui.Button(label="Botão <:GariIcon:1525340158831104060>")
         botao_1.callback = self.botao_1_resposta
         
         sessao = ui.Section(ui.TextDisplay("Botão ao lado:"), accessory=botao_1)
