@@ -84,7 +84,7 @@ EMPREGOS = {
         "salario_min": 1250,
         "salario_max": 1450,
         "level_necessario": 0,
-        "emoji": "<:GariIcon:1525380207907704914>>",
+        "emoji": "<:GariIcon:1525380207907704914>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
             "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
@@ -96,7 +96,7 @@ EMPREGOS = {
         "salario_min": 1600,
         "salario_max": 1800,
         "level_necessario": 5,
-        "emoji": "<:FotografoIcon:1525381107867193354>>",
+        "emoji": "<:FotografoIcon:1525381107867193354>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
             "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
