@@ -1476,24 +1476,49 @@ class ViewPagamento(discord.ui.View):
             inline=False
         )
         await interaction.response.edit_message(embed=embed, view=self)
-
-class SelectEmprego(discord.ui.Select):
-    def __init__(self, usuario_id, level_usuario):
+# ============================================================
+# VIEW (BOTÕES) - Comando de !empregos
+# ============================================================
+class LayoutEmpregos(ui.LayoutView):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        options = []
+        level_usuario, _ = buscar_level(usuario_id)
+
+        container = ui.Container(
+            ui.TextDisplay("💼 **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
+        )
+        container.accent_color = discord.Colour.blue()
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         for nome, dados in EMPREGOS.items():
             level_req = dados["level_necessario"]
             pode = level_usuario >= level_req
-            options.append(discord.SelectOption(
-                label=f"{dados['emoji']} {nome}",
-                value=nome,
-                description=f"Salário: {dados['salario_min']}-{dados['salario_max']}J | Level {level_req}{'✅' if pode else '❌'}",
-                default=False
-            ))
-        super().__init__(placeholder="Escolha um emprego...", options=options)
 
-    async def callback(self, interaction: discord.Interaction):
-        emprego_nome = self.values[0]
+            texto = (
+                f"{dados['emoji']} **{nome}**\n"
+                f"{dados['descricao']}\n"
+                f"<:JoyensIcon:1525350395738591325> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
+            )
+
+            botao = ui.Button(
+                label="✅ Escolher" if pode else "❌ Escolher",
+                style=discord.ButtonStyle.success if pode else discord.ButtonStyle.danger
+            )
+            botao.callback = self.criar_callback(nome)
+
+            sessao = ui.Section(ui.TextDisplay(texto), accessory=botao)
+            container.add_item(sessao)
+            container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        self.add_item(container)
+
+    def criar_callback(self, emprego_nome):
+        async def callback(interaction: discord.Interaction):
+            await self.escolher_emprego(interaction, emprego_nome)
+        return callback
+
+    async def escolher_emprego(self, interaction: discord.Interaction, emprego_nome):
         emprego = EMPREGOS[emprego_nome]
         level_usuario, _ = buscar_level(self.usuario_id)
 
@@ -1514,38 +1539,22 @@ class SelectEmprego(discord.ui.Select):
         con.commit()
         con.close()
 
-        embed = discord.Embed(
-            title=f"{emprego['emoji']} Empregado como {emprego_nome}!",
-            description=f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="Salário", value=f"{emprego['salario_min']} - {emprego['salario_max']} Joyens", inline=True)
-        embed.add_field(name="Level necessário", value=f"Level {emprego['level_necessario']}", inline=True)
-        await interaction.response.edit_message(embed=embed, view=None)
+        confirmacao = LayoutConfirmacaoEmprego(emprego_nome, emprego)
+        await interaction.response.edit_message(view=confirmacao)
 
-# ============================================================
-# VIEW (BOTÕES) - Empregos e Trabalhar
-# ============================================================
-
-class ViewEmpregos(discord.ui.View):
-    def __init__(self, usuario_id):
-        super().__init__(timeout=120)
-        level_usuario, _ = buscar_level(usuario_id)
-        self.add_item(SelectEmprego(usuario_id, level_usuario))
-
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="💼 Menu de Empregos",
-            description="Escolha um emprego abaixo! Empregos com `❌` precisam de level maior.",
-            color=discord.Color.blue()
-        )
-        for nome, dados in EMPREGOS.items():
-            embed.add_field(
-                name=f"{dados['emoji']} {nome}",
-                value=f"{dados['descricao']}\n<:JoyensIcon:1525350395738591325> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {dados['level_necessario']}",
-                inline=False
+class LayoutConfirmacaoEmprego(ui.LayoutView):
+    def __init__(self, emprego_nome, emprego_dados):
+        super().__init__(timeout=None)
+        container = ui.Container(
+            ui.TextDisplay(
+                f"{emprego_dados['emoji']} **Empregado como {emprego_nome}!**\n"
+                f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.\n\n"
+                f"<:JoyensIcon:1525350395738591325> Salário: {emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
+                f"📊 Level necessário: {emprego_dados['level_necessario']}"
             )
-        return embed
+        )
+        container.accent_color = discord.Colour.green()
+        self.add_item(container)
 
 # ============================================================
 # VIEW (BOTÕES) - Comando de !ajuda
@@ -2132,19 +2141,17 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
 
 @bot.command(name="empregos")
 async def empregos(ctx):
-    view = ViewEmpregos(ctx.author.id)
-    embed = view.gerar_embed()
-    await ctx.send(embed=embed, view=view)
-
+    layout = LayoutEmpregos(ctx.author.id)
+    await ctx.send(view=layout)
+    
 @bot.command(name="trabalhar")
 async def trabalhar(ctx):
     emprego_dados = buscar_emprego(ctx.author.id)
 
     # Se não tiver emprego, redireciona para o menu
     if not emprego_dados:
-        view = ViewEmpregos(ctx.author.id)
-        embed = view.gerar_embed()
-        await ctx.send("Você ainda não tem um emprego! Escolha um abaixo:", embed=embed, view=view)
+        layout = LayoutEmpregos(ctx.author.id)
+        await ctx.send(view=layout)
         return
 
     emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
