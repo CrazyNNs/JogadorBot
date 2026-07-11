@@ -852,7 +852,7 @@ class ViewConquistas(discord.ui.View):
             embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
 
         embed2 = discord.Embed(color=discord.Color.blurple())
-        embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
+        embed2.add_field(name="<:SacoJoyensIcon:1525372626107633704> Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
         embed2.add_field(
             name="📊 Outros",
             value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
@@ -1129,7 +1129,7 @@ class ViewInventarioBanners(discord.ui.View):
                 embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
 
             embed2 = discord.Embed(color=discord.Color.blurple())
-            embed2.add_field(name="💰 Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
+            embed2.add_field(name="<:SacoJoyensIcon:1525372626107633704> Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
             embed2.add_field(
                 name="📊 Outros",
                 value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{qtd_banners}``",
@@ -1310,7 +1310,7 @@ class ViewCatalogoBanners(discord.ui.View):
             fav_texto = " ⭐ Favoritado" if favoritado else ""
             embed.add_field(
                 name=f"**{i+1}.** {nome} — {raridade}{fav_texto}",
-                value=f"{descricao}\n💰 **{preco} Joyens** | {status}",
+                value=f"{descricao}\n<:SacoJoyensIcon:1525372626107633704> **{preco} Joyens** | {status}",
                 inline=False
             )
 
@@ -1477,7 +1477,7 @@ class ViewPagamento(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=self)
 # ============================================================
-# VIEW (BOTÕES) - Comando de !empregos
+# V2 VIEW (BOTÕES) - Comando de !empregos
 # ============================================================
 class LayoutEmpregos(ui.LayoutView):
     def __init__(self, usuario_id):
@@ -1486,7 +1486,7 @@ class LayoutEmpregos(ui.LayoutView):
         level_usuario, _ = buscar_level(usuario_id)
 
         container = ui.Container(
-            ui.TextDisplay("💼 **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
+            ui.TextDisplay("<:EmpregosIcon:1525362354425036840> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
@@ -1570,7 +1570,7 @@ class ViewAjuda(discord.ui.View):
             color=discord.Color.blurple()
         )
         embed.add_field(
-            name="💰 Economia",
+            name="<:SacoJoyensIcon:1525372626107633704> Economia",
             value="Comandos relacionados a Joyens, loja e trabalho.",
             inline=True
         )
@@ -1599,7 +1599,7 @@ class ViewAjuda(discord.ui.View):
 
     def embed_economia(self):
         embed = discord.Embed(
-            title="💰 Economia",
+            title="<:SacoJoyensIcon:1525372626107633704> Economia",
             description="Comandos relacionados a Joyens, loja e trabalho.",
             color=discord.Color.gold()
         )
@@ -1610,7 +1610,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}loja`", value="Abre a loja de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
         embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
-        embed.set_footer(text="💰 Economia • JogadorBot")
+        embed.set_footer(text="<:SacoJoyensIcon:1525372626107633704> Economia • JogadorBot")
         return embed
 
     def embed_informacao(self):
@@ -1675,7 +1675,7 @@ class ViewAjuda(discord.ui.View):
         embed.set_footer(text="⚙️ Slash • JogadorBot")
         return embed
 
-    @discord.ui.button(emoji="💰", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(emoji="<:SacoJoyensIcon:1525372626107633704>", style=discord.ButtonStyle.primary, row=0)
     async def btn_economia(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=self.embed_economia(), view=ViewAjudaCategoria())
 
@@ -1700,7 +1700,7 @@ class ViewAjudaCategoria(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=120)
 
-    @discord.ui.button(emoji="💰", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(emoji="<:SacoJoyensIcon:1525372626107633704>", style=discord.ButtonStyle.secondary, row=0)
     async def btn_economia(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_economia(), view=self)
 
@@ -1834,7 +1834,7 @@ async def perfil(ctx, membro: discord.Member = None):
 # Segunda embed — Economia e outros
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
-        name="💰 Economia",
+        name="<:SacoJoyensIcon:1525372626107633704> Economia",
         value=f"> **Joyens:** ``{joyens}``",
         inline=False
     )
@@ -1909,7 +1909,7 @@ async def diario(ctx):
     novo_saldo = cur.execute("SELECT joyens FROM economia WHERE usuario_id = ?", (str(ctx.author.id),)).fetchone()[0]
     con.close()
 
-    embed = discord.Embed(title="💰 Recompensa Diária!", color=discord.Color.gold())
+    embed = discord.Embed(title="<:SacoJoyensIcon:1525372626107633704> Recompensa Diária!", color=discord.Color.gold())
     embed.add_field(name="Joyens recebidos", value=f"+{quantidade} Joyens", inline=True)
     embed.add_field(name="Saldo atual", value=f"{novo_saldo} Joyens", inline=True)
     embed.set_footer(text="Volte amanhã para mais Joyens!")
@@ -1925,7 +1925,7 @@ async def saldo(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
     joyens = buscar_joyens(membro.id)
-    embed = discord.Embed(title=f"💰 Saldo de {membro.display_name}", color=discord.Color.gold())
+    embed = discord.Embed(title=f"<:SacoJoyensIcon:1525372626107633704> Saldo de {membro.display_name}", color=discord.Color.gold())
     embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=False)
     await ctx.send(embed=embed)
 
@@ -2691,7 +2691,7 @@ async def adminbot_dar(
         novo_saldo = buscar_joyens(membro.id)
 
         embed = discord.Embed(
-            title="💰 Joyens Concedidos!",
+            title="<:SacoJoyensIcon:1525372626107633704> Joyens Concedidos!",
             description=f"{membro.mention} recebeu **{quantidade} Joyens**!",
             color=discord.Color.gold()
         )
