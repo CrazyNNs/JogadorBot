@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from PIL import Image, ImageDraw, ImageFont
 from zoneinfo import ZoneInfo
+from discord import ui
 import random
 import datetime
 import sqlite3
