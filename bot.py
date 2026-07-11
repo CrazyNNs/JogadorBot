@@ -2240,7 +2240,7 @@ class Layout(ui.LayoutView):
         container.add_item(sessao)
         self.add_item(container)
 
-    async def botao_1_resposta(self, interect:discord.Interaction):
+    async def botao_1_resposta(self, interact:discord.Interaction):
         await interact.response.send_message(f"Olá, {interact.user.name}!")
 
 @bot.command(name="Teste")
