@@ -2232,10 +2232,15 @@ class Layout(ui.LayoutView):
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        sessao = ui.Section(ui.TextDisplay("Botão ao lado:"), accessory=ui.Button(label="Botão 1"))
+        botao_1 = ui.Button(label="Botão 1")
+        
+        sessao = ui.Section(ui.TextDisplay("Botão ao lado:"), accessory=botao_1)
         
         container.add_item(sessao)
         self.add_item(container)
+
+    async def botao_1_resposta(self, interect:discord.Interaction)
+        await interact.response.send_message(f"Olá, {interact.user.name}!")
 
 @bot.command(name="Teste")
 async def Teste(ctx:commands.Context):
