@@ -2230,9 +2230,11 @@ class Layout(ui.LayoutView):
 
         container = ui.Container(ui.TextDisplay("Salve! Este é um comando teste de V2."))
         container.accent_color = discord.Colour.purple()
-        container.spoiler = True
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        sessao = ui.Section(ui.TextDisplay("Botão ao lado:"), accessory=ui.Button(label="Botão 1"))
         
-        container.add_item(ui.TextDisplay("Esse é um texto extra de teste."))
+        container.add_item(sessao)
         self.add_item(container)
 
 @bot.command(name="Teste")
