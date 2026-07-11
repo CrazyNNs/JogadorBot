@@ -87,9 +87,9 @@ EMPREGOS = {
         "emoji": "<:GariIcon:1525340158831104060>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
-            "Você varreu as ruas do centro e ganhou {salario} Joyens!",
-            "Você recolheu o lixo do bairro e ganhou {salario} Joyens!",
-            "Você limpou a praça principal e ganhou {salario} Joyens!",
+            "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você recolheu o lixo do bairro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você limpou a praça principal e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
         ]
     },
     "Fotografo": {
@@ -99,21 +99,21 @@ EMPREGOS = {
         "emoji": "<:FotografoIcon:1525345746218647593>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
-            "Você fotografou um casamento e ganhou {salario} Joyens!",
-            "Você fez um ensaio fotográfico e ganhou {salario} Joyens!",
-            "Você fotografou um evento corporativo e ganhou {salario} Joyens!",
+            "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você fez um ensaio fotográfico e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você fotografou um evento corporativo e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
         ]
     },
     "Barman": {
         "salario_min": 2000,
         "salario_max": 2200,
         "level_necessario": 10,
-        "emoji": "<:BarmanIcon:1525347726626131998>",
+        "emoji": "<:BarmanIcon:1525348561171251411>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
-            "Você preparou drinks a noite toda e ganhou {salario} Joyens!",
-            "Você atendeu uma festa VIP no bar e ganhou {salario} Joyens!",
-            "Você criou um novo drink especial e ganhou {salario} Joyens!",
+            "Você preparou drinks a noite toda e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você atendeu uma festa VIP no bar e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você criou um novo drink especial e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
         ]
     },
 }
@@ -1536,13 +1536,13 @@ class ViewEmpregos(discord.ui.View):
     def gerar_embed(self):
         embed = discord.Embed(
             title="💼 Menu de Empregos",
-            description="Escolha um emprego abaixo! Empregos com ❌ precisam de level maior.",
+            description="Escolha um emprego abaixo! Empregos com `❌` precisam de level maior.",
             color=discord.Color.blue()
         )
         for nome, dados in EMPREGOS.items():
             embed.add_field(
                 name=f"{dados['emoji']} {nome}",
-                value=f"{dados['descricao']}\n💰 {dados['salario_min']}-{dados['salario_max']} Joyens | Level {dados['level_necessario']}",
+                value=f"{dados['descricao']}\n<:JoyensIcon:1525350395738591325> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {dados['level_necessario']}",
                 inline=False
             )
         return embed
