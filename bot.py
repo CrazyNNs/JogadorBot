@@ -2253,74 +2253,71 @@ class Layout(ui.LayoutView):
 
 @bot.command(name="rank")
 async def rank(ctx, tipo: str = "joyens"):
-    tipo = tipo.lower()
-    if tipo not in ["joyens", "level"]:
-        await ctx.send("❌ Tipo inválido! Use `!rank joyens` ou `!rank level`.")
-        return
+    try:
+        tipo = tipo.lower()
+        if tipo not in ["joyens", "level"]:
+            await ctx.send("❌ Tipo inválido! Use `!rank joyens` ou `!rank level`.")
+            return
 
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
 
-    if tipo == "joyens":
-        cur.execute("""
-            SELECT usuario_id, joyens FROM economia
-            ORDER BY joyens DESC LIMIT 10
-        """)
-        titulo = "💰 Ranking de Joyens"
-        emoji_tipo = "💰"
-        sufixo = "Joyens"
-    else:
-        cur.execute("""
-            SELECT usuario_id, level, xp FROM level_usuarios
-            ORDER BY level DESC, xp DESC LIMIT 10
-        """)
-        titulo = "⭐ Ranking de Level"
-        emoji_tipo = "⭐"
-        sufixo = "Level"
-
-    resultados = cur.fetchall()
-    con.close()
-
-    if not resultados:
-        await ctx.send("❌ Nenhum dado encontrado para o ranking!")
-        return
-
-    medalhas = ["🥇", "🥈", "🥉"]
-
-    layout = ui.LayoutView()
-    container = ui.Container()
-    container.accent_color = discord.Colour.gold()
-    container.add_item(ui.TextDisplay(f"# {titulo}"))
-    container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-
-    for i, dados in enumerate(resultados):
-        usuario_id = dados[0]
-        valor = dados[1]
-        posicao = i + 1
-
-        try:
-            membro = ctx.guild.get_member(int(usuario_id)) or await ctx.guild.fetch_member(int(usuario_id))
-            nome = membro.display_name
-            avatar_url = membro.display_avatar.url
-        except:
-            nome = f"Usuário {usuario_id}"
-            avatar_url = None
-
-        if posicao <= 3:
-            medalha = medalhas[i]
-            texto = f"**{medalha} {posicao}º — {nome}**\n{emoji_tipo} {valor:,} {sufixo}"
-            if avatar_url:
-                thumbnail = ui.Thumbnail(url=avatar_url)
-                secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
-            else:
-                secao = ui.Section(ui.TextDisplay(texto))
-            container.add_item(secao)
-            container.add_item(ui.Separator())
+        if tipo == "joyens":
+            cur.execute("SELECT usuario_id, joyens FROM economia ORDER BY joyens DESC LIMIT 10")
+            titulo = "💰 Ranking de Joyens"
+            emoji_tipo = "💰"
+            sufixo = "Joyens"
         else:
-            container.add_item(ui.TextDisplay(f"**{posicao}º — {nome}** • {valor:,} {sufixo}"))
+            cur.execute("SELECT usuario_id, level, xp FROM level_usuarios ORDER BY level DESC, xp DESC LIMIT 10")
+            titulo = "⭐ Ranking de Level"
+            emoji_tipo = "⭐"
+            sufixo = "Level"
 
-    layout.add_item(container)
-    await ctx.send(view=layout)
+        resultados = cur.fetchall()
+        con.close()
+
+        if not resultados:
+            await ctx.send("❌ Nenhum dado encontrado para o ranking!")
+            return
+
+        medalhas = ["🥇", "🥈", "🥉"]
+        layout = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(f"# {titulo}"))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        for i, dados in enumerate(resultados):
+            usuario_id = dados[0]
+            valor = dados[1]
+            posicao = i + 1
+
+            try:
+                membro = ctx.guild.get_member(int(usuario_id)) or await ctx.guild.fetch_member(int(usuario_id))
+                nome = membro.display_name
+                avatar_url = str(membro.display_avatar.url)
+            except:
+                nome = f"Usuário desconhecido"
+                avatar_url = None
+
+            if posicao <= 3:
+                medalha = medalhas[i]
+                texto = f"**{medalha} {posicao}º — {nome}**\n{emoji_tipo} {valor:,} {sufixo}"
+                if avatar_url:
+                    thumbnail = ui.Thumbnail(url=avatar_url)
+                    secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
+                else:
+                    secao = ui.Section(ui.TextDisplay(texto))
+                container.add_item(secao)
+                container.add_item(ui.Separator())
+            else:
+                container.add_item(ui.TextDisplay(f"**{posicao}º — {nome}** • {valor:,} {sufixo}"))
+
+        layout.add_item(container)
+        await ctx.send(view=layout)
+
+    except Exception as e:
+        await ctx.send(f"❌ Erro ao gerar ranking: `{e}`")
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
