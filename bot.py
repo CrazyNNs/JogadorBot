@@ -87,9 +87,9 @@ EMPREGOS = {
         "emoji": "<:GariIcon:1525380207907704914>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
-            "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você recolheu o lixo do bairro e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você limpou a praça principal e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você varreu as ruas do centro e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você recolheu o lixo do bairro e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você limpou a praça principal e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
         ]
     },
     "Fotografo": {
@@ -99,9 +99,9 @@ EMPREGOS = {
         "emoji": "<:FotografoIcon:1525381107867193354>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
-            "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você fez um ensaio fotográfico e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você fotografou um evento corporativo e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você fotografou um casamento e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você fez um ensaio fotográfico e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você fotografou um evento corporativo e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
         ]
     },
     "Barman": {
@@ -111,9 +111,9 @@ EMPREGOS = {
         "emoji": "<:BarmanIcon:1525381712387772597>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
-            "Você preparou drinks a noite toda e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você atendeu uma festa VIP no bar e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
-            "Você criou um novo drink especial e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você preparou drinks a noite toda e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você atendeu uma festa VIP no bar e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você criou um novo drink especial e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
         ]
     },
 }
@@ -1498,7 +1498,7 @@ class LayoutEmpregos(ui.LayoutView):
             texto = (
                 f"{dados['emoji']} **{nome}**\n"
                 f"{dados['descricao']}\n"
-                f"<:JoyensIcon:1525930784584634398> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
+                f"<:JoyensIcon:1525930784584634398>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
 
             botao = ui.Button(
@@ -1549,7 +1549,7 @@ class LayoutConfirmacaoEmprego(ui.LayoutView):
             ui.TextDisplay(
                 f"{emprego_dados['emoji']} **Empregado como {emprego_nome}!**\n"
                 f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.\n\n"
-                f"<:JoyensIcon:1525930784584634398> Salário: {emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
+                f"<:BolsaJoyensIcon:1525729605724405781> Salário: <:JoyensIcon:1525930784584634398>{emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
                 f"📊 Level necessário: {emprego_dados['level_necessario']}"
             )
         )
