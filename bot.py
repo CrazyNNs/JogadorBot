@@ -2304,7 +2304,7 @@ async def rank(ctx, tipo: str = "joyens"):
                 medalha = medalhas[i]
                 texto = f"**{medalha} {posicao}º — {nome}**\n{emoji_tipo} {valor:,} {sufixo}"
                 if avatar_url:
-                    thumbnail = ui.Thumbnail(url=avatar_url)
+                    thumbnail = ui.Thumbnail(avatar_url)
                     secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
                 else:
                     secao = ui.Section(ui.TextDisplay(texto))
