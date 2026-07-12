@@ -87,9 +87,9 @@ EMPREGOS = {
         "emoji": "<:GariIcon:1525380207907704914>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
-            "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você recolheu o lixo do bairro e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você limpou a praça principal e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você varreu as ruas do centro e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você recolheu o lixo do bairro e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você limpou a praça principal e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
         ]
     },
     "Fotografo": {
@@ -99,9 +99,9 @@ EMPREGOS = {
         "emoji": "<:FotografoIcon:1525381107867193354>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
-            "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você fez um ensaio fotográfico e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você fotografou um evento corporativo e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você fotografou um casamento e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você fez um ensaio fotográfico e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você fotografou um evento corporativo e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
         ]
     },
     "Barman": {
@@ -111,9 +111,9 @@ EMPREGOS = {
         "emoji": "<:BarmanIcon:1525381712387772597>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
-            "Você preparou drinks a noite toda e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você atendeu uma festa VIP no bar e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
-            "Você criou um novo drink especial e ganhou {salario} <:JoyensIcon:1525350395738591325>Joyens!",
+            "Você preparou drinks a noite toda e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você atendeu uma festa VIP no bar e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
+            "Você criou um novo drink especial e ganhou {salario} <:JoyensIcon:1525930784584634398>Joyens!",
         ]
     },
 }
@@ -863,14 +863,14 @@ class ViewConquistas(discord.ui.View):
         if emprego_dados:
             emprego_nome, vezes_trabalhadas, _ = emprego_dados
             emprego_info = EMPREGOS.get(emprego_nome)
-            emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
+            emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
             embed2.add_field(
-                name="💼 Emprego",
+                name="<:EmpregosIcon:1525710982364532890> Emprego",
                 value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
                 inline=False
             )
         else:
-            embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
+            embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
 
         if banner_arquivo and os.path.exists(banner_arquivo):
             nome_arquivo = os.path.basename(banner_arquivo)
@@ -1140,14 +1140,14 @@ class ViewInventarioBanners(discord.ui.View):
             if emprego_dados:
                 emprego_nome, vezes_trabalhadas, _ = emprego_dados
                 emprego_info = EMPREGOS.get(emprego_nome)
-                emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
+                emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
                 embed2.add_field(
-                    name="💼 Emprego",
+                    name="<:EmpregosIcon:1525710982364532890> Emprego",
                     value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
                     inline=False
                 )
             else:
-                embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
+                embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
 
             banner_arquivo = buscar_banner_ativo(membro.id)
             if banner_arquivo and os.path.exists(banner_arquivo):
@@ -1498,7 +1498,7 @@ class LayoutEmpregos(ui.LayoutView):
             texto = (
                 f"{dados['emoji']} **{nome}**\n"
                 f"{dados['descricao']}\n"
-                f"<:JoyensIcon:1525350395738591325> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
+                f"<:JoyensIcon:1525930784584634398> {dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
 
             botao = ui.Button(
@@ -1549,7 +1549,7 @@ class LayoutConfirmacaoEmprego(ui.LayoutView):
             ui.TextDisplay(
                 f"{emprego_dados['emoji']} **Empregado como {emprego_nome}!**\n"
                 f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.\n\n"
-                f"<:JoyensIcon:1525350395738591325> Salário: {emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
+                f"<:JoyensIcon:1525930784584634398> Salário: {emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
                 f"📊 Level necessário: {emprego_dados['level_necessario']}"
             )
         )
@@ -1852,14 +1852,14 @@ async def perfil(ctx, membro: discord.Member = None):
     if emprego_dados:
         emprego_nome, vezes_trabalhadas, _ = emprego_dados
         emprego_info = EMPREGOS.get(emprego_nome)
-        emoji_emp = emprego_info["emoji"] if emprego_info else "💼"
+        emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
         embed2.add_field(
-            name="💼 Emprego",
+            name="<:EmpregosIcon:1525710982364532890> Emprego",
             value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
             inline=False
         )
     else:
-        embed2.add_field(name="💼 Emprego", value="Desempregado — use `!empregos`", inline=False)
+        embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
 
 # Banner ativo como imagem
     if banner_arquivo and os.path.exists(banner_arquivo):
@@ -2264,8 +2264,8 @@ async def rank(ctx, tipo: str = "joyens"):
 
         if tipo == "joyens":
             cur.execute("SELECT usuario_id, joyens FROM economia ORDER BY joyens DESC LIMIT 10")
-            titulo = "💰 Ranking de Joyens"
-            emoji_tipo = "💰"
+            titulo = "<:BolsaJoyensIcon:1525729605724405781> Ranking de Joyens"
+            emoji_tipo = "<:BolsaJoyensIcon:1525729605724405781>"
             sufixo = "Joyens"
         else:
             cur.execute("SELECT usuario_id, level, xp FROM level_usuarios ORDER BY level DESC, xp DESC LIMIT 10")
