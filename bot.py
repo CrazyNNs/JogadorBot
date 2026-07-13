@@ -2112,9 +2112,6 @@ async def userinfo(ctx, membro: discord.Member = None):
     embed.add_field(name="Apelido no servidor", value=membro.display_name, inline=True)
     embed.add_field(name="Entrou no servidor em", value=membro.joined_at.strftime("%d/%m/%Y"), inline=True)
     embed.add_field(name="Conta criada em", value=membro.created_at.strftime("%d/%m/%Y"), inline=True)
-    atualizar_contador(ctx.author.id, "trabalhar_semana")
-    atualizar_contador(ctx.author.id, "trabalhar_total")
-    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     await ctx.send(embed=embed)
 
 @bot.command(name="limpar")
@@ -2150,13 +2147,13 @@ async def perfil(ctx, membro: discord.Member = None):
     conquistas = buscar_conquistas_usuario(membro.id)
     banner_arquivo = buscar_banner_ativo(membro.id)
 
- # Quantidade de banners do usuário
+# Quantidade de banners do usuário
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
     total_banners = cur.fetchone()[0]
     con.close()
-
+    
 # Primeira embed — Informações gerais
     embed1 = discord.Embed(
         title=f"Perfil — Lvl.``{level}``",
@@ -2560,6 +2557,9 @@ async def trabalhar(ctx):
     embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
     embed.set_footer(text=f"Próximo trabalho em 40 minutos")
+    atualizar_contador(ctx.author.id, "trabalhar_semana")
+    atualizar_contador(ctx.author.id, "trabalhar_total")
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     await ctx.send(embed=embed)
     await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
