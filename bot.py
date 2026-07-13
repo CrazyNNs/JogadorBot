@@ -127,6 +127,80 @@ intents.members = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # ============================================================
+# MISSÕES SEMANAIS — Edite os valores para ajustar dificuldade
+# ============================================================
+def semana_atual():
+    """Retorna a semana atual no formato ANO-SEMANA."""
+    hoje = datetime.date.today()
+    return f"{hoje.isocalendar()[0]}-{hoje.isocalendar()[1]}"
+
+MISSOES_SEMANAIS = [
+    {
+        "id": "trabalhar_semana",
+        "nome": "💼 Trabalhador da Semana",
+        "descricao": "Use !trabalhar 10 vezes nessa semana.",
+        "condicao": "trabalhar_semana",
+        "meta": 10,
+        "tipo_recompensa": "joyens",
+        "quantidade_recompensa": 1500,
+    },
+    {
+        "id": "apostar_semana",
+        "nome": "🎰 Apostador da Semana",
+        "descricao": "Use !apostar 7 vezes nessa semana.",
+        "condicao": "apostar_semana",
+        "meta": 7,
+        "tipo_recompensa": "joyens",
+        "quantidade_recompensa": 800,
+    },
+    {
+        "id": "diario_semana",
+        "nome": "📅 Fiel ao Diário",
+        "descricao": "Use !diario 5 vezes nessa semana.",
+        "condicao": "diario_semana",
+        "meta": 5,
+        "tipo_recompensa": "joyens",
+        "quantidade_recompensa": 600,
+    },
+    {
+        "id": "diario_seguidos_semana",
+        "nome": "🔥 Sequência Perfeita",
+        "descricao": "Use !diario 7 dias seguidos.",
+        "condicao": "diario_seguidos",
+        "meta": 7,
+        "tipo_recompensa": "xp",
+        "quantidade_recompensa": 500,
+    },
+    {
+        "id": "joyens_acumulados_semana",
+        "nome": "💰 Acumulador",
+        "descricao": "Acumule 10.000 Joyens nessa semana.",
+        "condicao": "joyens_acumulados",
+        "meta": 10000,
+        "tipo_recompensa": "xp",
+        "quantidade_recompensa": 300,
+    },
+    {
+        "id": "msg_semana",
+        "nome": "💬 Comunicativo",
+        "descricao": "Envie 100 mensagens nessa semana.",
+        "condicao": "msg_semana",
+        "meta": 100,
+        "tipo_recompensa": "joyens",
+        "quantidade_recompensa": 500,
+    },
+    {
+        "id": "call_semana",
+        "nome": "🎙️ Presença em Call",
+        "descricao": "Fique 60 minutos em call nessa semana.",
+        "condicao": "call_semana",
+        "meta": 60,
+        "tipo_recompensa": "joyens",
+        "quantidade_recompensa": 700,
+    },
+]
+
+# ============================================================
 # BANCO DE DADOS
 # ============================================================
 def iniciar_banco():
@@ -242,6 +316,62 @@ def iniciar_banco():
     
     con.commit()
     con.close()
+
+    # Rewards
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rewards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            descricao TEXT NOT NULL,
+            tipo_recompensa TEXT NOT NULL,
+            quantidade_recompensa TEXT NOT NULL,
+            condicoes TEXT NOT NULL,
+            repetivel INTEGER DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rewards_usuarios (
+            usuario_id TEXT NOT NULL,
+            reward_id INTEGER NOT NULL,
+            completado_em TEXT,
+            PRIMARY KEY (usuario_id, reward_id)
+        )
+    """)
+
+    # Missões semanais
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS missoes_progresso (
+            usuario_id TEXT NOT NULL,
+            missao_id TEXT NOT NULL,
+            progresso INTEGER DEFAULT 0,
+            completada INTEGER DEFAULT 0,
+            semana TEXT NOT NULL,
+            PRIMARY KEY (usuario_id, missao_id, semana)
+        )
+    """)
+
+    # Contadores gerais (mensagens, calls, etc)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS contadores_usuarios (
+            usuario_id TEXT PRIMARY KEY,
+            msg_semana INTEGER DEFAULT 0,
+            msg_total INTEGER DEFAULT 0,
+            call_semana INTEGER DEFAULT 0,
+            call_total INTEGER DEFAULT 0,
+            call_inicio TEXT,
+            apostar_semana INTEGER DEFAULT 0,
+            apostar_total INTEGER DEFAULT 0,
+            apostar_quantidade_semana INTEGER DEFAULT 0,
+            apostar_quantidade_total INTEGER DEFAULT 0,
+            diario_semana INTEGER DEFAULT 0,
+            diario_total INTEGER DEFAULT 0,
+            diario_seguidos INTEGER DEFAULT 0,
+            diario_ultimo TEXT,
+            trabalhar_semana INTEGER DEFAULT 0,
+            trabalhar_total INTEGER DEFAULT 0,
+            joyens_acumulados INTEGER DEFAULT 0
+        )
+    """)
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Conquistas
@@ -564,6 +694,95 @@ async def verificar_favoritos_rotacao():
             )
         except:
             pass
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Verificar Reset Semanal e Tempo em Call
+# ============================================================
+
+@tasks.loop(hours=1)
+async def verificar_reset_semanal():
+    """Reseta os contadores semanais toda segunda-feira às 00h."""
+    agora = datetime.datetime.now()
+    if agora.weekday() == 0 and agora.hour == 0:
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            UPDATE contadores_usuarios SET
+                msg_semana = 0,
+                call_semana = 0,
+                apostar_semana = 0,
+                apostar_quantidade_semana = 0,
+                diario_semana = 0,
+                trabalhar_semana = 0,
+                joyens_acumulados = 0
+        """)
+        con.commit()
+        con.close()
+
+        canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+        if canal:
+            embed = discord.Embed(
+                title="🔄 Novas Missões Semanais!",
+                description="As missões da semana foram resetadas! Use `!missoes` para ver as novas missões.",
+                color=discord.Color.purple()
+            )
+            await canal.send(embed=embed)
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Monitora entrada e saída de calls para contar o tempo."""
+    garantir_contador(member.id)
+    agora = datetime.datetime.now().isoformat()
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+
+    # Entrou em call
+    if before.channel is None and after.channel is not None:
+        cur.execute("UPDATE contadores_usuarios SET call_inicio = ? WHERE usuario_id = ?",
+                    (agora, str(member.id)))
+        con.commit()
+
+    # Saiu de call
+    elif before.channel is not None and after.channel is None:
+        cur.execute("SELECT call_inicio FROM contadores_usuarios WHERE usuario_id = ?",
+                    (str(member.id),))
+        resultado = cur.fetchone()
+        if resultado and resultado[0]:
+            inicio = datetime.datetime.fromisoformat(resultado[0])
+            minutos = int((datetime.datetime.now() - inicio).total_seconds() // 60)
+            if minutos > 0:
+                cur.execute("""
+                    UPDATE contadores_usuarios SET
+                        call_semana = call_semana + ?,
+                        call_total = call_total + ?,
+                        call_inicio = NULL
+                    WHERE usuario_id = ?
+                """, (minutos, minutos, str(member.id)))
+                con.commit()
+                await verificar_missoes_usuario(str(member.id))
+
+    con.close()
+
+@bot.event
+async def on_message(message):
+    """Conta mensagens dos usuários."""
+    if message.author.bot:
+        await bot.process_commands(message)
+        return
+    garantir_contador(message.author.id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE contadores_usuarios SET
+            msg_semana = msg_semana + 1,
+            msg_total = msg_total + 1
+        WHERE usuario_id = ?
+    """, (str(message.author.id),))
+    con.commit()
+    con.close()
+    await verificar_missoes_usuario(str(message.author.id))
+    await bot.process_commands(message)
+    
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
@@ -738,6 +957,126 @@ def tempo_restante_trabalho(ultimo_trabalho):
     minutos = int(diferenca.total_seconds() // 60)
     segundos = int(diferenca.total_seconds() % 60)
     return f"{minutos}m {segundos}s"
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Missões Semanais
+# ============================================================
+
+def garantir_contador(usuario_id):
+    """Garante que o usuário tem uma linha na tabela de contadores."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)
+    """, (str(usuario_id),))
+    con.commit()
+    con.close()
+
+def buscar_contador(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado
+
+def atualizar_contador(usuario_id, campo, valor=1, absoluto=False):
+    """Incrementa ou define um campo do contador do usuário."""
+    garantir_contador(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    if absoluto:
+        cur.execute(f"UPDATE contadores_usuarios SET {campo} = ? WHERE usuario_id = ?",
+                    (valor, str(usuario_id)))
+    else:
+        cur.execute(f"UPDATE contadores_usuarios SET {campo} = {campo} + ? WHERE usuario_id = ?",
+                    (valor, str(usuario_id)))
+    con.commit()
+    con.close()
+
+def buscar_progresso_missao(usuario_id, missao_id):
+    semana = semana_atual()
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT progresso, completada FROM missoes_progresso
+        WHERE usuario_id = ? AND missao_id = ? AND semana = ?
+    """, (str(usuario_id), missao_id, semana))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado if resultado else (0, 0)
+
+async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
+    """Verifica e atualiza o progresso de todas as missões do usuário."""
+    garantir_contador(usuario_id)
+    semana = semana_atual()
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+    cols = [desc[0] for desc in cur.description]
+    row = cur.fetchone()
+    con.close()
+
+    if not row:
+        return
+
+    dados = dict(zip(cols, row))
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+
+    for missao in MISSOES_SEMANAIS:
+        progresso_atual, completada = buscar_progresso_missao(usuario_id, missao["id"])
+        if completada:
+            continue
+
+        condicao = missao["condicao"]
+        valor_atual = dados.get(condicao, 0) or 0
+        meta = missao["meta"]
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO missoes_progresso (usuario_id, missao_id, progresso, completada, semana)
+            VALUES (?, ?, ?, 0, ?)
+            ON CONFLICT(usuario_id, missao_id, semana) DO UPDATE SET progresso = ?
+        """, (str(usuario_id), missao["id"], valor_atual, semana, valor_atual))
+        con.commit()
+        con.close()
+
+        if valor_atual >= meta:
+            # Marca como completada
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("""
+                UPDATE missoes_progresso SET completada = 1
+                WHERE usuario_id = ? AND missao_id = ? AND semana = ?
+            """, (str(usuario_id), missao["id"], semana))
+            con.commit()
+            con.close()
+
+            # Dá a recompensa
+            tipo = missao["tipo_recompensa"]
+            qtd = missao["quantidade_recompensa"]
+            if tipo == "joyens":
+                adicionar_joyens(usuario_id, qtd)
+                recompensa_texto = f"**+{qtd} Joyens**"
+            elif tipo == "xp":
+                canal_ctx = ctx_ou_channel or canal
+                await adicionar_xp(str(usuario_id), qtd, canal_ctx)
+                recompensa_texto = f"**+{qtd} XP**"
+
+            # Notifica no canal
+            if canal:
+                try:
+                    usuario = await bot.fetch_user(int(usuario_id))
+                    embed = discord.Embed(
+                        title="✅ Missão Concluída!",
+                        description=f"{usuario.mention} completou a missão **{missao['nome']}**!",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Recompensa", value=recompensa_texto, inline=True)
+                    await canal.send(embed=embed)
+                except:
+                    pass
 
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
@@ -1626,6 +1965,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens do usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}rank`", value="Abre o rank de (joyens/level)", inline=False)
+        embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra as missões semanais e o progresso", inline=False)
         embed.set_footer(text="ℹ️ Informação • JogadorBot")
         return embed
 
@@ -1733,6 +2073,7 @@ async def on_ready():
     iniciar_banco()
     verificar_admins_expirados.start()
     verificar_rotacao.start()
+    verificar_reset_semanal.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
@@ -1771,6 +2112,9 @@ async def userinfo(ctx, membro: discord.Member = None):
     embed.add_field(name="Apelido no servidor", value=membro.display_name, inline=True)
     embed.add_field(name="Entrou no servidor em", value=membro.joined_at.strftime("%d/%m/%Y"), inline=True)
     embed.add_field(name="Conta criada em", value=membro.created_at.strftime("%d/%m/%Y"), inline=True)
+    atualizar_contador(ctx.author.id, "trabalhar_semana")
+    atualizar_contador(ctx.author.id, "trabalhar_total")
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     await ctx.send(embed=embed)
 
 @bot.command(name="limpar")
@@ -1917,7 +2261,9 @@ async def diario(ctx):
 
     xp_ganho = random.randint(250, 500)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
-
+    atualizar_contador(ctx.author.id, "diario_semana")
+    atualizar_contador(ctx.author.id, "diario_total")
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     await ctx.send(embed=embed)
     await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
@@ -1986,6 +2332,23 @@ async def apostar(ctx, quantidade: int):
         embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
 
     embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
+    atualizar_contador(ctx.author.id, "apostar_semana")
+    atualizar_contador(ctx.author.id, "apostar_total")
+    atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
+    atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
+    # Atualiza o acumulador de Joyens
+    con2 = sqlite3.connect("jogadorbot.db")
+    cur2 = con2.cursor()
+    cur2.execute("""
+        INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)
+    """, (str(usuario_id),))
+    cur2.execute("""
+        UPDATE contadores_usuarios SET joyens_acumulados = joyens_acumulados + ?
+        WHERE usuario_id = ?
+    """, (quantidade, str(usuario_id)))
+    con2.commit()
+    con2.close()
     await ctx.send(embed=embed)
 
 @bot.command(name="catalogo")
@@ -2318,6 +2681,47 @@ async def rank(ctx, tipo: str = "joyens"):
 
     except Exception as e:
         await ctx.send(f"❌ Erro ao gerar ranking: `{e}`")
+
+@bot.command(name="missoes")
+async def missoes(ctx, membro: discord.Member = None):
+    if membro is None:
+        membro = ctx.author
+
+    garantir_contador(membro.id)
+    semana = semana_atual()
+
+    layout = ui.LayoutView()
+    container = ui.Container()
+    container.accent_color = discord.Colour.purple()
+    container.add_item(ui.TextDisplay(f"# 📋 Missões da Semana\n-# Semana {semana} • {membro.display_name}"))
+    container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+    for missao in MISSOES_SEMANAIS:
+        progresso, completada = buscar_progresso_missao(membro.id, missao["id"])
+        meta = missao["meta"]
+        progresso = min(progresso, meta)
+
+        porcentagem = int((progresso / meta) * 100)
+        blocos_cheios = porcentagem // 10
+        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+
+        tipo = missao["tipo_recompensa"]
+        qtd = missao["quantidade_recompensa"]
+        recompensa = f"+{qtd} Joyens" if tipo == "joyens" else f"+{qtd} XP"
+
+        status = "✅ Concluída!" if completada else f"`{barra}` {progresso}/{meta}"
+
+        texto = (
+            f"**{missao['nome']}**\n"
+            f"-# {missao['descricao']}\n"
+            f"{status}\n"
+            f"-# 🎁 Recompensa: {recompensa}"
+        )
+        container.add_item(ui.TextDisplay(texto))
+        container.add_item(ui.Separator())
+
+    layout.add_item(container)
+    await ctx.send(view=layout)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
