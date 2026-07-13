@@ -313,9 +313,6 @@ def iniciar_banco():
             ultimo_trabalho TEXT
         )
     """)
-    
-    con.commit()
-    con.close()
 
     # Rewards
     cur.execute("""
@@ -372,6 +369,9 @@ def iniciar_banco():
             joyens_acumulados INTEGER DEFAULT 0
         )
     """)
+    
+    con.commit()
+    con.close()
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Conquistas
