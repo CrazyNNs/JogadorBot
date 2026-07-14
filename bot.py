@@ -81,8 +81,8 @@ CATEGORIAS_VENDAVEIS = {
 # ============================================================
 EMPREGOS = {
     "Gari": {
-        "salario_min": 1250,
-        "salario_max": 1450,
+        "salario_min": 1200,
+        "salario_max": 1400,
         "level_necessario": 0,
         "emoji": "<:GariIcon:1525380207907704914>",
         "descricao": "Mantém as ruas limpas da cidade.",
@@ -105,7 +105,7 @@ EMPREGOS = {
         ]
     },
     "Barman": {
-        "salario_min": 2000,
+        "salario_min": 1900,
         "salario_max": 2200,
         "level_necessario": 10,
         "emoji": "<:BarmanIcon:1525381712387772597>",
@@ -114,6 +114,18 @@ EMPREGOS = {
             "Você preparou drinks a noite toda e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
             "Você atendeu uma festa VIP no bar e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
             "Você criou um novo drink especial e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+        ]
+    },
+    "Motorista Particular": {
+        "salario_min": 2500,
+        "salario_max": 2800,
+        "level_necessario": 15,
+        "emoji": "🚗",
+        "descricao": "Dirige por toda cidade e deixa o seu cliente no destino desejado.",
+        "acoes": [
+            "Você dirigiu ao shooping e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você deixou seu cliente em casa e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
+            "Você passeou de carro com o cliente e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
         ]
     },
 }
