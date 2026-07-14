@@ -2329,11 +2329,6 @@ async def apostar(ctx, quantidade: int):
         embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
 
     embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
-    atualizar_contador(ctx.author.id, "apostar_semana")
-    atualizar_contador(ctx.author.id, "apostar_total")
-    atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
-    atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
-    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     # Atualiza o acumulador de Joyens
     con2 = sqlite3.connect("jogadorbot.db")
     cur2 = con2.cursor()
@@ -2346,6 +2341,11 @@ async def apostar(ctx, quantidade: int):
     """, (quantidade, str(usuario_id)))
     con2.commit()
     con2.close()
+    atualizar_contador(ctx.author.id, "apostar_semana")
+    atualizar_contador(ctx.author.id, "apostar_total")
+    atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
+    atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
     await ctx.send(embed=embed)
 
 @bot.command(name="catalogo")
