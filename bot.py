@@ -419,6 +419,16 @@ def adicionar_joyens(usuario_id, quantidade):
     """, (str(usuario_id), quantidade, quantidade))
     con.commit()
     con.close()
+    # Atualiza o acumulador semanal de Joyens
+    garantir_contador(usuario_id)
+    con2 = sqlite3.connect("jogadorbot.db")
+    cur2 = con2.cursor()
+    cur2.execute("""
+        UPDATE contadores_usuarios SET joyens_acumulados = joyens_acumulados + ?
+        WHERE usuario_id = ?
+    """, (quantidade, str(usuario_id)))
+    con2.commit()
+    con2.close()
 
 def remover_joyens(usuario_id, quantidade):
     con = sqlite3.connect("jogadorbot.db")
@@ -2260,8 +2270,24 @@ async def diario(ctx):
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
     atualizar_contador(ctx.author.id, "diario_semana")
     atualizar_contador(ctx.author.id, "diario_total")
+
+    # Verifica sequência de diários
+    con_seq = sqlite3.connect("jogadorbot.db")
+    cur_seq = con_seq.cursor()
+    cur_seq.execute("SELECT diario_ultimo, diario_seguidos FROM contadores_usuarios WHERE usuario_id = ?",
+                    (str(ctx.author.id),))
+    seq_dados = cur_seq.fetchone()
+    ontem = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    if seq_dados and seq_dados[0] == ontem:
+        cur_seq.execute("UPDATE contadores_usuarios SET diario_seguidos = diario_seguidos + 1, diario_ultimo = ? WHERE usuario_id = ?",
+                        (hoje, str(ctx.author.id)))
+    else:
+        cur_seq.execute("UPDATE contadores_usuarios SET diario_seguidos = 1, diario_ultimo = ? WHERE usuario_id = ?",
+                        (hoje, str(ctx.author.id)))
+    con_seq.commit()
+    con_seq.close()
+
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
-    await ctx.send(embed=embed)
     await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
 @bot.command(name="saldo")
@@ -3480,6 +3506,63 @@ bot.tree.add_command(admin_group)
 bot.tree.add_command(banner_group)
 
 bot.tree.add_command(conquista_group)
+
+# ============================================================
+# EVENTOS DE CALL E MENSAGENS
+# ============================================================
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member.bot:
+        return
+    garantir_contador(member.id)
+    agora = datetime.datetime.now().isoformat()
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+
+    if before.channel is None and after.channel is not None:
+        cur.execute("UPDATE contadores_usuarios SET call_inicio = ? WHERE usuario_id = ?",
+                    (agora, str(member.id)))
+        con.commit()
+
+    elif before.channel is not None and after.channel is None:
+        cur.execute("SELECT call_inicio FROM contadores_usuarios WHERE usuario_id = ?",
+                    (str(member.id),))
+        resultado = cur.fetchone()
+        if resultado and resultado[0]:
+            inicio = datetime.datetime.fromisoformat(resultado[0])
+            minutos = int((datetime.datetime.now() - inicio).total_seconds() // 60)
+            if minutos > 0:
+                cur.execute("""
+                    UPDATE contadores_usuarios SET
+                        call_semana = call_semana + ?,
+                        call_total = call_total + ?,
+                        call_inicio = NULL
+                    WHERE usuario_id = ?
+                """, (minutos, minutos, str(member.id)))
+                con.commit()
+                await verificar_missoes_usuario(str(member.id))
+
+    con.close()
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        await bot.process_commands(message)
+        return
+    garantir_contador(message.author.id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE contadores_usuarios SET
+            msg_semana = msg_semana + 1,
+            msg_total = msg_total + 1
+        WHERE usuario_id = ?
+    """, (str(message.author.id),))
+    con.commit()
+    con.close()
+    await verificar_missoes_usuario(str(message.author.id))
+    await bot.process_commands(message)
 
 # ============================================================
 # TRATAMENTO DE ERROS
