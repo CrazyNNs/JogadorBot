@@ -2367,12 +2367,12 @@ async def apostar(ctx, quantidade: int):
     """, (quantidade, str(usuario_id)))
     con2.commit()
     con2.close()
+    await ctx.send(embed=embed)
     atualizar_contador(ctx.author.id, "apostar_semana")
     atualizar_contador(ctx.author.id, "apostar_total")
     atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
     atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
-    await ctx.send(embed=embed)
 
 @bot.command(name="catalogo")
 async def catalogo(ctx):
