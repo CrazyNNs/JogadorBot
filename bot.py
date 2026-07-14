@@ -2360,11 +2360,11 @@ async def apostar(ctx, quantidade: int):
     cur2 = con2.cursor()
     cur2.execute("""
         INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)
-    """, (str(usuario_id),))
+    """, (str(ctx.author.id),))
     cur2.execute("""
         UPDATE contadores_usuarios SET joyens_acumulados = joyens_acumulados + ?
         WHERE usuario_id = ?
-    """, (quantidade, str(usuario_id)))
+    """, (quantidade, str(ctx.author.id)))
     con2.commit()
     con2.close()
     await ctx.send(embed=embed)
