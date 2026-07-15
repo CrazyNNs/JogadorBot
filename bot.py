@@ -2531,27 +2531,81 @@ async def enquete(ctx, *, pergunta: str):
     await ctx.message.delete()
 
 @bot.command(name="perfil")
-async def perfil(ctx, *, argumento: str = None):
-    if argumento is None:
+async def perfil(ctx, membro: discord.Member = None):
+    if membro is None:
         membro = ctx.author
+
+    level, xp = buscar_level(membro.id)
+    xp_prox = xp_necessario(level)
+    joyens = buscar_joyens(membro.id)
+    conquistas = buscar_conquistas_usuario(membro.id)
+    banner_arquivo = buscar_banner_ativo(membro.id)
+
+# Quantidade de banners do usuário
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+    total_banners = cur.fetchone()[0]
+    con.close()
+    
+# Primeira embed — Informações gerais
+    embed1 = discord.Embed(
+        title=f"Perfil — Lvl.``{level}``",
+        color=discord.Color.blurple()
+    )
+    embed1.set_thumbnail(url=membro.display_avatar.url)
+    embed1.description = (
+        f"**{membro.display_name}**\n"
+        f"> {membro.name}\n"
+        f"**ID:** ``{membro.id}``"
+    )
+    if xp_prox:
+        porcentagem = int((xp / xp_prox) * 100)
+        blocos_cheios = porcentagem // 10
+        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+        embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
     else:
-        membro = None
-        argumento_limpo = argumento.strip().replace("<@", "").replace(">", "").replace("!", "")
-        if argumento_limpo.isdigit():
-            membro = ctx.guild.get_member(int(argumento_limpo))
-            if not membro:
-                try:
-                    membro = await ctx.guild.fetch_member(int(argumento_limpo))
-                except:
-                    pass
-        if not membro:
-            membro = discord.utils.find(
-                lambda m: m.display_name.lower() == argumento.lower() or m.name.lower() == argumento.lower(),
-                ctx.guild.members
-            )
-        if not membro:
-            await ctx.send(f"❌ Usuário **{argumento}** não encontrado!")
-            return
+        embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
+
+# Segunda embed — Economia e outros
+    embed2 = discord.Embed(color=discord.Color.blurple())
+    embed2.add_field(
+        name="<:BolsaJoyensIcon:1525729605724405781> Economia",
+        value=f"> **Joyens:** ``{joyens}``",
+        inline=False
+    )
+    embed2.add_field(
+        name="📊 Outros",
+        value=(
+            f"> **Conquistas:** ``{len(conquistas)}``\n"
+            f"> **Banners:** ``{total_banners}``"
+        ),
+        inline=False
+    )
+
+    emprego_dados = buscar_emprego(membro.id)
+    if emprego_dados:
+        emprego_nome, vezes_trabalhadas, _ = emprego_dados
+        emprego_info = EMPREGOS.get(emprego_nome)
+        emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
+        embed2.add_field(
+            name="<:EmpregosIcon:1525710982364532890> Emprego",
+            value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
+            inline=False
+        )
+    else:
+        embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
+
+# Banner ativo como imagem
+    if banner_arquivo and os.path.exists(banner_arquivo):
+        nome_arquivo = os.path.basename(banner_arquivo)
+        arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
+        embed2.set_image(url=f"attachment://{nome_arquivo}")
+        view = ViewPerfil(membro)
+        await ctx.send(embeds=[embed1, embed2], file=arquivo_discord, view=view)
+    else:
+        view = ViewPerfil(membro)
+        await ctx.send(embeds=[embed1, embed2], view=view)
             
 @bot.command(name="diario")
 async def diario(ctx):
