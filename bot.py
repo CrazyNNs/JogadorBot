@@ -382,6 +382,31 @@ def iniciar_banco():
         )
     """)
     
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS missoes_customizadas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            descricao TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            condicoes TEXT NOT NULL,
+            meta INTEGER,
+            tipo_recompensa TEXT NOT NULL,
+            quantidade_recompensa INTEGER NOT NULL,
+            data_fim TEXT,
+            aviso_enviado INTEGER DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS missoes_customizadas_progresso (
+            usuario_id TEXT NOT NULL,
+            missao_id INTEGER NOT NULL,
+            progresso INTEGER DEFAULT 0,
+            completada INTEGER DEFAULT 0,
+            completada_em TEXT,
+            PRIMARY KEY (usuario_id, missao_id)
+        )
+    """)
+    
     con.commit()
     con.close()
 
@@ -804,7 +829,58 @@ async def on_message(message):
     con.close()
     await verificar_missoes_usuario(str(message.author.id))
     await bot.process_commands(message)
-    
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Missões Customizadas Temporárias
+# ============================================================
+@tasks.loop(hours=1)
+async def verificar_missoes_temporarias():
+    """Avisa 6 horas antes do fim e remove missões expiradas."""
+    agora = datetime.datetime.now()
+    aviso_limite = (agora + datetime.timedelta(hours=6)).isoformat()
+    agora_iso = agora.isoformat()
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+
+    # Avisa missões que expiram em 6 horas
+    cur.execute("""
+        SELECT id, nome, data_fim FROM missoes_customizadas
+        WHERE tipo = 'temporaria'
+        AND data_fim <= ?
+        AND data_fim > ?
+        AND aviso_enviado = 0
+    """, (aviso_limite, agora_iso))
+    para_avisar = cur.fetchall()
+
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    for mid, nome, data_fim in para_avisar:
+        cur.execute("UPDATE missoes_customizadas SET aviso_enviado = 1 WHERE id = ?", (mid,))
+        if canal:
+            expira_dt = datetime.datetime.fromisoformat(data_fim)
+            embed = discord.Embed(
+                title="⚠️ Missão Expirando em Breve!",
+                description=f"A missão **{nome}** expira em menos de 6 horas!",
+                color=discord.Color.orange()
+            )
+            embed.add_field(name="Expira em", value=expira_dt.strftime("%d/%m/%Y às %H:%M"), inline=False)
+            await canal.send(embed=embed)
+
+    # Remove missões expiradas
+    cur.execute("""
+        DELETE FROM missoes_customizadas_progresso
+        WHERE missao_id IN (
+            SELECT id FROM missoes_customizadas
+            WHERE tipo = 'temporaria' AND data_fim <= ?
+        )
+    """, (agora_iso,))
+    cur.execute("""
+        DELETE FROM missoes_customizadas WHERE tipo = 'temporaria' AND data_fim <= ?
+    """, (agora_iso,))
+
+    con.commit()
+    con.close()
+
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
@@ -1097,8 +1173,143 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
                     )
                     embed.add_field(name="Recompensa", value=recompensa_texto, inline=True)
                     await canal.send(embed=embed)
+                    await verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel)
                 except:
                     pass
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Missões Customizadas
+# ============================================================
+def buscar_missoes_customizadas(tipo=None):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    agora = datetime.datetime.now().isoformat()
+    if tipo:
+        if tipo == "temporaria":
+            cur.execute("""
+                SELECT * FROM missoes_customizadas
+                WHERE tipo = ? AND (data_fim IS NULL OR data_fim > ?)
+                ORDER BY id
+            """, (tipo, agora))
+        else:
+            cur.execute("SELECT * FROM missoes_customizadas WHERE tipo = ? ORDER BY id", (tipo,))
+    else:
+        cur.execute("SELECT * FROM missoes_customizadas ORDER BY tipo, id")
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def buscar_progresso_missao_customizada(usuario_id, missao_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT progresso, completada FROM missoes_customizadas_progresso
+        WHERE usuario_id = ? AND missao_id = ?
+    """, (str(usuario_id), missao_id))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado if resultado else (0, 0)
+
+async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None):
+    """Verifica missões customizadas com condições automáticas."""
+    garantir_contador(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+    cols = [desc[0] for desc in cur.description]
+    row = cur.fetchone()
+    con.close()
+
+    if not row:
+        return
+
+    dados = dict(zip(cols, row))
+    agora = datetime.datetime.now().isoformat()
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    missoes = buscar_missoes_customizadas()
+
+    for missao in missoes:
+        mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _ = missao
+
+        # Pula missões expiradas
+        if data_fim and data_fim < agora:
+            continue
+
+        progresso_atual, completada = buscar_progresso_missao_customizada(usuario_id, mid)
+        if completada:
+            continue
+
+        # Pula missões Null (precisam de aprovação manual)
+        if condicoes.strip().lower() == "null":
+            continue
+
+        # Calcula progresso combinado
+        lista_condicoes = [c.strip() for c in condicoes.split(",")]
+        todos_completos = True
+        progresso_min = float("inf")
+
+        for cond in lista_condicoes:
+            if ":" not in cond:
+                continue
+            campo, valor_meta = cond.split(":", 1)
+            valor_meta = int(valor_meta)
+            valor_atual = dados.get(campo, 0) or 0
+            progresso_percentual = min(valor_atual, valor_meta)
+            progresso_min = min(progresso_min, progresso_percentual / valor_meta * (meta or valor_meta))
+            if valor_atual < valor_meta:
+                todos_completos = False
+
+        novo_progresso = int(progresso_min) if progresso_min != float("inf") else 0
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO missoes_customizadas_progresso (usuario_id, missao_id, progresso)
+            VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, missao_id) DO UPDATE SET progresso = ?
+        """, (str(usuario_id), mid, novo_progresso, novo_progresso))
+        con.commit()
+        con.close()
+
+        if todos_completos:
+            await concluir_missao_customizada(usuario_id, mid, nome, tipo_recompensa, qtd_recompensa, canal, ctx_ou_channel)
+
+async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompensa, qtd_recompensa, canal=None, ctx_ou_channel=None):
+    """Marca uma missão customizada como completada e dá a recompensa."""
+    agora = datetime.datetime.now().isoformat()
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO missoes_customizadas_progresso (usuario_id, missao_id, completada, completada_em)
+        VALUES (?, ?, 1, ?)
+        ON CONFLICT(usuario_id, missao_id) DO UPDATE SET completada = 1, completada_em = ?
+    """, (str(usuario_id), missao_id, agora, agora))
+    con.commit()
+    con.close()
+
+    if tipo_recompensa == "joyens":
+        adicionar_joyens(usuario_id, qtd_recompensa)
+        recompensa_texto = f"**+{qtd_recompensa} Joyens**"
+    elif tipo_recompensa == "xp":
+        canal_ctx = ctx_ou_channel or canal
+        if canal_ctx:
+            await adicionar_xp(str(usuario_id), qtd_recompensa, canal_ctx)
+        recompensa_texto = f"**+{qtd_recompensa} XP**"
+    else:
+        recompensa_texto = tipo_recompensa
+
+    if canal:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            embed = discord.Embed(
+                title="✅ Missão Concluída!",
+                description=f"{usuario.mention} completou a missão **{nome}**!",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Recompensa", value=recompensa_texto, inline=True)
+            await canal.send(embed=embed)
+        except:
+            pass
 
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
@@ -1988,6 +2199,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}rank`", value="Abre o rank de (joyens/level)", inline=False)
         embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra as missões semanais e o progresso", inline=False)
+        embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra todas as categorias de missões", inline=False)
         embed.set_footer(text="ℹ️ Informação • JogadorBot")
         return embed
 
@@ -2088,6 +2300,195 @@ class ViewAjudaCategoria(discord.ui.View):
         await interaction.response.edit_message(embed=ViewAjuda().embed_inicial(), view=ViewAjuda())
 
 # ============================================================
+# V2 VIEW (BOTÕES) - Missões
+# ============================================================
+class ViewMissoesMenu(discord.ui.View):
+    def __init__(self, usuario: discord.Member):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+
+    def gerar_embed_inicial(self):
+        layout = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.purple()
+        container.add_item(ui.TextDisplay(f"# 📋 Missões\n-# Escolha uma categoria de missões abaixo."))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.TextDisplay("🗓️ **Semanais** — Resetam toda segunda-feira\n📌 **Permanentes** — Sem prazo, complete uma vez\n⏳ **Temporárias** — Eventos por tempo limitado"))
+        layout.add_item(container)
+        return layout
+
+    @discord.ui.button(label="🗓️ Semanais", style=discord.ButtonStyle.primary, row=0)
+    async def btn_semanais(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewMissoesSemanais(self.usuario, pagina=0, view_menu=self)
+        layout = view.gerar_layout()
+        await interaction.response.edit_message(view=view, **layout)
+
+    @discord.ui.button(label="📌 Permanentes", style=discord.ButtonStyle.primary, row=0)
+    async def btn_permanentes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewMissoesCustomizadas(self.usuario, tipo="permanente", pagina=0, view_menu=self)
+        layout = view.gerar_layout()
+        await interaction.response.edit_message(view=view, **layout)
+
+    @discord.ui.button(label="⏳ Temporárias", style=discord.ButtonStyle.primary, row=0)
+    async def btn_temporarias(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewMissoesCustomizadas(self.usuario, tipo="temporaria", pagina=0, view_menu=self)
+        layout = view.gerar_layout()
+        await interaction.response.edit_message(view=view, **layout)
+
+
+class ViewMissoesSemanais(discord.ui.View):
+    def __init__(self, usuario: discord.Member, pagina: int, view_menu: ViewMissoesMenu):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.pagina = pagina
+        self.view_menu = view_menu
+        self.por_pagina = 7
+        self.total_paginas = 1
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.pagina == 0
+        self.proximo.disabled = self.pagina >= self.total_paginas - 1
+
+    def gerar_layout(self):
+        semana = semana_atual()
+        layout = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.blue()
+        container.add_item(ui.TextDisplay(f"# 🗓️ Missões Semanais\n-# Semana {semana} • {self.usuario.display_name}"))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        missoes_pagina = MISSOES_SEMANAIS[inicio:fim]
+        self.total_paginas = max(1, -(-len(MISSOES_SEMANAIS) // self.por_pagina))
+        self.atualizar_botoes()
+
+        for missao in missoes_pagina:
+            progresso, completada = buscar_progresso_missao(self.usuario.id, missao["id"])
+            meta = missao["meta"]
+            progresso = min(progresso, meta)
+            porcentagem = int((progresso / meta) * 100)
+            blocos_cheios = porcentagem // 10
+            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+            tipo = missao["tipo_recompensa"]
+            qtd = missao["quantidade_recompensa"]
+            recompensa = f"+{qtd} Joyens" if tipo == "joyens" else f"+{qtd} XP"
+            status = "✅ Concluída!" if completada else f"`{barra}` {progresso}/{meta}"
+            texto = (
+                f"**{missao['nome']}**\n"
+                f"-# {missao['descricao']}\n"
+                f"{status}\n"
+                f"-# 🎁 Recompensa: {recompensa}"
+            )
+            container.add_item(ui.TextDisplay(texto))
+            container.add_item(ui.Separator())
+
+        layout.add_item(container)
+        return {"view": self, "content": None}
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina -= 1
+        layout = self.gerar_layout()
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        layout = self.gerar_layout()
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        layout = self.view_menu.gerar_embed_inicial()
+        await interaction.response.edit_message(view=self.view_menu)
+
+
+class ViewMissoesCustomizadas(discord.ui.View):
+    def __init__(self, usuario: discord.Member, tipo: str, pagina: int, view_menu: ViewMissoesMenu):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.tipo = tipo
+        self.pagina = pagina
+        self.view_menu = view_menu
+        self.por_pagina = 5
+        self.missoes = buscar_missoes_customizadas(tipo)
+        self.total_paginas = max(1, -(-len(self.missoes) // self.por_pagina))
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.pagina == 0
+        self.proximo.disabled = self.pagina >= self.total_paginas - 1
+
+    def gerar_layout(self):
+        titulo = "📌 Missões Permanentes" if self.tipo == "permanente" else "⏳ Missões Temporárias"
+        layout = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold() if self.tipo == "permanente" else discord.Colour.orange()
+        container.add_item(ui.TextDisplay(f"# {titulo}\n-# {self.usuario.display_name}"))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        inicio = self.pagina * self.por_pagina
+        fim = inicio + self.por_pagina
+        missoes_pagina = self.missoes[inicio:fim]
+
+        if not missoes_pagina:
+            container.add_item(ui.TextDisplay("Nenhuma missão disponível nesta categoria."))
+        else:
+            for missao in missoes_pagina:
+                mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _ = missao
+                progresso, completada = buscar_progresso_missao_customizada(self.usuario.id, mid)
+                recompensa = f"+{qtd_recompensa} Joyens" if tipo_recompensa == "joyens" else f"+{qtd_recompensa} XP"
+
+                if condicoes.strip().lower() == "null":
+                    status = "✅ Concluída!" if completada else "📸 Envie uma prova para completar"
+                    barra_texto = ""
+                else:
+                    meta_val = meta or 1
+                    progresso_val = min(progresso, meta_val)
+                    porcentagem = int((progresso_val / meta_val) * 100)
+                    blocos = porcentagem // 10
+                    barra = "█" * blocos + "░" * (10 - blocos)
+                    barra_texto = f"\n`{barra}` {progresso_val}/{meta_val}"
+                    status = "✅ Concluída!" if completada else barra_texto
+
+                prazo = ""
+                if data_fim:
+                    expira_dt = datetime.datetime.fromisoformat(data_fim)
+                    prazo = f"\n-# ⏰ Expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}"
+
+                texto = (
+                    f"**{nome}**\n"
+                    f"-# {descricao}\n"
+                    f"{status}{prazo}\n"
+                    f"-# 🎁 Recompensa: {recompensa}"
+                )
+                container.add_item(ui.TextDisplay(texto))
+                container.add_item(ui.Separator())
+
+        layout.add_item(container)
+        return layout
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina -= 1
+        self.atualizar_botoes()
+        self.missoes = buscar_missoes_customizadas(self.tipo)
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        self.atualizar_botoes()
+        self.missoes = buscar_missoes_customizadas(self.tipo)
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
+    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(view=self.view_menu)
+
+# ============================================================
 # EVENTOS
 # ============================================================
 @bot.event
@@ -2096,6 +2497,7 @@ async def on_ready():
     verificar_admins_expirados.start()
     verificar_rotacao.start()
     verificar_reset_semanal.start()
+    verificar_missoes_temporarias.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
@@ -2724,42 +3126,10 @@ async def rank(ctx, tipo: str = "joyens"):
 async def missoes(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
-
     garantir_contador(membro.id)
-    semana = semana_atual()
-
-    layout = ui.LayoutView()
-    container = ui.Container()
-    container.accent_color = discord.Colour.purple()
-    container.add_item(ui.TextDisplay(f"# 📋 Missões da Semana\n-# Semana {semana} • {membro.display_name}"))
-    container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-
-    for missao in MISSOES_SEMANAIS:
-        progresso, completada = buscar_progresso_missao(membro.id, missao["id"])
-        meta = missao["meta"]
-        progresso = min(progresso, meta)
-
-        porcentagem = int((progresso / meta) * 100)
-        blocos_cheios = porcentagem // 10
-        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-
-        tipo = missao["tipo_recompensa"]
-        qtd = missao["quantidade_recompensa"]
-        recompensa = f"+{qtd} Joyens" if tipo == "joyens" else f"+{qtd} XP"
-
-        status = "✅ Concluída!" if completada else f"`{barra}` {progresso}/{meta}"
-
-        texto = (
-            f"**{missao['nome']}**\n"
-            f"-# {missao['descricao']}\n"
-            f"{status}\n"
-            f"-# 🎁 Recompensa: {recompensa}"
-        )
-        container.add_item(ui.TextDisplay(texto))
-        container.add_item(ui.Separator())
-
-    layout.add_item(container)
-    await ctx.send(view=layout)
+    view = ViewMissoesMenu(membro)
+    layout = view.gerar_embed_inicial()
+    await ctx.send(view=view)
 
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
@@ -3506,6 +3876,134 @@ async def level_dar_error(interaction: discord.Interaction, error: app_commands.
         await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
     else:
         raise error
+
+missao_group = app_commands.Group(name="missao", description="Gerenciamento de missões")
+
+@missao_group.command(name="criar", description="Cria uma nova missão (admin)")
+@app_commands.describe(
+    nome="Nome da missão",
+    descricao="Descrição da missão",
+    tipo="permanente ou temporaria",
+    condicoes="Condições separadas por vírgula. Ex: trabalhar_total:50 ou null",
+    meta="Meta total da missão (deixe 0 para condição null)",
+    tipo_recompensa="joyens ou xp",
+    quantidade_recompensa="Quantidade da recompensa",
+    data_fim="Data de fim para temporárias. Formato: DD/MM/AAAA HH:MM (deixe vazio para permanentes)"
+)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_criar(
+    interaction: discord.Interaction,
+    nome: str,
+    descricao: str,
+    tipo: str,
+    condicoes: str,
+    meta: int,
+    tipo_recompensa: str,
+    quantidade_recompensa: int,
+    data_fim: str = None
+):
+    tipo = tipo.lower()
+    if tipo not in ["permanente", "temporaria"]:
+        await interaction.response.send_message("❌ Tipo inválido! Use `permanente` ou `temporaria`.", ephemeral=True)
+        return
+
+    if tipo_recompensa not in ["joyens", "xp"]:
+        await interaction.response.send_message("❌ Tipo de recompensa inválido! Use `joyens` ou `xp`.", ephemeral=True)
+        return
+
+    data_fim_iso = None
+    if tipo == "temporaria":
+        if not data_fim:
+            await interaction.response.send_message("❌ Missões temporárias precisam de uma data de fim!", ephemeral=True)
+            return
+        try:
+            data_fim_iso = datetime.datetime.strptime(data_fim, "%d/%m/%Y %H:%M").isoformat()
+        except ValueError:
+            await interaction.response.send_message("❌ Formato de data inválido! Use DD/MM/AAAA HH:MM", ephemeral=True)
+            return
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO missoes_customizadas
+            (nome, descricao, tipo, condicoes, meta, tipo_recompensa, quantidade_recompensa, data_fim)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (nome, descricao, tipo, condicoes, meta if meta > 0 else None, tipo_recompensa, quantidade_recompensa, data_fim_iso))
+        con.commit()
+        await interaction.response.send_message(f"✅ Missão **{nome}** criada com sucesso!", ephemeral=True)
+    except sqlite3.IntegrityError:
+        await interaction.response.send_message(f"❌ Já existe uma missão com o nome **{nome}**.", ephemeral=True)
+    finally:
+        con.close()
+
+@missao_group.command(name="deletar", description="Deleta uma missão (admin)")
+@app_commands.describe(nome="Nome exato da missão a deletar")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_deletar(interaction: discord.Interaction, nome: str):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(f"❌ Missão **{nome}** não encontrada.", ephemeral=True)
+        con.close()
+        return
+    mid = resultado[0]
+    cur.execute("DELETE FROM missoes_customizadas_progresso WHERE missao_id = ?", (mid,))
+    cur.execute("DELETE FROM missoes_customizadas WHERE id = ?", (mid,))
+    con.commit()
+    con.close()
+    await interaction.response.send_message(f"✅ Missão **{nome}** deletada.", ephemeral=True)
+
+@missao_group.command(name="lista", description="Lista todas as missões criadas")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_lista(interaction: discord.Interaction):
+    missoes = buscar_missoes_customizadas()
+    if not missoes:
+        await interaction.response.send_message("Nenhuma missão criada ainda.", ephemeral=True)
+        return
+    embed = discord.Embed(title="📋 Lista de Missões", color=discord.Color.purple())
+    for mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd, data_fim, _ in missoes:
+        prazo = datetime.datetime.fromisoformat(data_fim).strftime("%d/%m/%Y às %H:%M") if data_fim else "Sem prazo"
+        embed.add_field(
+            name=f"{nome} ({tipo})",
+            value=f"{descricao}\nCondição: `{condicoes}` | Meta: {meta}\nRecompensa: {qtd} {tipo_recompensa}\nPrazo: {prazo}",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@missao_group.command(name="concluir", description="Conclui manualmente uma missão Null para um membro (admin)")
+@app_commands.describe(
+    nome="Nome exato da missão",
+    membro="Membro que completou a missão"
+)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_concluir(interaction: discord.Interaction, nome: str, membro: discord.Member):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, nome, tipo_recompensa, quantidade_recompensa FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(f"❌ Missão **{nome}** não encontrada.", ephemeral=True)
+        con.close()
+        return
+    mid, nome_real, tipo_recompensa, qtd_recompensa = resultado
+
+    cur.execute("SELECT completada FROM missoes_customizadas_progresso WHERE usuario_id = ? AND missao_id = ?",
+                (str(membro.id), mid))
+    prog = cur.fetchone()
+    if prog and prog[0]:
+        await interaction.response.send_message(f"❌ {membro.display_name} já completou esta missão!", ephemeral=True)
+        con.close()
+        return
+    con.close()
+
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    await concluir_missao_customizada(str(membro.id), mid, nome_real, tipo_recompensa, qtd_recompensa, canal, interaction)
+    await interaction.response.send_message(f"✅ Missão **{nome_real}** concluída para {membro.mention}!", ephemeral=True)
+
+bot.tree.add_command(missao_group)
 
 bot.tree.add_command(rotacao_group)
 
