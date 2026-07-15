@@ -2630,59 +2630,67 @@ class ViewAjudaCategoria(discord.ui.View):
 # ============================================================
 # V2 VIEW (BOTÕES) - Missões
 # ============================================================
-class ViewMissoesMenu(discord.ui.View):
+class ViewMissoesMenu(ui.LayoutView):
     def __init__(self, usuario: discord.Member):
         super().__init__(timeout=120)
         self.usuario = usuario
+        self.montar()
 
-    def gerar_layout(self):
-        layout = ui.LayoutView()
+    def montar(self):
+        self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.purple()
         container.add_item(ui.TextDisplay("# 📋 Missões\n-# Escolha uma categoria de missões abaixo."))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
         container.add_item(ui.TextDisplay("🗓️ **Semanais** — Resetam toda segunda-feira\n📌 **Permanentes** — Sem prazo, complete uma vez\n⏳ **Temporárias** — Eventos por tempo limitado"))
-        layout.add_item(container)
-        return layout
 
-    @discord.ui.button(label="🗓️ Semanais", style=discord.ButtonStyle.primary, row=0)
-    async def btn_semanais(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewMissoesSemanais(self.usuario, pagina=0, view_menu=self)
-        layout = view.gerar_layout()
-        await interaction.response.edit_message(view=view, attachments=[])
+        linha = ui.ActionRow()
+        btn_semanais = ui.Button(label="🗓️ Semanais", style=discord.ButtonStyle.primary)
+        btn_permanentes = ui.Button(label="📌 Permanentes", style=discord.ButtonStyle.primary)
+        btn_temporarias = ui.Button(label="⏳ Temporárias", style=discord.ButtonStyle.primary)
 
-    @discord.ui.button(label="📌 Permanentes", style=discord.ButtonStyle.primary, row=0)
-    async def btn_permanentes(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewMissoesCustomizadas(self.usuario, tipo="permanente", pagina=0, view_menu=self)
-        await interaction.response.edit_message(view=view, attachments=[])
+        async def ir_semanais(interaction: discord.Interaction):
+            view = ViewMissoesSemanais(self.usuario, pagina=0, view_menu=self)
+            await interaction.response.edit_message(view=view)
 
-    @discord.ui.button(label="⏳ Temporárias", style=discord.ButtonStyle.primary, row=0)
-    async def btn_temporarias(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewMissoesCustomizadas(self.usuario, tipo="temporaria", pagina=0, view_menu=self)
-        await interaction.response.edit_message(view=view, attachments=[])
+        async def ir_permanentes(interaction: discord.Interaction):
+            view = ViewMissoesCustomizadas(self.usuario, tipo="permanente", pagina=0, view_menu=self)
+            await interaction.response.edit_message(view=view)
+
+        async def ir_temporarias(interaction: discord.Interaction):
+            view = ViewMissoesCustomizadas(self.usuario, tipo="temporaria", pagina=0, view_menu=self)
+            await interaction.response.edit_message(view=view)
+
+        btn_semanais.callback = ir_semanais
+        btn_permanentes.callback = ir_permanentes
+        btn_temporarias.callback = ir_temporarias
+
+        linha.add_item(btn_semanais)
+        linha.add_item(btn_permanentes)
+        linha.add_item(btn_temporarias)
+        container.add_item(linha)
+
+        self.add_item(container)
 
 
-class ViewMissoesSemanais(discord.ui.View):
+class ViewMissoesSemanais(ui.LayoutView):
     def __init__(self, usuario: discord.Member, pagina: int, view_menu: ViewMissoesMenu):
         super().__init__(timeout=120)
         self.usuario = usuario
         self.pagina = pagina
         self.view_menu = view_menu
         self.por_pagina = 7
-        self.total_paginas = max(1, -(-len(MISSOES_SEMANAIS) // 7))
-        self.atualizar_botoes()
+        self.total_paginas = max(1, -(-len(MISSOES_SEMANAIS) // self.por_pagina))
+        self.montar()
 
-    def atualizar_botoes(self):
-        self.anterior.disabled = self.pagina == 0
-        self.proximo.disabled = self.pagina >= self.total_paginas - 1
-
-    def gerar_layout(self):
+    def montar(self):
+        self.clear_items()
         semana = semana_atual()
-        layout = ui.LayoutView()
         container = ui.Container()
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.TextDisplay(f"# 🗓️ Missões Semanais\n-# Semana {semana} • {self.usuario.display_name}"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         for missao in MISSOES_SEMANAIS[inicio:fim]:
@@ -2697,27 +2705,38 @@ class ViewMissoesSemanais(discord.ui.View):
                 f"**{missao['nome']}**\n-# {missao['descricao']}\n{status}\n-# 🎁 Recompensa: {recompensa}"
             ))
             container.add_item(ui.Separator())
-        layout.add_item(container)
-        return layout
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
-    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina -= 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(view=self)
+        linha = ui.ActionRow()
+        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
+        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
-    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina += 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(view=self)
+        async def ir_anterior(interaction: discord.Interaction):
+            self.pagina -= 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(view=self.view_menu)
+        async def ir_proximo(interaction: discord.Interaction):
+            self.pagina += 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
+
+        async def ir_voltar(interaction: discord.Interaction):
+            await interaction.response.edit_message(view=self.view_menu)
+
+        btn_anterior.callback = ir_anterior
+        btn_proximo.callback = ir_proximo
+        btn_voltar.callback = ir_voltar
+
+        linha.add_item(btn_anterior)
+        linha.add_item(btn_proximo)
+        linha.add_item(btn_voltar)
+        container.add_item(linha)
+
+        self.add_item(container)
 
 
-class ViewMissoesCustomizadas(discord.ui.View):
+class ViewMissoesCustomizadas(ui.LayoutView):
     def __init__(self, usuario: discord.Member, tipo: str, pagina: int, view_menu: ViewMissoesMenu):
         super().__init__(timeout=120)
         self.usuario = usuario
@@ -2727,22 +2746,20 @@ class ViewMissoesCustomizadas(discord.ui.View):
         self.por_pagina = 5
         self.missoes = buscar_missoes_customizadas(tipo)
         self.total_paginas = max(1, -(-len(self.missoes) // self.por_pagina))
-        self.atualizar_botoes()
+        self.montar()
 
-    def atualizar_botoes(self):
-        self.anterior.disabled = self.pagina == 0
-        self.proximo.disabled = self.pagina >= self.total_paginas - 1
-
-    def gerar_layout(self):
+    def montar(self):
+        self.clear_items()
         titulo = "📌 Missões Permanentes" if self.tipo == "permanente" else "⏳ Missões Temporárias"
-        layout = ui.LayoutView()
         container = ui.Container()
         container.accent_color = discord.Colour.gold() if self.tipo == "permanente" else discord.Colour.orange()
         container.add_item(ui.TextDisplay(f"# {titulo}\n-# {self.usuario.display_name}"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         missoes_pagina = self.missoes[inicio:fim]
+
         if not missoes_pagina:
             container.add_item(ui.TextDisplay("Nenhuma missão disponível nesta categoria."))
         else:
@@ -2766,27 +2783,37 @@ class ViewMissoesCustomizadas(discord.ui.View):
                     f"**{nome}**\n-# {descricao}\n{status}{prazo}\n-# 🎁 Recompensa: {recompensa}"
                 ))
                 container.add_item(ui.Separator())
-        layout.add_item(container)
-        return layout
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
-    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina -= 1
-        self.atualizar_botoes()
-        self.missoes = buscar_missoes_customizadas(self.tipo)
-        await interaction.response.edit_message(view=self)
+        linha = ui.ActionRow()
+        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
+        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
-    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina += 1
-        self.atualizar_botoes()
-        self.missoes = buscar_missoes_customizadas(self.tipo)
-        await interaction.response.edit_message(view=self)
+        async def ir_anterior(interaction: discord.Interaction):
+            self.pagina -= 1
+            self.missoes = buscar_missoes_customizadas(self.tipo)
+            self.montar()
+            await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(view=self.view_menu)
+        async def ir_proximo(interaction: discord.Interaction):
+            self.pagina += 1
+            self.missoes = buscar_missoes_customizadas(self.tipo)
+            self.montar()
+            await interaction.response.edit_message(view=self)
 
+        async def ir_voltar(interaction: discord.Interaction):
+            await interaction.response.edit_message(view=self.view_menu)
+
+        btn_anterior.callback = ir_anterior
+        btn_proximo.callback = ir_proximo
+        btn_voltar.callback = ir_voltar
+
+        linha.add_item(btn_anterior)
+        linha.add_item(btn_proximo)
+        linha.add_item(btn_voltar)
+        container.add_item(linha)
+
+        self.add_item(container)
 # ============================================================
 # EVENTOS
 # ============================================================
@@ -3428,7 +3455,6 @@ async def missoes(ctx, membro: discord.Member = None):
         membro = ctx.author
     garantir_contador(membro.id)
     view = ViewMissoesMenu(membro)
-    layout = view.gerar_layout()
     await ctx.send(view=view)
 
 # ============================================================
