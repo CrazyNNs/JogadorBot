@@ -120,7 +120,7 @@ EMPREGOS = {
         "salario_min": 2500,
         "salario_max": 2800,
         "level_necessario": 15,
-        "emoji": "🚗",
+        "emoji": "<:MotoristaParticularIcon:1527099360331038790>",
         "descricao": "Dirige por toda cidade e deixa o seu cliente no destino desejado.",
         "acoes": [
             "Você dirigiu ao shooping e ganhou <:JoyensIcon:1525930784584634398>{salario}Joyens!",
