@@ -2306,11 +2306,11 @@ class ViewMissoesMenu(discord.ui.View):
         super().__init__(timeout=120)
         self.usuario = usuario
 
-    def gerar_embed_inicial(self):
+    def gerar_layout(self):
         layout = ui.LayoutView()
         container = ui.Container()
         container.accent_color = discord.Colour.purple()
-        container.add_item(ui.TextDisplay(f"# 📋 Missões\n-# Escolha uma categoria de missões abaixo."))
+        container.add_item(ui.TextDisplay("# 📋 Missões\n-# Escolha uma categoria de missões abaixo."))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
         container.add_item(ui.TextDisplay("🗓️ **Semanais** — Resetam toda segunda-feira\n📌 **Permanentes** — Sem prazo, complete uma vez\n⏳ **Temporárias** — Eventos por tempo limitado"))
         layout.add_item(container)
@@ -2320,19 +2320,17 @@ class ViewMissoesMenu(discord.ui.View):
     async def btn_semanais(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMissoesSemanais(self.usuario, pagina=0, view_menu=self)
         layout = view.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     @discord.ui.button(label="📌 Permanentes", style=discord.ButtonStyle.primary, row=0)
     async def btn_permanentes(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMissoesCustomizadas(self.usuario, tipo="permanente", pagina=0, view_menu=self)
-        layout = view.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     @discord.ui.button(label="⏳ Temporárias", style=discord.ButtonStyle.primary, row=0)
     async def btn_temporarias(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMissoesCustomizadas(self.usuario, tipo="temporaria", pagina=0, view_menu=self)
-        layout = view.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=view, attachments=[])
 
 
 class ViewMissoesSemanais(discord.ui.View):
@@ -2342,7 +2340,7 @@ class ViewMissoesSemanais(discord.ui.View):
         self.pagina = pagina
         self.view_menu = view_menu
         self.por_pagina = 7
-        self.total_paginas = 1
+        self.total_paginas = max(1, -(-len(MISSOES_SEMANAIS) // 7))
         self.atualizar_botoes()
 
     def atualizar_botoes(self):
@@ -2356,59 +2354,39 @@ class ViewMissoesSemanais(discord.ui.View):
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.TextDisplay(f"# 🗓️ Missões Semanais\n-# Semana {semana} • {self.usuario.display_name}"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
-        missoes_pagina = MISSOES_SEMANAIS[inicio:fim]
-        self.total_paginas = max(1, -(-len(MISSOES_SEMANAIS) // self.por_pagina))
-        self.atualizar_botoes()
-
-        for missao in missoes_pagina:
+        for missao in MISSOES_SEMANAIS[inicio:fim]:
             progresso, completada = buscar_progresso_missao(self.usuario.id, missao["id"])
             meta = missao["meta"]
             progresso = min(progresso, meta)
             porcentagem = int((progresso / meta) * 100)
-            blocos_cheios = porcentagem // 10
-            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-            tipo = missao["tipo_recompensa"]
-            qtd = missao["quantidade_recompensa"]
-            recompensa = f"+{qtd} Joyens" if tipo == "joyens" else f"+{qtd} XP"
+            barra = "█" * (porcentagem // 10) + "░" * (10 - porcentagem // 10)
+            recompensa = f"+{missao['quantidade_recompensa']} {'Joyens' if missao['tipo_recompensa'] == 'joyens' else 'XP'}"
             status = "✅ Concluída!" if completada else f"`{barra}` {progresso}/{meta}"
-            texto = (
-                f"**{missao['nome']}**\n"
-                f"-# {missao['descricao']}\n"
-                f"{status}\n"
-                f"-# 🎁 Recompensa: {recompensa}"
-            )
-            container.add_item(ui.TextDisplay(texto))
+            container.add_item(ui.TextDisplay(
+                f"**{missao['nome']}**\n-# {missao['descricao']}\n{status}\n-# 🎁 Recompensa: {recompensa}"
+            ))
             container.add_item(ui.Separator())
-
-        # Botões de navegação dentro do container
-        acoes = ui.ActionRow()
-        acoes.add_item(ui.Button(label="◀", style=discord.ButtonStyle.secondary, custom_id="miss_ant", disabled=self.pagina == 0))
-        acoes.add_item(ui.Button(label="▶", style=discord.ButtonStyle.secondary, custom_id="miss_prox", disabled=self.pagina >= self.total_paginas - 1))
-        acoes.add_item(ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger, custom_id="miss_voltar"))
-        container.add_item(acoes)
         layout.add_item(container)
         return layout
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.pagina -= 1
-        layout = self.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        self.atualizar_botoes()
+        await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.pagina += 1
-        layout = self.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        self.atualizar_botoes()
+        await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        layout = self.view_menu.gerar_embed_inicial()
-        layout.add_item(self.view_menu)
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=self.view_menu)
+
 
 class ViewMissoesCustomizadas(discord.ui.View):
     def __init__(self, usuario: discord.Member, tipo: str, pagina: int, view_menu: ViewMissoesMenu):
@@ -2433,47 +2411,33 @@ class ViewMissoesCustomizadas(discord.ui.View):
         container.accent_color = discord.Colour.gold() if self.tipo == "permanente" else discord.Colour.orange()
         container.add_item(ui.TextDisplay(f"# {titulo}\n-# {self.usuario.display_name}"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         missoes_pagina = self.missoes[inicio:fim]
-
         if not missoes_pagina:
             container.add_item(ui.TextDisplay("Nenhuma missão disponível nesta categoria."))
         else:
             for missao in missoes_pagina:
                 mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _ = missao
                 progresso, completada = buscar_progresso_missao_customizada(self.usuario.id, mid)
-                recompensa = f"+{qtd_recompensa} Joyens" if tipo_recompensa == "joyens" else f"+{qtd_recompensa} XP"
-
+                recompensa = f"+{qtd_recompensa} {'Joyens' if tipo_recompensa == 'joyens' else 'XP'}"
                 if condicoes.strip().lower() == "null":
                     status = "✅ Concluída!" if completada else "📸 Envie uma prova para completar"
-                    barra_texto = ""
                 else:
                     meta_val = meta or 1
                     progresso_val = min(progresso, meta_val)
                     porcentagem = int((progresso_val / meta_val) * 100)
-                    blocos = porcentagem // 10
-                    barra = "█" * blocos + "░" * (10 - blocos)
-                    barra_texto = f"\n`{barra}` {progresso_val}/{meta_val}"
-                    status = "✅ Concluída!" if completada else barra_texto
-
+                    barra = "█" * (porcentagem // 10) + "░" * (10 - porcentagem // 10)
+                    status = "✅ Concluída!" if completada else f"`{barra}` {progresso_val}/{meta_val}"
                 prazo = ""
                 if data_fim:
                     expira_dt = datetime.datetime.fromisoformat(data_fim)
                     prazo = f"\n-# ⏰ Expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}"
-
-                texto = (
-                    f"**{nome}**\n"
-                    f"-# {descricao}\n"
-                    f"{status}{prazo}\n"
-                    f"-# 🎁 Recompensa: {recompensa}"
-                )
-                container.add_item(ui.TextDisplay(texto))
+                container.add_item(ui.TextDisplay(
+                    f"**{nome}**\n-# {descricao}\n{status}{prazo}\n-# 🎁 Recompensa: {recompensa}"
+                ))
                 container.add_item(ui.Separator())
-
         layout.add_item(container)
-        layout.add_item(self)
         return layout
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
@@ -2483,27 +2447,16 @@ class ViewMissoesCustomizadas(discord.ui.View):
         self.missoes = buscar_missoes_customizadas(self.tipo)
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
-    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina -= 1
-        self.atualizar_botoes()
-        self.missoes = buscar_missoes_customizadas(self.tipo)
-        layout = self.gerar_layout()
-        await interaction.response.edit_message(view=layout)
-
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.pagina += 1
         self.atualizar_botoes()
         self.missoes = buscar_missoes_customizadas(self.tipo)
-        layout = self.gerar_layout()
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=0)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        layout = self.view_menu.gerar_embed_inicial()
-        layout.add_item(self.view_menu)
-        await interaction.response.edit_message(view=layout)
+        await interaction.response.edit_message(view=self.view_menu)
 
 # ============================================================
 # EVENTOS
@@ -2582,7 +2535,6 @@ async def perfil(ctx, *, argumento: str = None):
     if argumento is None:
         membro = ctx.author
     else:
-        # Tenta encontrar por menção, ID ou nome
         membro = None
         argumento_limpo = argumento.strip().replace("<@", "").replace(">", "").replace("!", "")
         if argumento_limpo.isdigit():
@@ -3092,7 +3044,7 @@ async def missoes(ctx, membro: discord.Member = None):
         membro = ctx.author
     garantir_contador(membro.id)
     view = ViewMissoesMenu(membro)
-    layout = view.gerar_embed_inicial()
+    layout = view.gerar_layout()
     await ctx.send(view=view)
 
 # ============================================================
