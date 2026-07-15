@@ -2383,8 +2383,13 @@ class ViewMissoesSemanais(discord.ui.View):
             container.add_item(ui.TextDisplay(texto))
             container.add_item(ui.Separator())
 
+        # Botões de navegação dentro do container
+        acoes = ui.ActionRow()
+        acoes.add_item(ui.Button(label="◀", style=discord.ButtonStyle.secondary, custom_id="miss_ant", disabled=self.pagina == 0))
+        acoes.add_item(ui.Button(label="▶", style=discord.ButtonStyle.secondary, custom_id="miss_prox", disabled=self.pagina >= self.total_paginas - 1))
+        acoes.add_item(ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger, custom_id="miss_voltar"))
+        container.add_item(acoes)
         layout.add_item(container)
-        layout.add_item(self)
         return layout
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
