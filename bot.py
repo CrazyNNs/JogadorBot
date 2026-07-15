@@ -605,48 +605,6 @@ async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
         mensagem = await canal.send(embed=embed)
         await mensagem.delete(delay=60)
 
-# Dados foto de perfil
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA").resize((180, 180))
-    mascara = Image.new("L", (180, 180), 0)
-    ImageDraw.Draw(mascara).ellipse((0, 0, 180, 180), fill=255)
-    avatar_circular = Image.new("RGBA", (180, 180), (0, 0, 0, 0))
-    avatar_circular.paste(avatar, mask=mascara)
-    
-# Banner de perfil
-    card = Image.open("perfil.png").convert("RGBA").resize((800, 600))
-
-    draw = ImageDraw.Draw(card)
-    card.paste(avatar_circular, (16, 16), avatar_circular)
-    
-    banner_arquivo = buscar_banner_ativo(usuario.id)
-    if banner_arquivo and os.path.exists(banner_arquivo):
-        banner = Image.open(banner_arquivo).convert("RGBA").resize((800, 375))
-        card.paste(banner, (0, 225), banner)
-
-# Textos de perfil
-    fonte_nome = ImageFont.truetype("/app/fonte.ttf", 35)
-    fonte_info = ImageFont.truetype("/app/fonte_regular.ttf", 25)
-# Level do usuário
-    level, xp = buscar_level(usuario.id)
-    xp_prox = xp_necessario(level)
-    xp_texto = f"XP: {xp}/{xp_prox}" if xp_prox else "Level MAX"
-    draw.text((400, 140), f"Level {level}", font=fonte_nome, fill=(255, 215, 0))
-    draw.text((400, 175), xp_texto, font=fonte_info, fill=(200, 200, 200))
-# Nickname e @ do usuário
-    draw.text((210, 30), usuario.display_name, font=fonte_nome, fill=(255, 255, 255))
-    draw.text((210, 80), f"@{usuario.name}", font=fonte_info, fill=(100, 100, 100))
-# Quantidade de conquistas
-    conquistas = buscar_conquistas_usuario(usuario.id)
-    draw.text((540, 97), f"{len(conquistas)}", font=fonte_info, fill=(255, 255, 255))
-# Quantidade de Joyens do usuário
-    joyens = buscar_joyens(usuario.id)
-    draw.text((540, 27), f"{joyens}", font=fonte_info, fill=(255, 255, 255))
-
-    buffer = io.BytesIO()
-    card.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer, len(conquistas)
-
 from discord.ext import tasks
 
 @tasks.loop(minutes=5)
@@ -808,26 +766,6 @@ async def on_voice_state_update(member, before, after):
                 await verificar_missoes_usuario(str(member.id))
 
     con.close()
-
-@bot.event
-async def on_message(message):
-    """Conta mensagens dos usuários."""
-    if message.author.bot:
-        await bot.process_commands(message)
-        return
-    garantir_contador(message.author.id)
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        UPDATE contadores_usuarios SET
-            msg_semana = msg_semana + 1,
-            msg_total = msg_total + 1
-        WHERE usuario_id = ?
-    """, (str(message.author.id),))
-    con.commit()
-    con.close()
-    await verificar_missoes_usuario(str(message.author.id))
-    await bot.process_commands(message)
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Missões Customizadas Temporárias
@@ -1158,7 +1096,10 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
                 recompensa_texto = f"**+{qtd} Joyens**"
             elif tipo == "xp":
                 canal_ctx = ctx_ou_channel or canal
-                await adicionar_xp(str(usuario_id), qtd, canal_ctx)
+                try:
+                    await adicionar_xp(str(usuario_id), qtd, canal_ctx)
+                except Exception as e:
+                    print(f"Erro ao dar XP de missão: {e}")
                 recompensa_texto = f"**+{qtd} XP**"
 
             # Notifica no canal
