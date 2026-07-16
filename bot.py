@@ -170,6 +170,29 @@ SABONETE_PRECO = 20
 
 LIMITE_PETS = 3
 # ============================================================
+# PETS — Dados sobre os pets
+# ============================================================
+# --- Decaimento (1 ponto a cada X minutos) ---
+DECAIMENTO_FOME_MINUTOS = 15
+DECAIMENTO_ENERGIA_MINUTOS = 20
+DECAIMENTO_HIGIENE_MINUTOS = 30
+DECAIMENTO_FELICIDADE_MINUTOS = 40
+
+# --- Efeitos das ações ---
+FOME_ALIMENTAR = 30
+FELICIDADE_ALIMENTAR = 5
+
+BRINCAR_FELICIDADE = 15
+BRINCAR_ENERGIA = -8
+BRINCAR_HIGIENE = -5
+BRINCAR_FOME = -3
+BRINCAR_ENERGIA_MINIMA = 10
+
+BANHO_HIGIENE = 100
+BANHO_FELICIDADE = 5
+
+DORMIR_DURACAO_HORAS = 2
+# ============================================================
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -553,6 +576,8 @@ def remover_joyens(usuario_id, quantidade):
     con.commit()
     con.close()
 
+# ============================================================
+# SISTEMA DE PETS E STATUS
 def contar_pets(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -593,6 +618,99 @@ def buscar_sabonetes_usuario(usuario_id):
     con.close()
     return resultado[0] if resultado else 0
 
+def atualizar_stats_pet(pet_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate,
+               energia_ao_dormir, ultima_atualizacao
+        FROM pets WHERE id = ?
+    """, (pet_id,))
+    linha = cur.fetchone()
+    if not linha:
+        con.close()
+        return
+
+    fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate, energia_ao_dormir, ultima_atualizacao = linha
+
+    agora = datetime.datetime.now(FUSO_BR)
+    ultima = datetime.datetime.fromisoformat(ultima_atualizacao)
+
+    estava_dormindo = dormindo_ate is not None
+    dormindo_ate_dt = datetime.datetime.fromisoformat(dormindo_ate) if dormindo_ate else None
+    dormindo_desde_dt = datetime.datetime.fromisoformat(dormindo_desde) if dormindo_desde else None
+
+    if estava_dormindo and agora < dormindo_ate_dt:
+        duracao_total = (dormindo_ate_dt - dormindo_desde_dt).total_seconds()
+        decorrido = (agora - dormindo_desde_dt).total_seconds()
+        progresso = min(1.0, decorrido / duracao_total) if duracao_total > 0 else 1.0
+        nova_energia = energia_ao_dormir + (100 - energia_ao_dormir) * progresso
+        novo_dormindo_desde = dormindo_desde
+        novo_dormindo_ate = dormindo_ate
+        novo_energia_ao_dormir = energia_ao_dormir
+
+    elif estava_dormindo and agora >= dormindo_ate_dt:
+        minutos_desde_acordar = (agora - dormindo_ate_dt).total_seconds() / 60
+        nova_energia = 100 - (minutos_desde_acordar / DECAIMENTO_ENERGIA_MINUTOS)
+        novo_dormindo_desde = None
+        novo_dormindo_ate = None
+        novo_energia_ao_dormir = None
+
+    else:
+        minutos_passados_energia = (agora - ultima).total_seconds() / 60
+        nova_energia = energia - (minutos_passados_energia / DECAIMENTO_ENERGIA_MINUTOS)
+        novo_dormindo_desde = None
+        novo_dormindo_ate = None
+        novo_energia_ao_dormir = None
+
+    minutos_passados = (agora - ultima).total_seconds() / 60
+    nova_fome = fome - (minutos_passados / DECAIMENTO_FOME_MINUTOS)
+    nova_higiene = higiene - (minutos_passados / DECAIMENTO_HIGIENE_MINUTOS)
+    nova_felicidade = felicidade - (minutos_passados / DECAIMENTO_FELICIDADE_MINUTOS)
+
+    nova_fome = max(0, min(100, round(nova_fome)))
+    nova_higiene = max(0, min(100, round(nova_higiene)))
+    nova_felicidade = max(0, min(100, round(nova_felicidade)))
+    nova_energia = max(0, min(100, round(nova_energia)))
+
+    cur.execute("""
+        UPDATE pets SET fome = ?, energia = ?, higiene = ?, felicidade = ?,
+                        dormindo_desde = ?, dormindo_ate = ?, energia_ao_dormir = ?,
+                        ultima_atualizacao = ?
+        WHERE id = ?
+    """, (
+        nova_fome, nova_energia, nova_higiene, nova_felicidade,
+        novo_dormindo_desde, novo_dormindo_ate, novo_energia_ao_dormir,
+        agora.isoformat(), pet_id
+    ))
+    con.commit()
+    con.close()
+
+def aplicar_efeito_pet(pet_id, fome=0, energia=0, higiene=0, felicidade=0):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT fome, energia, higiene, felicidade FROM pets WHERE id = ?", (pet_id,))
+    resultado = cur.fetchone()
+    if not resultado:
+        con.close()
+        return
+    fome_atual, energia_atual, higiene_atual, felicidade_atual = resultado
+
+    novo_fome = max(0, min(100, fome_atual + fome))
+    novo_energia = max(0, min(100, energia_atual + energia))
+    novo_higiene = max(0, min(100, higiene_atual + higiene))
+    novo_felicidade = max(0, min(100, felicidade_atual + felicidade))
+
+    agora = datetime.datetime.now(FUSO_BR).isoformat()
+    cur.execute("""
+        UPDATE pets SET fome = ?, energia = ?, higiene = ?, felicidade = ?, ultima_atualizacao = ?
+        WHERE id = ?
+    """, (novo_fome, novo_energia, novo_higiene, novo_felicidade, agora, pet_id))
+    con.commit()
+    con.close()
+
+# ============================================================
+# BANNER NA ROTAÇÃO DA LOJA
 def usuario_tem_banner(usuario_id, banner_id):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -655,6 +773,8 @@ async def gerar_card_perfil(usuario: discord.Member):
         async with session.get(str(usuario.display_avatar.url)) as resp:
             avatar_bytes = await resp.read()
 
+# ============================================================
+# SISTEMA DE LEVEL UP
 def xp_necessario(level):
     """Calcula o XP necessário para atingir o próximo level."""
     if level >= LEVEL_MAX:
@@ -727,6 +847,8 @@ async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
 
 from discord.ext import tasks
 
+# ============================================================
+# TASKS DE VERIFICAÇÃO POR TEMPO
 @tasks.loop(minutes=5)
 async def verificar_admins_expirados():
     con = sqlite3.connect("jogadorbot.db")
@@ -1917,7 +2039,293 @@ class ViewComprarSabonete(discord.ui.View):
             color=discord.Color.gold()
         )
         return embed
+# ============================================================
+# VIEW (BOTÕES) - !pets (Components V2)
+# ============================================================
 
+class ViewEscolherPetisco(discord.ui.View):
+    def __init__(self, usuario_id, pet_id, petiscos):
+        super().__init__(timeout=60)
+        self.usuario_id = usuario_id
+        self.pet_id = pet_id
+
+        opcoes = [
+            discord.SelectOption(label=f"{tipo} (x{quantidade})", value=tipo)
+            for tipo, quantidade in petiscos[:25]
+        ]
+        select = discord.ui.Select(placeholder="Escolha um petisco...", options=opcoes)
+        select.callback = self.escolher
+        self.add_item(select)
+
+    async def escolher(self, interaction: discord.Interaction):
+        tipo = interaction.data["values"][0]
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "SELECT quantidade FROM pets_petiscos WHERE usuario_id = ? AND tipo = ?",
+            (str(self.usuario_id), tipo)
+        )
+        resultado = cur.fetchone()
+        if not resultado or resultado[0] <= 0:
+            con.close()
+            await interaction.response.edit_message(content=f"❌ Você não tem mais **{tipo}**!", view=None)
+            return
+
+        cur.execute(
+            "UPDATE pets_petiscos SET quantidade = quantidade - 1 WHERE usuario_id = ? AND tipo = ?",
+            (str(self.usuario_id), tipo)
+        )
+        con.commit()
+        con.close()
+
+        atualizar_stats_pet(self.pet_id)
+        aplicar_efeito_pet(self.pet_id, fome=FOME_ALIMENTAR, felicidade=FELICIDADE_ALIMENTAR)
+
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content=f"✅ Você deu **{tipo}** para o seu pet!", view=self
+        )
+
+
+class ViewPets(discord.ui.LayoutView):
+    def __init__(self, usuario_id, pet_id_selecionado=None):
+        super().__init__(timeout=180)
+        self.usuario_id = usuario_id
+        self.pet_id_selecionado = pet_id_selecionado
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        pets_usuario = listar_pets(self.usuario_id)
+
+        if not pets_usuario:
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → PetShop → Pets para adotar um."
+                )
+            )
+            container.accent_color = discord.Colour.red()
+            self.add_item(container)
+            return
+
+        opcoes = []
+        for pet_id, especie, nome in pets_usuario:
+            dados = PETS_DISPONIVEIS.get(especie, {})
+            opcoes.append(discord.SelectOption(
+                label=nome,
+                value=str(pet_id),
+                description=especie,
+                emoji=dados.get("emoji"),
+                default=(self.pet_id_selecionado == pet_id)
+            ))
+
+        select = discord.ui.Select(placeholder="Escolha um pet para ver e cuidar...", options=opcoes)
+        select.callback = self.selecionar_pet
+        self.add_item(discord.ui.ActionRow(select))
+
+        if self.pet_id_selecionado is None:
+            container = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    "🐾 **Seus Pets**\nSelecione um pet no menu acima para ver o status e cuidar dele!"
+                )
+            )
+            container.accent_color = discord.Colour.blue()
+            self.add_item(container)
+            return
+
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            container = discord.ui.Container(
+                discord.ui.TextDisplay("❌ Esse pet não foi encontrado.")
+            )
+            self.add_item(container)
+            return
+
+        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+        dados = PETS_DISPONIVEIS.get(especie, {})
+        dormindo = dormindo_ate is not None and datetime.datetime.fromisoformat(dormindo_ate) > datetime.datetime.now(FUSO_BR)
+
+        titulo = f"{dados.get('emoji', '🐾')} {nome}" + (" 💤" if dormindo else "")
+
+        container = discord.ui.Container(
+            discord.ui.TextDisplay(f"# {titulo}\n{dados.get('descricao', '')}")
+        )
+        container.accent_color = discord.Colour.blue()
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        container.add_item(discord.ui.TextDisplay(self.barra_status("Fome", "🍖", fome)))
+        container.add_item(discord.ui.TextDisplay(self.barra_status("Energia", "⚡", energia)))
+        container.add_item(discord.ui.TextDisplay(self.barra_status("Higiene", "🧼", higiene)))
+        container.add_item(discord.ui.TextDisplay(self.barra_status("Felicidade", "😊", felicidade)))
+
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        botao_alimentar = discord.ui.Button(label="Alimentar", emoji="🍖", style=discord.ButtonStyle.success, disabled=dormindo)
+        botao_alimentar.callback = self.abrir_alimentar
+
+        botao_brincar = discord.ui.Button(label="Brincar", emoji="🎾", style=discord.ButtonStyle.primary, disabled=dormindo)
+        botao_brincar.callback = self.brincar
+
+        botao_banho = discord.ui.Button(label="Banho", emoji="🧼", style=discord.ButtonStyle.primary, disabled=dormindo)
+        botao_banho.callback = self.banho
+
+        botao_dormir = discord.ui.Button(
+            label="Dormindo..." if dormindo else "Dormir",
+            emoji="💤" if dormindo else "😴",
+            style=discord.ButtonStyle.secondary,
+            disabled=dormindo
+        )
+        botao_dormir.callback = self.dormir
+
+        container.add_item(discord.ui.ActionRow(botao_alimentar, botao_brincar, botao_banho, botao_dormir))
+
+        self.add_item(container)
+
+    def barra_status(self, nome, emoji, valor):
+        blocos_cheios = valor // 10
+        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+        return f"{emoji} **{nome}**\n`{barra}` {valor}%"
+
+    def buscar_pet_atualizado(self):
+        atualizar_stats_pet(self.pet_id_selecionado)
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate
+            FROM pets WHERE id = ? AND usuario_id = ?
+        """, (self.pet_id_selecionado, str(self.usuario_id)))
+        resultado = cur.fetchone()
+        con.close()
+        return resultado
+
+    async def selecionar_pet(self, interaction: discord.Interaction):
+        self.pet_id_selecionado = int(interaction.data["values"][0])
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def abrir_alimentar(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            return
+        pet_id = pet[0]
+
+        petiscos = buscar_petiscos_usuario(self.usuario_id)
+        if not petiscos:
+            await interaction.response.send_message(
+                "❌ Você não tem nenhum petisco! Compre na `!loja` → PetShop → Petiscos.",
+                ephemeral=True
+            )
+            return
+
+        view = ViewEscolherPetisco(self.usuario_id, pet_id, petiscos)
+        await interaction.response.send_message(
+            "🍖 Qual petisco você quer dar ao seu pet?", view=view, ephemeral=True
+        )
+
+    async def brincar(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            return
+        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+
+        if energia < BRINCAR_ENERGIA_MINIMA:
+            await interaction.response.send_message(
+                f"😴 {nome} está cansado demais para brincar agora. Deixe ele dormir um pouco!",
+                ephemeral=True
+            )
+            return
+
+        dados = PETS_DISPONIVEIS.get(especie, {})
+        brinquedo_nome = dados.get("brinquedo_nome")
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "SELECT usos_restantes FROM pets_brinquedos WHERE usuario_id = ? AND tipo = ?",
+            (str(self.usuario_id), brinquedo_nome)
+        )
+        resultado = cur.fetchone()
+        if not resultado or resultado[0] <= 0:
+            con.close()
+            await interaction.response.send_message(
+                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → PetShop → Brinquedos.",
+                ephemeral=True
+            )
+            return
+
+        cur.execute(
+            "UPDATE pets_brinquedos SET usos_restantes = usos_restantes - 1 WHERE usuario_id = ? AND tipo = ?",
+            (str(self.usuario_id), brinquedo_nome)
+        )
+        con.commit()
+        con.close()
+
+        aplicar_efeito_pet(
+            pet_id,
+            felicidade=BRINCAR_FELICIDADE,
+            energia=BRINCAR_ENERGIA,
+            higiene=BRINCAR_HIGIENE,
+            fome=BRINCAR_FOME
+        )
+
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def banho(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            return
+        pet_id = pet[0]
+
+        sabonetes = buscar_sabonetes_usuario(self.usuario_id)
+        if sabonetes <= 0:
+            await interaction.response.send_message(
+                "❌ Você não tem Sabonete! Compre na `!loja` → PetShop → Higiene.",
+                ephemeral=True
+            )
+            return
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE pets_sabonete SET quantidade = quantidade - 1 WHERE usuario_id = ?",
+            (str(self.usuario_id),)
+        )
+        con.commit()
+        con.close()
+
+        aplicar_efeito_pet(pet_id, higiene=BANHO_HIGIENE, felicidade=BANHO_FELICIDADE)
+
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def dormir(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            return
+        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+
+        agora = datetime.datetime.now(FUSO_BR)
+        ate = agora + datetime.timedelta(hours=DORMIR_DURACAO_HORAS)
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            UPDATE pets SET dormindo_desde = ?, dormindo_ate = ?, energia_ao_dormir = ?, ultima_atualizacao = ?
+            WHERE id = ?
+        """, (agora.isoformat(), ate.isoformat(), energia, agora.isoformat(), pet_id))
+        con.commit()
+        con.close()
+
+        self.montar()
+        await interaction.response.edit_message(view=self)
+        
 # ============================================================
 # VIEW (BOTÕES) - Inventário de banner
 # ============================================================
@@ -3455,6 +3863,11 @@ async def missoes(ctx, membro: discord.Member = None):
         membro = ctx.author
     garantir_contador(membro.id)
     view = ViewMissoesMenu(membro)
+    await ctx.send(view=view)
+
+@bot.command(name="pets")
+async def pets(ctx):
+    view = ViewPets(ctx.author.id)
     await ctx.send(view=view)
 
 # ============================================================
