@@ -3416,6 +3416,7 @@ async def diario(ctx):
 
     xp_ganho = random.randint(250, 500)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
+    await ctx.send(embed=embed)
     atualizar_contador(ctx.author.id, "diario_semana")
     atualizar_contador(ctx.author.id, "diario_total")
 
