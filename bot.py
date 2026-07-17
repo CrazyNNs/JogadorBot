@@ -1772,19 +1772,19 @@ class ViewMenuLoja(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
-    @discord.ui.button(label="🐾 PetshopJ", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🐾 Petshop", style=discord.ButtonStyle.primary)
     async def abrir_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMenuPetshop(self.usuario_id)
         embed = gerar_embed_petshop(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
-# VIEW (BOTÕES) - PetshopJ
+# VIEW (BOTÕES) - Petshop
 # ============================================================
 
 def gerar_embed_petshop(usuario_id):
     embed = discord.Embed(
-        title="🐾 PetshopJ",
+        title="🐾 Petshop",
         description="Escolha uma subcategoria:",
         color=discord.Color.gold()
     )
@@ -1833,7 +1833,7 @@ class ViewMenuPetshop(discord.ui.View):
             color=discord.Color.gold()
         )
         embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
-        embed.add_field(name="🐾 PetshopJ", value="Adote e cuide de um bichinho virtual!", inline=False)
+        embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
         embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
         view = ViewMenuLoja(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
@@ -1961,7 +1961,7 @@ class ViewComprarPet(discord.ui.View):
             botao.callback = self.criar_callback(especie)
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -1983,7 +1983,7 @@ class ViewComprarPet(discord.ui.View):
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🐾 PetshopJ — Pets",
+            title="🐾 Petshop — Pets",
             description=f"Adote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário.",
             color=discord.Color.gold()
         )
@@ -2008,7 +2008,7 @@ class ViewComprarPetisco(discord.ui.View):
             botao.callback = self.criar_callback(dados["petisco_nome"], dados["petisco_preco"])
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -2026,7 +2026,7 @@ class ViewComprarPetisco(discord.ui.View):
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🍖 PetshopJ — Petiscos",
+            title="🍖 Petshop — Petiscos",
             description="Compre petiscos para alimentar seus pets. Escolha o petisco e informe a quantidade.",
             color=discord.Color.gold()
         )
@@ -2051,7 +2051,7 @@ class ViewComprarBrinquedo(discord.ui.View):
             botao.callback = self.criar_callback(dados["brinquedo_nome"], dados["brinquedo_preco"], dados["brinquedo_usos"])
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -2069,7 +2069,7 @@ class ViewComprarBrinquedo(discord.ui.View):
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🧸 PetshopJ — Brinquedos",
+            title="🧸 Petshop — Brinquedos",
             description="Compre brinquedos para brincar com seus pets. Escolha o brinquedo e informe a quantidade.",
             color=discord.Color.gold()
         )
@@ -2093,7 +2093,7 @@ class ViewComprarSabonete(discord.ui.View):
             ModalQuantidadeCompra(self.usuario_id, "sabonete", SABONETE_NOME, SABONETE_PRECO)
         )
 
-    @discord.ui.button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
     async def voltar_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMenuPetshop(self.usuario_id)
         embed = gerar_embed_petshop(self.usuario_id)
@@ -2101,7 +2101,7 @@ class ViewComprarSabonete(discord.ui.View):
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🧼 PetshopJ — Higiene",
+            title="🧼 Petshop — Higiene",
             description=f"O Sabonete é universal e serve para dar banho em qualquer pet.\n\n**Sabonete** — {SABONETE_PRECO} Joyens",
             color=discord.Color.gold()
         )
@@ -2111,10 +2111,17 @@ class ViewComprarSabonete(discord.ui.View):
 # ============================================================
 
 class ViewEscolherPetisco(discord.ui.View):
-    def __init__(self, usuario_id, pet_id, petiscos):
+    def __init__(self, usuario_id, pet_id, petiscos, view_pets=None, mensagem_pets=None):
         super().__init__(timeout=60)
         self.usuario_id = usuario_id
         self.pet_id = pet_id
+        self.view_pets = view_pets
+        self.mensagem_pets = mensagem_pets
+        self.montar_select(petiscos)
+
+    def montar_select(self, petiscos):
+        for item in list(self.children):
+            self.remove_item(item)
 
         opcoes = [
             discord.SelectOption(label=f"{tipo} (x{quantidade})", value=tipo)
@@ -2149,11 +2156,26 @@ class ViewEscolherPetisco(discord.ui.View):
         atualizar_stats_pet(self.pet_id)
         aplicar_efeito_pet(self.pet_id, fome=FOME_ALIMENTAR, felicidade=FELICIDADE_ALIMENTAR)
 
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.edit_message(
-            content=f"✅ Você deu **{tipo}** para o seu pet!", view=self
-        )
+        # Atualiza a mensagem principal do /pets (status), igual o Brincar e o Banho já fazem
+        if self.view_pets is not None and self.mensagem_pets is not None:
+            self.view_pets.montar()
+            try:
+                await self.mensagem_pets.edit(view=self.view_pets)
+            except discord.HTTPException:
+                pass
+
+        nova_quantidade = resultado[0] - 1
+        if nova_quantidade <= 0:
+            await interaction.response.edit_message(
+                content=f"✅ Você deu **{tipo}** para o seu pet! Você não tem mais {tipo}.",
+                view=None
+            )
+        else:
+            self.montar_select([(tipo, nova_quantidade)])
+            await interaction.response.edit_message(
+                content=f"✅ Você deu **{tipo}** para o seu pet! Restam {nova_quantidade}x — pode dar de novo se quiser.",
+                view=self
+            )
 
 
 class ViewPets(discord.ui.LayoutView):
@@ -2170,7 +2192,7 @@ class ViewPets(discord.ui.LayoutView):
         if not pets_usuario:
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → PetshopJ → Pets para adotar um."
+                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → Petshop → Pets para adotar um."
                 )
             )
             container.accent_color = discord.Colour.red()
@@ -2277,17 +2299,29 @@ class ViewPets(discord.ui.LayoutView):
         if pet is None:
             await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
             return
-        pet_id = pet[0]
+        pet_id, especie, nome = pet[0], pet[1], pet[2]
 
-        petiscos = buscar_petiscos_usuario(self.usuario_id)
-        if not petiscos:
+        dados = PETS_DISPONIVEIS.get(especie, {})
+        petisco_nome = dados.get("petisco_nome")
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "SELECT quantidade FROM pets_petiscos WHERE usuario_id = ? AND tipo = ?",
+            (str(self.usuario_id), petisco_nome)
+        )
+        resultado = cur.fetchone()
+        con.close()
+
+        if not resultado or resultado[0] <= 0:
             await interaction.response.send_message(
-                "❌ Você não tem nenhum petisco! Compre na `!loja` → PetshopJ → Petiscos.",
+                f"❌ Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!loja` → PetShop → Petiscos.",
                 ephemeral=True
             )
             return
 
-        view = ViewEscolherPetisco(self.usuario_id, pet_id, petiscos)
+        petiscos = [(petisco_nome, resultado[0])]
+        view = ViewEscolherPetisco(self.usuario_id, pet_id, petiscos, view_pets=self, mensagem_pets=interaction.message)
         await interaction.response.send_message(
             "🍖 Qual petisco você quer dar ao seu pet?", view=view, ephemeral=True
         )
@@ -2319,7 +2353,7 @@ class ViewPets(discord.ui.LayoutView):
         if not resultado or resultado[0] <= 0:
             con.close()
             await interaction.response.send_message(
-                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → PetshopJ → Brinquedos.",
+                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → Petshop → Brinquedos.",
                 ephemeral=True
             )
             return
@@ -2352,7 +2386,7 @@ class ViewPets(discord.ui.LayoutView):
         sabonetes = buscar_sabonetes_usuario(self.usuario_id)
         if sabonetes <= 0:
             await interaction.response.send_message(
-                "❌ Você não tem Sabonete! Compre na `!loja` → PetshopJ → Higiene.",
+                "❌ Você não tem Sabonete! Compre na `!loja` → Petshop → Higiene.",
                 ephemeral=True
             )
             return
@@ -3523,7 +3557,7 @@ async def loja(ctx):
         color=discord.Color.gold()
     )
     embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
-    embed.add_field(name="🐾 PetshopJ", value="Adote e cuide de um bichinho virtual!", inline=False)
+    embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
     view = ViewMenuLoja(ctx.author.id)
     await ctx.send(embed=embed, view=view)
