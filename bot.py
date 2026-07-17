@@ -1772,24 +1772,29 @@ class ViewMenuLoja(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
-    @discord.ui.button(label="🐾 PetShop", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🐾 PetshopJ", style=discord.ButtonStyle.primary)
     async def abrir_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = discord.Embed(
-            title="🐾 PetShop",
-            description="Escolha uma subcategoria:",
-            color=discord.Color.gold()
-        )
-        embed.add_field(name="🐾 Pets", value="Adote um novo companheiro!", inline=False)
-        embed.add_field(name="🍖 Petiscos", value="Compre comida para alimentar seus pets.", inline=False)
-        embed.add_field(name="🧸 Brinquedos", value="Compre brinquedos para brincar com seus pets.", inline=False)
-        embed.add_field(name="🧼 Higiene", value="Compre sabonete para dar banho nos seus pets.", inline=False)
-        embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
+        embed = gerar_embed_petshop(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 # ============================================================
-# VIEW (BOTÕES) - PetShop
+# VIEW (BOTÕES) - PetshopJ
 # ============================================================
+
+def gerar_embed_petshop(usuario_id):
+    embed = discord.Embed(
+        title="🐾 PetshopJ",
+        description="Escolha uma subcategoria:",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="🐾 Pets", value="Adote um novo companheiro!", inline=False)
+    embed.add_field(name="🍖 Petiscos", value="Compre comida para alimentar seus pets.", inline=False)
+    embed.add_field(name="🧸 Brinquedos", value="Compre brinquedos para brincar com seus pets.", inline=False)
+    embed.add_field(name="🧼 Higiene", value="Compre sabonete para dar banho nos seus pets.", inline=False)
+    embed.set_footer(text=f"Seu saldo: {buscar_joyens(usuario_id)} Joyens")
+    return embed
+
 
 class ViewMenuPetshop(discord.ui.View):
     def __init__(self, usuario_id):
@@ -1819,6 +1824,19 @@ class ViewMenuPetshop(discord.ui.View):
         view = ViewComprarSabonete(self.usuario_id)
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="🔙 Loja", style=discord.ButtonStyle.danger)
+    async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🏪 Loja do JogadorBot",
+            description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
+        embed.add_field(name="🐾 PetshopJ", value="Adote e cuide de um bichinho virtual!", inline=False)
+        embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
+        view = ViewMenuLoja(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 
 class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
@@ -1867,6 +1885,69 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
             ephemeral=True
         )
 
+class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?"):
+    quantidade = discord.ui.TextInput(
+        label="Quantidade",
+        placeholder="Ex: 5",
+        max_length=3,
+        min_length=1
+    )
+
+    def __init__(self, usuario_id, categoria, tipo, preco_unitario, usos_unitario=None):
+        super().__init__()
+        self.usuario_id = usuario_id
+        self.categoria = categoria  # "petisco", "brinquedo" ou "sabonete"
+        self.tipo = tipo
+        self.preco_unitario = preco_unitario
+        self.usos_unitario = usos_unitario
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.quantidade.value.strip()
+        if not texto.isdigit() or int(texto) <= 0:
+            await interaction.response.send_message(
+                "❌ Digite um número inteiro maior que 0!", ephemeral=True
+            )
+            return
+
+        qtd = int(texto)
+        preco_total = self.preco_unitario * qtd
+
+        saldo = buscar_joyens(self.usuario_id)
+        if saldo < preco_total:
+            await interaction.response.send_message(
+                f"❌ Você não tem Joyens suficientes! Precisa de {preco_total} Joyens, "
+                f"mas seu saldo é {saldo} Joyens.",
+                ephemeral=True
+            )
+            return
+
+        remover_joyens(self.usuario_id, preco_total)
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+
+        if self.categoria == "petisco":
+            cur.execute("""
+                INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, ?)
+                ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + ?
+            """, (str(self.usuario_id), self.tipo, qtd, qtd))
+        elif self.categoria == "brinquedo":
+            total_usos = self.usos_unitario * qtd
+            cur.execute("""
+                INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?)
+                ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?
+            """, (str(self.usuario_id), self.tipo, total_usos, total_usos))
+        elif self.categoria == "sabonete":
+            cur.execute("""
+                INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, ?)
+                ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + ?
+            """, (str(self.usuario_id), qtd, qtd))
+
+        con.commit()
+        con.close()
+
+        await interaction.response.send_message(
+            f"✅ Você comprou {qtd}x **{self.tipo}** por {preco_total} Joyens!", ephemeral=True
+        )
 
 class ViewComprarPet(discord.ui.View):
     def __init__(self, usuario_id):
@@ -1879,6 +1960,15 @@ class ViewComprarPet(discord.ui.View):
             )
             botao.callback = self.criar_callback(especie)
             self.add_item(botao)
+
+        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        self.add_item(botao_voltar)
+
+    async def voltar_petshop(self, interaction: discord.Interaction):
+        view = ViewMenuPetshop(self.usuario_id)
+        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view)
 
     def criar_callback(self, especie):
         async def callback(interaction: discord.Interaction):
@@ -1893,7 +1983,7 @@ class ViewComprarPet(discord.ui.View):
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🐾 PetShop — Pets",
+            title="🐾 PetshopJ — Pets",
             description=f"Adote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário.",
             color=discord.Color.gold()
         )
@@ -1918,32 +2008,26 @@ class ViewComprarPetisco(discord.ui.View):
             botao.callback = self.criar_callback(dados["petisco_nome"], dados["petisco_preco"])
             self.add_item(botao)
 
+        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        self.add_item(botao_voltar)
+
+    async def voltar_petshop(self, interaction: discord.Interaction):
+        view = ViewMenuPetshop(self.usuario_id)
+        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
     def criar_callback(self, tipo, preco):
         async def callback(interaction: discord.Interaction):
-            saldo = buscar_joyens(self.usuario_id)
-            if saldo < preco:
-                await interaction.response.send_message(
-                    f"❌ Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
-                )
-                return
-
-            remover_joyens(self.usuario_id, preco)
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("""
-                INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, 1)
-                ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + 1
-            """, (str(self.usuario_id), tipo))
-            con.commit()
-            con.close()
-
-            await interaction.response.send_message(f"✅ Você comprou 1x **{tipo}**!", ephemeral=True)
+            await interaction.response.send_modal(
+                ModalQuantidadeCompra(self.usuario_id, "petisco", tipo, preco)
+            )
         return callback
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🍖 PetShop — Petiscos",
-            description="Compre petiscos para alimentar seus pets. Cada compra adiciona 1 unidade ao seu inventário.",
+            title="🍖 PetshopJ — Petiscos",
+            description="Compre petiscos para alimentar seus pets. Escolha o petisco e informe a quantidade.",
             color=discord.Color.gold()
         )
         for especie, dados in PETS_DISPONIVEIS.items():
@@ -1967,40 +2051,32 @@ class ViewComprarBrinquedo(discord.ui.View):
             botao.callback = self.criar_callback(dados["brinquedo_nome"], dados["brinquedo_preco"], dados["brinquedo_usos"])
             self.add_item(botao)
 
+        botao_voltar = discord.ui.Button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        self.add_item(botao_voltar)
+
+    async def voltar_petshop(self, interaction: discord.Interaction):
+        view = ViewMenuPetshop(self.usuario_id)
+        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
     def criar_callback(self, tipo, preco, usos):
         async def callback(interaction: discord.Interaction):
-            saldo = buscar_joyens(self.usuario_id)
-            if saldo < preco:
-                await interaction.response.send_message(
-                    f"❌ Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
-                )
-                return
-
-            remover_joyens(self.usuario_id, preco)
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("""
-                INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?)
-                ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?
-            """, (str(self.usuario_id), tipo, usos, usos))
-            con.commit()
-            con.close()
-
-            await interaction.response.send_message(
-                f"✅ Você comprou **{tipo}**! (+{usos} usos)", ephemeral=True
+            await interaction.response.send_modal(
+                ModalQuantidadeCompra(self.usuario_id, "brinquedo", tipo, preco, usos_unitario=usos)
             )
         return callback
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🧸 PetShop — Brinquedos",
-            description="Compre brinquedos para brincar com seus pets. Cada brinquedo tem um número limitado de usos.",
+            title="🧸 PetshopJ — Brinquedos",
+            description="Compre brinquedos para brincar com seus pets. Escolha o brinquedo e informe a quantidade.",
             color=discord.Color.gold()
         )
         for especie, dados in PETS_DISPONIVEIS.items():
             embed.add_field(
                 name=f"{dados['brinquedo_nome']} — {dados['brinquedo_preco']} Joyens",
-                value=f"Brinquedo favorito do {dados['emoji']} {especie} · {dados['brinquedo_usos']} usos",
+                value=f"Brinquedo favorito do {dados['emoji']} {especie} · {dados['brinquedo_usos']} usos cada",
                 inline=False
             )
         return embed
@@ -2013,28 +2089,19 @@ class ViewComprarSabonete(discord.ui.View):
 
     @discord.ui.button(label=f"🧼 Sabonete — {SABONETE_PRECO} Joyens", style=discord.ButtonStyle.success)
     async def comprar_sabonete(self, interaction: discord.Interaction, button: discord.ui.Button):
-        saldo = buscar_joyens(self.usuario_id)
-        if saldo < SABONETE_PRECO:
-            await interaction.response.send_message(
-                f"❌ Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
-            )
-            return
+        await interaction.response.send_modal(
+            ModalQuantidadeCompra(self.usuario_id, "sabonete", SABONETE_NOME, SABONETE_PRECO)
+        )
 
-        remover_joyens(self.usuario_id, SABONETE_PRECO)
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("""
-            INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, 1)
-            ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + 1
-        """, (str(self.usuario_id),))
-        con.commit()
-        con.close()
-
-        await interaction.response.send_message("✅ Você comprou 1x **Sabonete**!", ephemeral=True)
+    @discord.ui.button(label="🔙 PetshopJ", style=discord.ButtonStyle.danger)
+    async def voltar_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewMenuPetshop(self.usuario_id)
+        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view)
 
     def gerar_embed(self):
         embed = discord.Embed(
-            title="🧼 PetShop — Higiene",
+            title="🧼 PetshopJ — Higiene",
             description=f"O Sabonete é universal e serve para dar banho em qualquer pet.\n\n**Sabonete** — {SABONETE_PRECO} Joyens",
             color=discord.Color.gold()
         )
@@ -2103,7 +2170,7 @@ class ViewPets(discord.ui.LayoutView):
         if not pets_usuario:
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → PetShop → Pets para adotar um."
+                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → PetshopJ → Pets para adotar um."
                 )
             )
             container.accent_color = discord.Colour.red()
@@ -2215,7 +2282,7 @@ class ViewPets(discord.ui.LayoutView):
         petiscos = buscar_petiscos_usuario(self.usuario_id)
         if not petiscos:
             await interaction.response.send_message(
-                "❌ Você não tem nenhum petisco! Compre na `!loja` → PetShop → Petiscos.",
+                "❌ Você não tem nenhum petisco! Compre na `!loja` → PetshopJ → Petiscos.",
                 ephemeral=True
             )
             return
@@ -2252,7 +2319,7 @@ class ViewPets(discord.ui.LayoutView):
         if not resultado or resultado[0] <= 0:
             con.close()
             await interaction.response.send_message(
-                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → PetShop → Brinquedos.",
+                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → PetshopJ → Brinquedos.",
                 ephemeral=True
             )
             return
@@ -2285,7 +2352,7 @@ class ViewPets(discord.ui.LayoutView):
         sabonetes = buscar_sabonetes_usuario(self.usuario_id)
         if sabonetes <= 0:
             await interaction.response.send_message(
-                "❌ Você não tem Sabonete! Compre na `!loja` → PetShop → Higiene.",
+                "❌ Você não tem Sabonete! Compre na `!loja` → PetshopJ → Higiene.",
                 ephemeral=True
             )
             return
@@ -3456,7 +3523,7 @@ async def loja(ctx):
         color=discord.Color.gold()
     )
     embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
-    embed.add_field(name="🐾 PetShop", value="Adote e cuide de um bichinho virtual!", inline=False)
+    embed.add_field(name="🐾 PetshopJ", value="Adote e cuide de um bichinho virtual!", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
     view = ViewMenuLoja(ctx.author.id)
     await ctx.send(embed=embed, view=view)
