@@ -1999,7 +1999,7 @@ class ViewMenuLoja(discord.ui.View):
         embed = gerar_embed_petshop(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
-    @discord.ui.button(label="⛏️ Mineração", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="⛏️ Mineração", style=discord.ButtonStyle.primary)
     async def abrir_mineracao(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewLojaMineracao(self.usuario_id)
         embed = discord.Embed(
