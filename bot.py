@@ -469,6 +469,11 @@ def iniciar_banco():
         )
     """)
 
+    try:
+        cur.execute("ALTER TABLE pets ADD COLUMN disponivel_adocao INTEGER NOT NULL DEFAULT 0")
+    except:
+        pass
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS pets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -483,9 +488,11 @@ def iniciar_banco():
             dormindo_ate TEXT,
             energia_ao_dormir INTEGER,
             criado_em TEXT NOT NULL,
-            ultima_atualizacao TEXT NOT NULL
+            ultima_atualizacao TEXT NOT NULL,
+            disponivel_adocao INTEGER NOT NULL DEFAULT 0
         )
     """)
+    
     cur.execute("""
         CREATE TABLE IF NOT EXISTS pets_petiscos (
             usuario_id TEXT NOT NULL,
@@ -581,7 +588,7 @@ def remover_joyens(usuario_id, quantidade):
 def contar_pets(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT COUNT(*) FROM pets WHERE usuario_id = ?", (str(usuario_id),))
+    cur.execute("SELECT COUNT(*) FROM pets WHERE usuario_id = ? AND disponivel_adocao = 0", (str(usuario_id),))
     total = cur.fetchone()[0]
     con.close()
     return total
@@ -589,7 +596,10 @@ def contar_pets(usuario_id):
 def listar_pets(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT id, especie, nome FROM pets WHERE usuario_id = ? ORDER BY id", (str(usuario_id),))
+    cur.execute(
+        "SELECT id, especie, nome FROM pets WHERE usuario_id = ? AND disponivel_adocao = 0 ORDER BY id",
+        (str(usuario_id),)
+    )
     resultado = cur.fetchall()
     con.close()
     return resultado
@@ -2177,6 +2187,54 @@ class ViewEscolherPetisco(discord.ui.View):
                 view=self
             )
 
+class ViewConfirmarAdocao(discord.ui.View):
+    def __init__(self, usuario_id, pet_id, nome_pet, view_pets=None, mensagem_pets=None):
+        super().__init__(timeout=60)
+        self.usuario_id = usuario_id
+        self.pet_id = pet_id
+        self.nome_pet = nome_pet
+        self.view_pets = view_pets
+        self.mensagem_pets = mensagem_pets
+
+    @discord.ui.button(label="Confirmar", emoji="✅", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE pets SET disponivel_adocao = 1 WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0",
+            (self.pet_id, str(self.usuario_id))
+        )
+        con.commit()
+        alterou = cur.rowcount > 0
+        con.close()
+
+        if not alterou:
+            await interaction.response.edit_message(
+                content="❌ Não foi possível colocar esse pet para adoção (ele já pode ter sido movido).",
+                view=None
+            )
+            return
+
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content=f"🏠 **{self.nome_pet}** foi colocado para adoção.",
+            view=self
+        )
+
+        if self.view_pets is not None and self.mensagem_pets is not None:
+            self.view_pets.pet_id_selecionado = None
+            self.view_pets.montar()
+            try:
+                await self.mensagem_pets.edit(view=self.view_pets)
+            except discord.HTTPException:
+                pass
+
+    @discord.ui.button(label="Cancelar", emoji="❌", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(content="Ação cancelada.", view=self)
 
 class ViewPets(discord.ui.LayoutView):
     def __init__(self, usuario_id, pet_id_selecionado=None):
@@ -2238,8 +2296,14 @@ class ViewPets(discord.ui.LayoutView):
 
         titulo = f"{dados.get('emoji', '🐾')} {nome}" + (" 💤" if dormindo else "")
 
+        botao_adocao = discord.ui.Button(label="Adoção", emoji="🏠", style=discord.ButtonStyle.danger)
+        botao_adocao.callback = self.abrir_adocao
+
         container = discord.ui.Container(
-            discord.ui.TextDisplay(f"# {titulo}\n{dados.get('descricao', '')}")
+            discord.ui.Section(
+                discord.ui.TextDisplay(f"# {titulo}\n{dados.get('descricao', '')}"),
+                accessory=botao_adocao
+            )
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
@@ -2277,13 +2341,29 @@ class ViewPets(discord.ui.LayoutView):
         barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
         return f"{emoji} **{nome}**\n`{barra}` {valor}%"
 
+    async def abrir_adocao(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            return
+        pet_id, especie, nome = pet[0], pet[1], pet[2]
+
+        view = ViewConfirmarAdocao(self.usuario_id, pet_id, nome, view_pets=self, mensagem_pets=interaction.message)
+        await interaction.response.send_message(
+            f"⚠️ Tem certeza que quer colocar **{nome}** para adoção?\n"
+            f"Ele vai sair da sua lista de pets e você **não** recebe Joyens em troca. "
+            f"Essa ação não pode ser desfeita.",
+            view=view,
+            ephemeral=True
+        )
+
     def buscar_pet_atualizado(self):
         atualizar_stats_pet(self.pet_id_selecionado)
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
             SELECT id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate
-            FROM pets WHERE id = ? AND usuario_id = ?
+            FROM pets WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0
         """, (self.pet_id_selecionado, str(self.usuario_id)))
         resultado = cur.fetchone()
         con.close()
