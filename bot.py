@@ -2105,6 +2105,281 @@ class ViewItensMineracao(discord.ui.View):
         return embed
 
 # ============================================================
+# VIEW (BOTÕES) - Inventário Geral
+# ============================================================
+class ViewInventarioMenu(ui.LayoutView):
+    def __init__(self, usuario: discord.Member):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.blurple()
+        container.add_item(ui.TextDisplay(f"### 🎒 Inventário de {self.usuario.display_name}\n-# Escolha uma categoria abaixo."))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        categorias = [
+            ("🖼️ Banners", "banner"),
+            ("⚒️ Ferramentas", "ferramenta"),
+            ("🛡️ Equipamento", "equipamento"),
+            ("☕ Consumíveis", "consumivel"),
+            ("💎 Minérios", "minerio"),
+        ]
+        for label, chave in categorias:
+            botao = ui.Button(label=label, style=discord.ButtonStyle.primary)
+            async def cb(interaction, categoria=chave):
+                if interaction.user.id != self.usuario.id:
+                    await interaction.response.send_message("Esse inventário não é seu!", ephemeral=True)
+                    return
+                view = ViewInventarioCategoria(self.usuario, categoria, self)
+                await interaction.response.edit_message(view=view)
+            botao.callback = cb
+            linha.add_item(botao)
+        container.add_item(linha)
+        self.add_item(container)
+
+
+class ViewInventarioCategoria(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, categoria: str, view_menu: ViewInventarioMenu):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.categoria = categoria
+        self.view_menu = view_menu
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        titulos = {
+            "banner": "🖼️ Banners", "ferramenta": "⚒️ Ferramentas",
+            "equipamento": "🛡️ Equipamento", "consumivel": "☕ Consumíveis",
+            "minerio": "💎 Minérios",
+        }
+        container = ui.Container()
+        container.accent_color = discord.Colour.blurple()
+        container.add_item(ui.TextDisplay(f"### {titulos[self.categoria]}\n-# {self.usuario.display_name}"))
+        container.add_item(ui.Separator())
+
+        if self.categoria == "banner":
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("""
+                SELECT b.nome FROM banners_usuarios bu JOIN banners b ON bu.banner_id = b.id
+                WHERE bu.usuario_id = ? ORDER BY b.nome
+            """, (str(self.usuario.id),))
+            banners = [r[0] for r in cur.fetchall()]
+            con.close()
+            container.add_item(ui.TextDisplay("\n".join(f"- {n}" for n in banners) if banners else "Você não possui nenhum banner."))
+
+        elif self.categoria == "ferramenta":
+            stats = buscar_stats(self.usuario.id)
+            dinamite_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Dinamite")
+            container.add_item(ui.TextDisplay(
+                f"⛏️ **Picareta** — {stats['picareta_usos']} uso(s) restante(s)\n"
+                f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)"
+            ))
+
+        elif self.categoria == "equipamento":
+            stats = buscar_stats(self.usuario.id)
+            texto = "🪖 **Capacete** — " + ("Equipado ✅" if stats["tem_capacete"] else "Não possui ❌")
+            container.add_item(ui.TextDisplay(texto))
+
+        elif self.categoria == "consumivel":
+            marmita_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Marmita")
+            pimenta_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Pimenta")
+            container.add_item(ui.TextDisplay(
+                f"🍱 **Marmita** — {marmita_qtd} unidade(s)\n"
+                f"🌶️ **Pimenta** — {pimenta_qtd} unidade(s)"
+            ))
+
+        elif self.categoria == "minerio":
+            minerios = buscar_minerios_usuario(self.usuario.id)
+            container.add_item(ui.TextDisplay(
+                "\n".join(f"- {n}: {q}" for n, q in minerios) if minerios else "Você não possui nenhum minério."
+            ))
+
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        async def voltar_cb(interaction):
+            self.view_menu.montar()
+            await interaction.response.edit_message(view=self.view_menu)
+        btn_voltar.callback = voltar_cb
+        container.add_item(btn_voltar)
+
+        self.add_item(container)
+# ============================================================
+# VIEW (BOTÕES) - Mineração - Tela inicial
+# ============================================================
+class ViewMinerarInicio(ui.LayoutView):
+    def __init__(self, usuario_id, ctx):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.ctx = ctx
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        stats = buscar_stats(self.usuario_id)
+        container = ui.Container()
+        container.accent_color = discord.Colour.dark_gold()
+        container.add_item(ui.TextDisplay(
+            f"### ⛏️ Mineração\n"
+            f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
+            f"⛏️ **Usos da picareta:** {stats['picareta_usos']}"
+        ))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        btn_comecar = ui.Button(label="▶️ Começar", style=discord.ButtonStyle.success, disabled=stats["picareta_usos"] <= 0)
+        btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
+
+        async def comecar_cb(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            MINERACAO_ATIVAS.add(self.usuario_id)
+            view = ViewMineracao(self.usuario_id, self.ctx)
+            await view.iniciar(interaction=interaction)
+
+        async def vender_cb(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            view = ViewVenderMinerios(self.usuario_id, self)
+            await interaction.response.edit_message(view=view)
+
+        btn_comecar.callback = comecar_cb
+        btn_vender.callback = vender_cb
+        linha.add_item(btn_comecar)
+        linha.add_item(btn_vender)
+        container.add_item(linha)
+
+        self.add_item(container)
+
+
+class ModalVenderMinerio(discord.ui.Modal):
+    def __init__(self, usuario_id, minerio_nome, quantidade_disponivel, view_vender):
+        super().__init__(title=f"Vender {minerio_nome}")
+        self.usuario_id = usuario_id
+        self.minerio_nome = minerio_nome
+        self.view_vender = view_vender
+        self.quantidade_input = discord.ui.TextInput(
+            label=f"Quantidade (máx: {quantidade_disponivel})",
+            placeholder="Digite a quantidade que deseja vender",
+            required=True
+        )
+        self.add_item(self.quantidade_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qtd = int(self.quantidade_input.value)
+        except ValueError:
+            await interaction.response.send_message("❌ Digite um número válido!", ephemeral=True)
+            return
+        if qtd <= 0:
+            await interaction.response.send_message("❌ A quantidade precisa ser maior que 0!", ephemeral=True)
+            return
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT quantidade FROM minerios_usuarios WHERE usuario_id = ? AND minerio = ?",
+                    (str(self.usuario_id), self.minerio_nome))
+        r = cur.fetchone()
+        qtd_atual = r[0] if r else 0
+        if qtd > qtd_atual:
+            con.close()
+            await interaction.response.send_message(f"❌ Você só tem {qtd_atual}x {self.minerio_nome}!", ephemeral=True)
+            return
+
+        preco_unit = MINERIOS[self.minerio_nome]["preco"]
+        total = qtd * preco_unit
+        cur.execute("UPDATE minerios_usuarios SET quantidade = quantidade - ? WHERE usuario_id = ? AND minerio = ?",
+                    (qtd, str(self.usuario_id), self.minerio_nome))
+        con.commit()
+        con.close()
+        adicionar_joyens(self.usuario_id, total)
+
+        self.view_vender.montar()
+        await interaction.response.edit_message(view=self.view_vender)
+        await interaction.followup.send(f"✅ Vendido {qtd}x **{self.minerio_nome}** por {total} Joyens!", ephemeral=True)
+
+
+class ViewVenderMinerios(ui.LayoutView):
+    def __init__(self, usuario_id, view_inicio: ViewMinerarInicio):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.view_inicio = view_inicio
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.green()
+        container.add_item(ui.TextDisplay("### 💰 Vender Minérios\nEscolha um minério para vender:"))
+        container.add_item(ui.Separator())
+
+        minerios = buscar_minerios_usuario(self.usuario_id)
+        if not minerios:
+            container.add_item(ui.TextDisplay("Você não possui nenhum minério para vender."))
+        else:
+            for nome, qtd in minerios:
+                preco_unit = MINERIOS[nome]["preco"]
+                container.add_item(ui.TextDisplay(f"**{nome}** — {qtd} unidade(s) ({preco_unit} Joyens cada)"))
+
+                linha = ui.ActionRow()
+                btn_vender = ui.Button(label=f"Vender {nome}", style=discord.ButtonStyle.primary)
+                btn_vender_tudo = ui.Button(label=f"Vender Tudo", style=discord.ButtonStyle.success)
+
+                async def vender_cb(interaction, minerio_nome=nome, quantidade_disp=qtd):
+                    if interaction.user.id != self.usuario_id:
+                        await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                        return
+                    modal = ModalVenderMinerio(self.usuario_id, minerio_nome, quantidade_disp, self)
+                    await interaction.response.send_modal(modal)
+
+                async def vender_tudo_cb(interaction, minerio_nome=nome):
+                    if interaction.user.id != self.usuario_id:
+                        await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                        return
+                    con = sqlite3.connect("jogadorbot.db")
+                    cur = con.cursor()
+                    cur.execute("SELECT quantidade FROM minerios_usuarios WHERE usuario_id = ? AND minerio = ?",
+                                (str(self.usuario_id), minerio_nome))
+                    r = cur.fetchone()
+                    qtd_atual = r[0] if r else 0
+                    if qtd_atual <= 0:
+                        con.close()
+                        await interaction.response.send_message("Você não tem mais esse minério!", ephemeral=True)
+                        return
+                    preco_unit = MINERIOS[minerio_nome]["preco"]
+                    total = qtd_atual * preco_unit
+                    cur.execute("UPDATE minerios_usuarios SET quantidade = 0 WHERE usuario_id = ? AND minerio = ?",
+                                (str(self.usuario_id), minerio_nome))
+                    con.commit()
+                    con.close()
+                    adicionar_joyens(self.usuario_id, total)
+                    self.montar()
+                    await interaction.response.edit_message(view=self)
+                    await interaction.followup.send(f"✅ Vendido {qtd_atual}x **{minerio_nome}** por {total} Joyens!", ephemeral=True)
+
+                btn_vender.callback = vender_cb
+                btn_vender_tudo.callback = vender_tudo_cb
+                linha.add_item(btn_vender)
+                linha.add_item(btn_vender_tudo)
+                container.add_item(linha)
+                container.add_item(ui.Separator())
+
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        async def voltar_cb(interaction):
+            self.view_inicio.montar()
+            await interaction.response.edit_message(view=self.view_inicio)
+        btn_voltar.callback = voltar_cb
+        container.add_item(btn_voltar)
+
+        self.add_item(container)
+
+# ============================================================
 # VIEW (BOTÕES) - Mineração - O jogo
 # ============================================================
 class ViewMineracao(ui.LayoutView):
@@ -2121,6 +2396,7 @@ class ViewMineracao(ui.LayoutView):
         self.monstro_atual = None
         self.monstro_hp = 0
         self.finalizado = False
+        self.ataque_event = asyncio.Event()
         self.texto_status = "⛏️ Você começou a minerar. O som da picareta ecoa pela caverna..."
         self.imagem_atual = "minerar1.png"
 
@@ -2151,6 +2427,8 @@ class ViewMineracao(ui.LayoutView):
             f"💎 **Joyogens:** {self.joyogens_ganhas}\n"
             f"📊 **Progresso:** `{barra}` {pct}%"
         )
+        if self.monstro_atual and self.em_combate:
+            status_texto += f"\n👾 **{self.monstro_atual} HP:** {max(0, self.monstro_hp)}"
         if self.minerios_ganhos:
             status_texto += "\n\n**Minérios coletados:**\n" + "\n".join(
                 f"- {n}: {q}" for n, q in self.minerios_ganhos.items()
@@ -2171,12 +2449,20 @@ class ViewMineracao(ui.LayoutView):
         blocos = pct // 10
         return "█" * blocos + "░" * (10 - blocos), pct
 
-    async def iniciar(self):
+    async def iniciar(self, interaction=None):
+        self.montar()
         arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
-        if arquivo:
-            self.message = await self.ctx.send(view=self, file=arquivo)
+        if interaction:
+            if arquivo:
+                await interaction.response.edit_message(view=self, attachments=[arquivo])
+            else:
+                await interaction.response.edit_message(view=self, attachments=[])
+            self.message = await interaction.original_response()
         else:
-            self.message = await self.ctx.send(view=self)
+            if arquivo:
+                self.message = await self.ctx.send(view=self, file=arquivo)
+            else:
+                self.message = await self.ctx.send(view=self)
         self.task = bot.loop.create_task(self.loop_mineracao())
 
     async def atualizar_mensagem(self):
@@ -2256,114 +2542,108 @@ class ViewMineracao(ui.LayoutView):
         self.imagem_atual = monstro["imagem"]
         self.texto_status = f"{monstro['mensagem']}\n**{tipo}** apareceu com {monstro['hp']} HP! Ataque antes que ele te acerte!"
         self.btn_atacar.disabled = False
-        self.btn_atacar.label = "⚔️ Atacar (2s)"
+        self.btn_atacar.label = "⚔️ Atacar (5s)"
         await self.atualizar_mensagem()
-        bot.loop.create_task(self.contagem_ataque())
+        bot.loop.create_task(self.loop_combate())
 
-    async def contagem_ataque(self):
-        for restante in [1, 0]:
-            await asyncio.sleep(1)
-            if not self.em_combate:
+    async def loop_combate(self):
+        while self.em_combate and not self.finalizado:
+            self.ataque_event.clear()
+            atacou_a_tempo = False
+
+            for restante in [5, 4, 3, 2, 1]:
+                if self.finalizado or not self.em_combate:
+                    return
+                self.btn_atacar.label = f"⚔️ Atacar ({restante}s)"
+                self.btn_atacar.disabled = False
+                self.montar()
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
+                try:
+                    await asyncio.wait_for(self.ataque_event.wait(), timeout=1)
+                    atacou_a_tempo = True
+                    break
+                except asyncio.TimeoutError:
+                    continue
+
+            if self.finalizado or not self.em_combate:
                 return
-            self.btn_atacar.label = f"⚔️ Atacar ({restante}s)" if restante > 0 else "⚔️ Atacar (❌)"
-            self.montar()
-            try:
-                await self.message.edit(view=self)
-            except:
-                pass
-        await asyncio.sleep(0.5)
-        if self.em_combate:
-            await self.sofrer_ataque()
 
-    async def sofrer_ataque(self):
-        if not self.em_combate:
-            return
-        monstro = MONSTROS[self.monstro_atual]
-        stats = buscar_stats(self.usuario_id)
-        novo_hp = atualizar_hp(self.usuario_id, stats["hp_atual"] - monstro["dano"])
-        self.em_combate = False
-        self.btn_atacar.disabled = True
-        self.btn_atacar.label = "⚔️ Atacar"
+            self.btn_atacar.disabled = True
 
-        if novo_hp <= 0:
-            self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou e você não resistiu... 💀"
-            for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
-                child.disabled = True
-            await self.atualizar_mensagem()
-            await self.aplicar_penalidade_morte()
-        else:
-            self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou causando {monstro['dano']} de dano!"
-            await self.atualizar_mensagem()
-            await asyncio.sleep(2)
-            self.texto_status = "⛏️ Você retoma o fôlego e continua minerando..."
-            self.imagem_atual = "minerar1.png"
-            await self.atualizar_mensagem()
+            if atacou_a_tempo:
+                stats = buscar_stats(self.usuario_id)
+                tem_pimenta = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta") > 0
+                errou = random.random() < 0.10
+                critico = random.random() < 0.30
+
+                if errou:
+                    dano_causado = 0
+                    texto_ataque = "Você atacou, mas errou completamente!"
+                else:
+                    dano = random.randint(DANO_BASE_MIN, DANO_BASE_MAX)
+                    if tem_pimenta:
+                        dano = int(dano * (1 + BONUS_DANO_PIMENTA))
+                    if critico:
+                        dano = int(dano * 2)
+                        texto_ataque = f"**Ataque crítico!** Você atacou antes e causou {dano} de dano!"
+                    else:
+                        texto_ataque = f"Você atacou antes e causou {dano} de dano!"
+                    dano_causado = dano
+
+                self.monstro_hp -= dano_causado
+                self.texto_status = texto_ataque
+                self.btn_atacar.label = "⚔️ Atacar"
+                await self.atualizar_mensagem()
+
+                if self.monstro_hp <= 0:
+                    self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉"
+                    self.em_combate = False
+                    await self.atualizar_mensagem()
+                    await asyncio.sleep(2)
+                    self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
+                    self.imagem_atual = "minerar1.png"
+                    self.btn_atacar.disabled = True
+                    await self.atualizar_mensagem()
+                    return
+                else:
+                    await asyncio.sleep(2)
+                    self.texto_status = f"O **{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e se prepara para atacar novamente!"
+                    await self.atualizar_mensagem()
+                    continue
+            else:
+                monstro = MONSTROS[self.monstro_atual]
+                stats = buscar_stats(self.usuario_id)
+                novo_hp = atualizar_hp(self.usuario_id, stats["hp_atual"] - monstro["dano"])
+                self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou causando {monstro['dano']} de dano!"
+                self.btn_atacar.label = "⚔️ Atacar"
+
+                if novo_hp <= 0:
+                    self.texto_status += "\n💀 Você não resistiu..."
+                    self.em_combate = False
+                    for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
+                        child.disabled = True
+                    await self.atualizar_mensagem()
+                    await self.aplicar_penalidade_morte()
+                    return
+                else:
+                    await self.atualizar_mensagem()
+                    await asyncio.sleep(2)
+                    self.texto_status = f"O **{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e se prepara para atacar novamente!"
+                    await self.atualizar_mensagem()
+                    continue
 
     async def atacar_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message("Essa não é sua mineração!", ephemeral=True)
             return
-        if not self.em_combate:
+        if not self.em_combate or self.ataque_event.is_set() or self.btn_atacar.disabled:
             await interaction.response.send_message("Não há nada para atacar agora!", ephemeral=True)
             return
-
-        self.em_combate = False
-        stats = buscar_stats(self.usuario_id)
-        tem_pimenta = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta") > 0
-        errou = random.random() < 0.10
-        critico = random.random() < 0.30
-
-        if errou:
-            dano_causado = 0
-            texto_ataque = "Você atacou, mas errou completamente!"
-        else:
-            dano = random.randint(DANO_BASE_MIN, DANO_BASE_MAX)
-            if tem_pimenta:
-                dano = int(dano * (1 + BONUS_DANO_PIMENTA))
-            if critico:
-                dano = int(dano * 2)
-                texto_ataque = f"**Ataque crítico!** Você atacou antes e causou {dano} de dano!"
-            else:
-                texto_ataque = f"Você atacou antes e causou {dano} de dano!"
-            dano_causado = dano
-
-        self.monstro_hp -= dano_causado
-        self.btn_atacar.disabled = True
-        self.btn_atacar.label = "⚔️ Atacar"
-
-        if self.monstro_hp <= 0:
-            self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉"
-            self.montar()
-            arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
-            await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
-            await asyncio.sleep(2)
-            self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
-            self.imagem_atual = "minerar1.png"
-            await self.atualizar_mensagem()
-        else:
-            monstro = MONSTROS[self.monstro_atual]
-            novo_hp = atualizar_hp(self.usuario_id, stats["hp_atual"] - monstro["dano"])
-            self.texto_status = (
-                f"{texto_ataque}\n**{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e revidou, "
-                f"causando {monstro['dano']} de dano em você!"
-            )
-            self.montar()
-            arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
-
-            if novo_hp <= 0:
-                self.texto_status += "\n💀 Você não resistiu ao contra-ataque..."
-                for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
-                    child.disabled = True
-                self.montar()
-                await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
-                await self.aplicar_penalidade_morte()
-            else:
-                self.em_combate = True
-                self.btn_atacar.disabled = False
-                self.btn_atacar.label = "⚔️ Atacar (2s)"
-                self.montar()
-                await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
-                bot.loop.create_task(self.contagem_ataque())
+        self.ataque_event.set()
+        await interaction.response.defer()
 
     async def picareta_quebrou(self):
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
@@ -2424,6 +2704,7 @@ class ViewMineracao(ui.LayoutView):
         if self.finalizado:
             return
         self.finalizado = True
+        self.em_combate = False
         remover_item_mineracao(self.usuario_id, "Dinamite", 1)
 
         if random.random() < 0.10:
@@ -2460,11 +2741,14 @@ class ViewMineracao(ui.LayoutView):
             return
         if self.finalizado:
             return
+        self.finalizado = True
+        self.em_combate = False
         await interaction.response.defer()
         await self.finalizar_mineracao("parou")
 
     async def aplicar_penalidade_morte(self):
         self.finalizado = True
+        self.em_combate = False
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         penalidade_ate = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
@@ -2476,6 +2760,7 @@ class ViewMineracao(ui.LayoutView):
 
     async def finalizar_mineracao(self, motivo):
         self.finalizado = True
+        self.em_combate = False
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
 
@@ -2521,7 +2806,7 @@ class ViewMineracao(ui.LayoutView):
         except:
             pass
         MINERACAO_ATIVAS.discard(self.usuario_id)
-
+        
 # ============================================================
 # VIEW (BOTÕES) - Petshop
 # ============================================================
@@ -4798,12 +5083,12 @@ async def minerar(ctx):
 
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT ultimo_minerar, penalidade_ate, picareta_usos FROM usuario_stats WHERE usuario_id = ?",
+    cur.execute("SELECT ultimo_minerar, penalidade_ate FROM usuario_stats WHERE usuario_id = ?",
                 (str(ctx.author.id),))
     resultado = cur.fetchone()
     con.close()
 
-    ultimo_minerar, penalidade_ate, picareta_usos = resultado
+    ultimo_minerar, penalidade_ate = resultado
     agora = datetime.datetime.now()
 
     if penalidade_ate:
@@ -4822,14 +5107,16 @@ async def minerar(ctx):
             await ctx.send(f"⏰ Você precisa esperar mais **{minutos} minuto(s)** para minerar novamente.")
             return
 
-    if picareta_usos <= 0:
-        await ctx.send("❌ Você não tem uma picareta! Compre uma em `!loja` na categoria ⛏️ Mineração.")
-        return
+    view = ViewMinerarInicio(ctx.author.id, ctx)
+    await ctx.send(view=view)
 
-    MINERACAO_ATIVAS.add(ctx.author.id)
-    view = ViewMineracao(ctx.author.id, ctx)
-    await view.iniciar()
-
+@bot.command(name="inventario")
+async def inventario(ctx, membro: discord.Member = None):
+    if membro is None:
+        membro = ctx.author
+    garantir_stats(membro.id)
+    view = ViewInventarioMenu(membro)
+    await ctx.send(view=view)
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
 # ============================================================
