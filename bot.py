@@ -136,37 +136,37 @@ PETS_DISPONIVEIS = {
     "Cachorro": {
         "emoji": "🐶",
         "descricao": "Leal e brincalhão, está sempre pronto para uma aventura ao seu lado.",
-        "preco": 500,
+        "preco": 18000,
         "petisco_nome": "Biscoito canino",
-        "petisco_preco": 15,
-        "brinquedo_nome": "Osso de morder",
-        "brinquedo_preco": 40,
+        "petisco_preco": 180,
+        "brinquedo_nome": "Bolinha",
+        "brinquedo_preco": 900,
         "brinquedo_usos": 10,
     },
     "Gato": {
         "emoji": "🐱",
         "descricao": "Independente, mas sempre volta pro colo na hora do carinho.",
-        "preco": 500,
-        "petisco_nome": "Peixe",
-        "petisco_preco": 15,
+        "preco": 22000,
+        "petisco_nome": "Whiskas",
+        "petisco_preco": 220,
         "brinquedo_nome": "Rato de pelúcia",
-        "brinquedo_preco": 40,
+        "brinquedo_preco": 1100,
         "brinquedo_usos": 10,
     },
     "Papagaio": {
         "emoji": "🦜",
         "descricao": "Curioso e falante, adora estar por perto e repetir o que ouve.",
-        "preco": 500,
+        "preco": 28000,
         "petisco_nome": "Fatia de melancia",
-        "petisco_preco": 15,
+        "petisco_preco": 160,
         "brinquedo_nome": "Balanço de pendurar",
-        "brinquedo_preco": 40,
+        "brinquedo_preco": 1300,
         "brinquedo_usos": 10,
     },
 }
 
 SABONETE_NOME = "Sabonete"
-SABONETE_PRECO = 20
+SABONETE_PRECO = 700
 
 LIMITE_PETS = 3
 # ============================================================
