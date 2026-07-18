@@ -2205,7 +2205,9 @@ class ViewInventarioCategoria(ui.LayoutView):
             self.view_menu.montar()
             await interaction.response.edit_message(view=self.view_menu)
         btn_voltar.callback = voltar_cb
-        container.add_item(btn_voltar)
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
 
         self.add_item(container)
 # ============================================================
@@ -2375,7 +2377,9 @@ class ViewVenderMinerios(ui.LayoutView):
             self.view_inicio.montar()
             await interaction.response.edit_message(view=self.view_inicio)
         btn_voltar.callback = voltar_cb
-        container.add_item(btn_voltar)
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
 
         self.add_item(container)
 
