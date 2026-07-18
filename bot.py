@@ -275,6 +275,60 @@ MISSOES_SEMANAIS = [
 ]
 
 # ============================================================
+# ITENS DE MINERAÇÃO — Loja e sistema de mineração
+# ============================================================
+ITENS_MINERACAO = {
+    "Picareta": {
+        "emoji": "⛏️",
+        "subcategoria": "Ferramentas",
+        "preco": 1000,
+        "descricao": "Necessária para minerar. Aguenta 10 usos.",
+        "usos": 10,
+    },
+    "Dinamite": {
+        "emoji": "🧨",
+        "subcategoria": "Ferramentas",
+        "preco": 30000,
+        "descricao": "Minera instantaneamente. 10% de chance de falhar.",
+    },
+    "Capacete": {
+        "emoji": "🪖",
+        "subcategoria": "Equipamento",
+        "preco": 2500,
+        "descricao": "Aumenta o HP máximo em 30 pontos.",
+    },
+    "Marmita": {
+        "emoji": "🍱",
+        "subcategoria": "Consumíveis",
+        "preco": 500,
+        "descricao": "Recupera 20 de HP.",
+    },
+    "Pimenta": {
+        "emoji": "🌶️",
+        "subcategoria": "Consumíveis",
+        "preco": 700,
+        "descricao": "Aumenta o dano de ataque em 30%.",
+    },
+}
+
+SUBCATEGORIAS_MINERACAO = ["Ferramentas", "Equipamento", "Consumíveis"]
+SUBCATEGORIAS_EMOJI = {"Ferramentas": "⚒️", "Equipamento": "🛡️", "Consumíveis": "☕"}
+
+MINERIOS = {
+    "Carvão":   {"min": 20, "max": 30, "chance": 0.50, "preco": 10},
+    "Cobre":    {"min": 10, "max": 25, "chance": 0.40, "preco": 10},
+    "Ferro":    {"min": 5,  "max": 10, "chance": 0.35, "preco": 10},
+    "Ouro":     {"min": 3,  "max": 5,  "chance": 0.20, "preco": 10},
+    "Diamante": {"min": 1,  "max": 3,  "chance": 0.05, "preco": 10},
+}
+
+HP_MAXIMO_BASE = 100
+HP_BONUS_CAPACETE = 30
+DANO_BASE_MIN = 15
+DANO_BASE_MAX = 20
+BONUS_DANO_PIMENTA = 0.30
+
+# ============================================================
 # BANCO DE DADOS
 # ============================================================
 def iniciar_banco():
@@ -513,6 +567,32 @@ def iniciar_banco():
         CREATE TABLE IF NOT EXISTS pets_sabonete (
             usuario_id TEXT PRIMARY KEY,
             quantidade INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS usuario_stats (
+            usuario_id TEXT PRIMARY KEY,
+            hp_atual INTEGER DEFAULT 100,
+            tem_capacete INTEGER DEFAULT 0,
+            picareta_usos INTEGER DEFAULT 0,
+            joyogens INTEGER DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS itens_usuarios_mineracao (
+            usuario_id TEXT NOT NULL,
+            item_nome TEXT NOT NULL,
+            quantidade INTEGER DEFAULT 0,
+            PRIMARY KEY (usuario_id, item_nome)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS minerios_usuarios (
+            usuario_id TEXT NOT NULL,
+            minerio TEXT NOT NULL,
+            quantidade INTEGER DEFAULT 0,
+            PRIMARY KEY (usuario_id, minerio)
         )
     """)
     
@@ -1246,6 +1326,137 @@ def tempo_restante_trabalho(ultimo_trabalho):
     return f"{minutos}m {segundos}s"
 
 # ============================================================
+# FUNÇÕES AUXILIARES - Mineração
+# ============================================================
+def garantir_stats(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("INSERT OR IGNORE INTO usuario_stats (usuario_id) VALUES (?)", (str(usuario_id),))
+    con.commit()
+    con.close()
+
+def buscar_stats(usuario_id):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens FROM usuario_stats WHERE usuario_id = ?",
+                (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return {"hp_atual": resultado[0], "tem_capacete": resultado[1], "picareta_usos": resultado[2], "joyogens": resultado[3]}
+
+def hp_maximo(usuario_id):
+    stats = buscar_stats(usuario_id)
+    return HP_MAXIMO_BASE + (HP_BONUS_CAPACETE if stats["tem_capacete"] else 0)
+
+def atualizar_hp(usuario_id, novo_hp):
+    garantir_stats(usuario_id)
+    maximo = hp_maximo(usuario_id)
+    novo_hp = max(0, min(novo_hp, maximo))
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET hp_atual = ? WHERE usuario_id = ?", (novo_hp, str(usuario_id)))
+    con.commit()
+    con.close()
+    return novo_hp
+
+def adicionar_joyogens(usuario_id, quantidade):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET joyogens = joyogens + ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
+    con.commit()
+    con.close()
+
+def remover_joyogens(usuario_id, quantidade):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET joyogens = MAX(0, joyogens - ?) WHERE usuario_id = ?", (quantidade, str(usuario_id)))
+    con.commit()
+    con.close()
+
+def buscar_qtd_item_mineracao(usuario_id, item_nome):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT quantidade FROM itens_usuarios_mineracao WHERE usuario_id = ? AND item_nome = ?",
+                (str(usuario_id), item_nome))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else 0
+
+def adicionar_item_mineracao(usuario_id, item_nome, qtd=1):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO itens_usuarios_mineracao (usuario_id, item_nome, quantidade) VALUES (?, ?, ?)
+        ON CONFLICT(usuario_id, item_nome) DO UPDATE SET quantidade = quantidade + ?
+    """, (str(usuario_id), item_nome, qtd, qtd))
+    con.commit()
+    con.close()
+
+def remover_item_mineracao(usuario_id, item_nome, qtd=1):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE itens_usuarios_mineracao SET quantidade = MAX(0, quantidade - ?)
+        WHERE usuario_id = ? AND item_nome = ?
+    """, (qtd, str(usuario_id), item_nome))
+    con.commit()
+    con.close()
+
+def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
+    """Compra um item de mineração. Retorna (sucesso, mensagem)."""
+    item = ITENS_MINERACAO.get(item_nome)
+    if not item:
+        return False, "Item não encontrado."
+
+    preco = preco_customizado if preco_customizado else item["preco"]
+    saldo = buscar_joyens(usuario_id)
+    if saldo < preco:
+        return False, f"Joyens insuficientes! Você tem {saldo} e precisa de {preco}."
+
+    remover_joyens(usuario_id, preco)
+    garantir_stats(usuario_id)
+
+    if item_nome == "Picareta":
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("UPDATE usuario_stats SET picareta_usos = picareta_usos + ? WHERE usuario_id = ?",
+                    (item["usos"], str(usuario_id)))
+        con.commit()
+        con.close()
+    elif item_nome == "Capacete":
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("UPDATE usuario_stats SET tem_capacete = 1 WHERE usuario_id = ?", (str(usuario_id),))
+        con.commit()
+        con.close()
+    else:
+        adicionar_item_mineracao(usuario_id, item_nome, 1)
+
+    return True, f"**{item_nome}** comprado com sucesso por {preco} Joyens!"
+
+def buscar_minerios_usuario(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT minerio, quantidade FROM minerios_usuarios WHERE usuario_id = ? AND quantidade > 0",
+                (str(usuario_id),))
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def adicionar_minerio(usuario_id, minerio, qtd):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO minerios_usuarios (usuario_id, minerio, quantidade) VALUES (?, ?, ?)
+        ON CONFLICT(usuario_id, minerio) DO UPDATE SET quantidade = quantidade + ?
+    """, (str(usuario_id), minerio, qtd, qtd))
+    con.commit()
+    con.close()
+
+# ============================================================
 # FUNÇÕES AUXILIARES - Missões Semanais
 # ============================================================
 
@@ -1787,6 +1998,94 @@ class ViewMenuLoja(discord.ui.View):
         view = ViewMenuPetshop(self.usuario_id)
         embed = gerar_embed_petshop(self.usuario_id)
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+    @discord.ui.button(label="⛏️ Mineração", style=discord.ButtonStyle.secondary)
+    async def abrir_mineracao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewLojaMineracao(self.usuario_id)
+        embed = discord.Embed(
+            title="⛏️ Loja de Mineração",
+            description="Escolha uma subcategoria:",
+            color=discord.Color.dark_gold()
+        )
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+# ============================================================
+# VIEW (BOTÕES) - Mineração
+# ============================================================
+class ViewLojaMineracao(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        for sub in SUBCATEGORIAS_MINERACAO:
+            emoji = SUBCATEGORIAS_EMOJI[sub]
+            botao = discord.ui.Button(label=sub, emoji=emoji, style=discord.ButtonStyle.primary)
+            async def callback(interaction, subcategoria=sub):
+                view = ViewItensMineracao(self.usuario_id, subcategoria)
+                embed = view.gerar_embed()
+                await interaction.response.edit_message(embed=embed, view=view)
+            botao.callback = callback
+            self.add_item(botao)
+
+        btn_voltar = discord.ui.Button(label="🔙 Loja", style=discord.ButtonStyle.danger, row=1)
+        async def voltar_callback(interaction):
+            embed = discord.Embed(
+                title="🏪 Loja do JogadorBot",
+                description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
+                color=discord.Color.gold()
+            )
+            embed.add_field(name="🖼️ Banners", value="Banners exclusivos por tempo limitado!", inline=False)
+            embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
+            embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
+            view = ViewMenuLoja(self.usuario_id)
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        btn_voltar.callback = voltar_callback
+        self.add_item(btn_voltar)
+
+
+class ViewItensMineracao(discord.ui.View):
+    def __init__(self, usuario_id, subcategoria):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.subcategoria = subcategoria
+
+        itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == subcategoria}
+        for nome, dados in itens.items():
+            botao = discord.ui.Button(label=f"Comprar {nome}", emoji=dados["emoji"], style=discord.ButtonStyle.success)
+            async def callback(interaction, item_nome=nome):
+                sucesso, msg = comprar_item_mineracao(interaction.user.id, item_nome)
+                if sucesso:
+                    await interaction.response.send_message(f"✅ {msg}", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+            botao.callback = callback
+            self.add_item(botao)
+
+        btn_voltar = discord.ui.Button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=1)
+        async def voltar_callback(interaction):
+            view = ViewLojaMineracao(self.usuario_id)
+            embed = discord.Embed(
+                title="⛏️ Loja de Mineração",
+                description="Escolha uma subcategoria:",
+                color=discord.Color.dark_gold()
+            )
+            await interaction.response.edit_message(embed=embed, view=view)
+        btn_voltar.callback = voltar_callback
+        self.add_item(btn_voltar)
+
+    def gerar_embed(self):
+        emoji_sub = SUBCATEGORIAS_EMOJI[self.subcategoria]
+        embed = discord.Embed(
+            title=f"{emoji_sub} {self.subcategoria}",
+            color=discord.Color.dark_gold()
+        )
+        itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == self.subcategoria}
+        for nome, dados in itens.items():
+            embed.add_field(
+                name=f"{dados['emoji']} {nome} — {dados['preco']} Joyens",
+                value=dados["descricao"],
+                inline=False
+            )
+        return embed
 
 # ============================================================
 # VIEW (BOTÕES) - Petshop
@@ -3638,6 +3937,7 @@ async def loja(ctx):
     )
     embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
     embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
+    embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
     view = ViewMenuLoja(ctx.author.id)
     await ctx.send(embed=embed, view=view)
