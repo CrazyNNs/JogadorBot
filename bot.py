@@ -2107,7 +2107,7 @@ class ViewItensMineracao(discord.ui.View):
 # ============================================================
 # VIEW (BOTÕES) - Mineração - O jogo
 # ============================================================
-class ViewMineracao(discord.ui.View):
+class ViewMineracao(ui.LayoutView):
     def __init__(self, usuario_id, ctx):
         super().__init__(timeout=None)
         self.usuario_id = usuario_id
@@ -2121,72 +2121,72 @@ class ViewMineracao(discord.ui.View):
         self.monstro_atual = None
         self.monstro_hp = 0
         self.finalizado = False
+        self.texto_status = "⛏️ Você começou a minerar. O som da picareta ecoa pela caverna..."
+        self.imagem_atual = "minerar1.png"
 
         self.btn_atacar = discord.ui.Button(label="⚔️ Atacar", style=discord.ButtonStyle.danger, disabled=True)
         self.btn_atacar.callback = self.atacar_callback
-        self.btn_dinamite = discord.ui.Button(label="🧨 Dinamite", style=discord.ButtonStyle.secondary)
+        self.btn_dinamite = discord.ui.Button(label="🧨 Dinamite", style=discord.ButtonStyle.secondary,
+                                               disabled=not (buscar_qtd_item_mineracao(usuario_id, "Dinamite") > 0))
         self.btn_dinamite.callback = self.dinamite_callback
         self.btn_parar = discord.ui.Button(label="❌ Parar", style=discord.ButtonStyle.secondary)
         self.btn_parar.callback = self.parar_callback
-        self.add_item(self.btn_atacar)
-        self.add_item(self.btn_dinamite)
-        self.add_item(self.btn_parar)
 
-        tem_dinamite = buscar_qtd_item_mineracao(usuario_id, "Dinamite") > 0
-        self.btn_dinamite.disabled = not tem_dinamite
+        self.montar()
 
-    async def iniciar(self):
-        embed, arquivo = self.gerar_embed_normal()
-        if arquivo:
-            self.message = await self.ctx.send(embed=embed, file=arquivo, view=self)
-        else:
-            self.message = await self.ctx.send(embed=embed, view=self)
-        self.task = bot.loop.create_task(self.loop_mineracao())
+    def montar(self):
+        self.clear_items()
+        stats = buscar_stats(self.usuario_id)
+        barra, pct = self.gerar_barra()
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.dark_gold()
+        container.add_item(ui.TextDisplay(f"### ⛏️ Mineração\n{self.texto_status}"))
+
+        if os.path.exists(self.imagem_atual):
+            container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{self.imagem_atual}")))
+
+        status_texto = (
+            f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
+            f"💎 **Joyogens:** {self.joyogens_ganhas}\n"
+            f"📊 **Progresso:** `{barra}` {pct}%"
+        )
+        if self.minerios_ganhos:
+            status_texto += "\n\n**Minérios coletados:**\n" + "\n".join(
+                f"- {n}: {q}" for n, q in self.minerios_ganhos.items()
+            )
+        container.add_item(ui.Separator())
+        container.add_item(ui.TextDisplay(status_texto))
+
+        linha = ui.ActionRow()
+        linha.add_item(self.btn_atacar)
+        linha.add_item(self.btn_dinamite)
+        linha.add_item(self.btn_parar)
+        container.add_item(linha)
+
+        self.add_item(container)
 
     def gerar_barra(self):
         pct = int((self.tick / self.total_ticks) * 100)
         blocos = pct // 10
         return "█" * blocos + "░" * (10 - blocos), pct
 
-    def gerar_embed_normal(self):
-        stats = buscar_stats(self.usuario_id)
-        barra, pct = self.gerar_barra()
-        embed = discord.Embed(title="⛏️ Minerando...", color=discord.Color.dark_gold())
-        embed.description = (
-            f"Progresso: `{barra}` {pct}%\n"
-            f"❤️ HP: {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
-            f"💎 Joyogens: {self.joyogens_ganhas}"
-        )
-        if self.minerios_ganhos:
-            texto = "\n".join(f"- {n}: {q}" for n, q in self.minerios_ganhos.items())
-            embed.add_field(name="Minérios coletados", value=texto, inline=False)
-        arquivo = None
-        if os.path.exists("minerar1.png"):
-            arquivo = discord.File("minerar1.png", filename="minerar1.png")
-            embed.set_image(url="attachment://minerar1.png")
-        return embed, arquivo
+    async def iniciar(self):
+        arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
+        if arquivo:
+            self.message = await self.ctx.send(view=self, file=arquivo)
+        else:
+            self.message = await self.ctx.send(view=self)
+        self.task = bot.loop.create_task(self.loop_mineracao())
 
-    def gerar_embed_evento(self, tipo, texto):
-        embed = discord.Embed(title="⚠️ Evento!", description=texto, color=discord.Color.red())
-        barra, pct = self.gerar_barra()
-        embed.add_field(name="Progresso", value=f"`{barra}` {pct}%", inline=False)
-        imagem_map = {
-            "Morcego": "atkmorcego1.png", "Slime": "atkslime1.png",
-            "Cobra": "atkcobra1.png", "Desmoronamento": "desmoronamento1.png",
-        }
-        nome_arquivo = imagem_map.get(tipo)
-        arquivo = None
-        if nome_arquivo and os.path.exists(nome_arquivo):
-            arquivo = discord.File(nome_arquivo, filename=nome_arquivo)
-            embed.set_image(url=f"attachment://{nome_arquivo}")
-        return embed, arquivo
-
-    async def atualizar_mensagem(self, embed, arquivo=None):
+    async def atualizar_mensagem(self):
+        self.montar()
+        arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
         try:
             if arquivo:
-                await self.message.edit(embed=embed, attachments=[arquivo], view=self)
+                await self.message.edit(view=self, attachments=[arquivo])
             else:
-                await self.message.edit(embed=embed, view=self)
+                await self.message.edit(view=self, attachments=[])
         except:
             pass
 
@@ -2222,8 +2222,9 @@ class ViewMineracao(discord.ui.View):
                 if self.finalizado:
                     return
             else:
-                embed, arquivo = self.gerar_embed_normal()
-                await self.atualizar_mensagem(embed, arquivo)
+                self.texto_status = "⛏️ Você continua minerando calmamente..."
+                self.imagem_atual = "minerar1.png"
+                await self.atualizar_mensagem()
 
         if not self.finalizado:
             await self.finalizar_mineracao("completa")
@@ -2232,19 +2233,19 @@ class ViewMineracao(discord.ui.View):
         tipo = random.choice(["Morcego", "Slime", "Cobra", "Desmoronamento"])
 
         if tipo == "Desmoronamento":
+            self.imagem_atual = "desmoronamento1.png"
             if random.random() < 0.70:
-                texto = "💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
-                embed, arquivo = self.gerar_embed_evento(tipo, texto)
-                await self.atualizar_mensagem(embed, arquivo)
+                self.texto_status = "💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
+                await self.atualizar_mensagem()
                 await asyncio.sleep(3)
-                embed, arquivo = self.gerar_embed_normal()
-                await self.atualizar_mensagem(embed, arquivo)
+                self.texto_status = "⛏️ Você retoma a mineração após o susto..."
+                self.imagem_atual = "minerar1.png"
+                await self.atualizar_mensagem()
             else:
-                texto = "💀 Um desmoronamento fatal aconteceu! Você não sobreviveu..."
-                embed, arquivo = self.gerar_embed_evento(tipo, texto)
-                for child in self.children:
+                self.texto_status = "💀 Um desmoronamento fatal aconteceu! Você não sobreviveu..."
+                for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
                     child.disabled = True
-                await self.atualizar_mensagem(embed, arquivo)
+                await self.atualizar_mensagem()
                 await self.aplicar_penalidade_morte()
             return
 
@@ -2252,11 +2253,11 @@ class ViewMineracao(discord.ui.View):
         self.em_combate = True
         self.monstro_atual = tipo
         self.monstro_hp = monstro["hp"]
-        texto = f"{monstro['mensagem']}\n**{tipo}** apareceu com {monstro['hp']} HP!"
-        embed, arquivo = self.gerar_embed_evento(tipo, texto)
+        self.imagem_atual = monstro["imagem"]
+        self.texto_status = f"{monstro['mensagem']}\n**{tipo}** apareceu com {monstro['hp']} HP! Ataque antes que ele te acerte!"
         self.btn_atacar.disabled = False
         self.btn_atacar.label = "⚔️ Atacar (2s)"
-        await self.atualizar_mensagem(embed, arquivo)
+        await self.atualizar_mensagem()
         bot.loop.create_task(self.contagem_ataque())
 
     async def contagem_ataque(self):
@@ -2265,6 +2266,7 @@ class ViewMineracao(discord.ui.View):
             if not self.em_combate:
                 return
             self.btn_atacar.label = f"⚔️ Atacar ({restante}s)" if restante > 0 else "⚔️ Atacar (❌)"
+            self.montar()
             try:
                 await self.message.edit(view=self)
             except:
@@ -2284,19 +2286,18 @@ class ViewMineracao(discord.ui.View):
         self.btn_atacar.label = "⚔️ Atacar"
 
         if novo_hp <= 0:
-            texto = f"O **{self.monstro_atual}** te atacou e você não resistiu... HP zerado!"
-            embed, arquivo = self.gerar_embed_evento(self.monstro_atual, texto)
-            for child in self.children:
+            self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou e você não resistiu... 💀"
+            for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
                 child.disabled = True
-            await self.atualizar_mensagem(embed, arquivo)
+            await self.atualizar_mensagem()
             await self.aplicar_penalidade_morte()
         else:
-            texto = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou e causou {monstro['dano']} de dano.\n❤️ HP restante: {novo_hp}"
-            embed, arquivo = self.gerar_embed_evento(self.monstro_atual, texto)
-            await self.atualizar_mensagem(embed, arquivo)
+            self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou causando {monstro['dano']} de dano!"
+            await self.atualizar_mensagem()
             await asyncio.sleep(2)
-            embed, arquivo = self.gerar_embed_normal()
-            await self.atualizar_mensagem(embed, arquivo)
+            self.texto_status = "⛏️ Você retoma o fôlego e continua minerando..."
+            self.imagem_atual = "minerar1.png"
+            await self.atualizar_mensagem()
 
     async def atacar_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.usuario_id:
@@ -2321,9 +2322,9 @@ class ViewMineracao(discord.ui.View):
                 dano = int(dano * (1 + BONUS_DANO_PIMENTA))
             if critico:
                 dano = int(dano * 2)
-                texto_ataque = f"**Ataque crítico!** Você causou {dano} de dano!"
+                texto_ataque = f"**Ataque crítico!** Você atacou antes e causou {dano} de dano!"
             else:
-                texto_ataque = f"Você atacou e causou {dano} de dano!"
+                texto_ataque = f"Você atacou antes e causou {dano} de dano!"
             dano_causado = dano
 
         self.monstro_hp -= dano_causado
@@ -2331,35 +2332,52 @@ class ViewMineracao(discord.ui.View):
         self.btn_atacar.label = "⚔️ Atacar"
 
         if self.monstro_hp <= 0:
-            texto = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**!"
-            embed, arquivo = self.gerar_embed_evento(self.monstro_atual, texto)
-            await interaction.response.edit_message(embed=embed, attachments=[arquivo] if arquivo else [], view=self)
+            self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉"
+            self.montar()
+            arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
+            await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
             await asyncio.sleep(2)
-            embed, arquivo = self.gerar_embed_normal()
-            await self.atualizar_mensagem(embed, arquivo)
+            self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
+            self.imagem_atual = "minerar1.png"
+            await self.atualizar_mensagem()
         else:
             monstro = MONSTROS[self.monstro_atual]
             novo_hp = atualizar_hp(self.usuario_id, stats["hp_atual"] - monstro["dano"])
-            texto = f"{texto_ataque}\nO **{self.monstro_atual}** revidou causando {monstro['dano']} de dano!\n❤️ HP restante: {novo_hp}\n{self.monstro_atual} HP restante: {max(0, self.monstro_hp)}"
+            self.texto_status = (
+                f"{texto_ataque}\n**{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e revidou, "
+                f"causando {monstro['dano']} de dano em você!"
+            )
+            self.montar()
+            arquivo = discord.File(self.imagem_atual, filename=self.imagem_atual) if os.path.exists(self.imagem_atual) else None
+
             if novo_hp <= 0:
-                embed, arquivo = self.gerar_embed_evento(self.monstro_atual, texto + "\n💀 Você não resistiu...")
-                for child in self.children:
+                self.texto_status += "\n💀 Você não resistiu ao contra-ataque..."
+                for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
                     child.disabled = True
-                await interaction.response.edit_message(embed=embed, attachments=[arquivo] if arquivo else [], view=self)
+                self.montar()
+                await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
                 await self.aplicar_penalidade_morte()
             else:
-                embed, arquivo = self.gerar_embed_evento(self.monstro_atual, texto)
-                await interaction.response.edit_message(embed=embed, attachments=[arquivo] if arquivo else [], view=self)
-                await asyncio.sleep(2)
-                embed, arquivo = self.gerar_embed_normal()
-                await self.atualizar_mensagem(embed, arquivo)
+                self.em_combate = True
+                self.btn_atacar.disabled = False
+                self.btn_atacar.label = "⚔️ Atacar (2s)"
+                self.montar()
+                await interaction.response.edit_message(view=self, attachments=[arquivo] if arquivo else [])
+                bot.loop.create_task(self.contagem_ataque())
 
     async def picareta_quebrou(self):
-        for child in self.children:
+        for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
 
         preco_nova = int(ITENS_MINERACAO["Picareta"]["preco"] * 1.2)
-        view_decisao = discord.ui.View(timeout=60)
+        layout_decisao = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.orange()
+        container.add_item(ui.TextDisplay(
+            "### ⛏️ Picareta quebrada!\nSua picareta quebrou! Quer comprar uma nova (20% mais cara) "
+            "para continuar ou parar por aqui?"
+        ))
+
         btn_comprar = discord.ui.Button(label=f"⛏️ Comprar nova ({preco_nova} Joyens)", style=discord.ButtonStyle.success)
         btn_parar_quebra = discord.ui.Button(label="❌ Parar mineração", style=discord.ButtonStyle.danger)
 
@@ -2374,8 +2392,9 @@ class ViewMineracao(discord.ui.View):
             await interaction.response.send_message("✅ Nova picareta comprada! Continuando a mineração...", ephemeral=True)
             self.btn_dinamite.disabled = not (buscar_qtd_item_mineracao(self.usuario_id, "Dinamite") > 0)
             self.btn_parar.disabled = False
-            embed, arquivo = self.gerar_embed_normal()
-            await self.atualizar_mensagem(embed, arquivo)
+            self.texto_status = "⛏️ Picareta trocada! Você volta a minerar..."
+            self.imagem_atual = "minerar1.png"
+            await self.atualizar_mensagem()
             self.task = bot.loop.create_task(self.loop_mineracao())
 
         async def parar_quebra_cb(interaction):
@@ -2387,15 +2406,16 @@ class ViewMineracao(discord.ui.View):
 
         btn_comprar.callback = comprar_cb
         btn_parar_quebra.callback = parar_quebra_cb
-        view_decisao.add_item(btn_comprar)
-        view_decisao.add_item(btn_parar_quebra)
+        linha = ui.ActionRow()
+        linha.add_item(btn_comprar)
+        linha.add_item(btn_parar_quebra)
+        container.add_item(linha)
+        layout_decisao.add_item(container)
 
-        embed = discord.Embed(
-            title="⛏️ Picareta quebrada!",
-            description="Sua picareta quebrou! Quer comprar uma nova (20% mais cara) para continuar ou parar por aqui?",
-            color=discord.Color.orange()
-        )
-        await self.message.edit(embed=embed, view=view_decisao, attachments=[])
+        try:
+            await self.message.edit(view=layout_decisao, attachments=[])
+        except:
+            pass
 
     async def dinamite_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.usuario_id:
@@ -2414,14 +2434,11 @@ class ViewMineracao(discord.ui.View):
                         (penalidade_ate, str(self.usuario_id)))
             con.commit()
             con.close()
-            embed = discord.Embed(
-                title="💥 A dinamite falhou!",
-                description="A explosão saiu pela culatra e a mineração foi perdida! Espere 1 hora para minerar novamente.",
-                color=discord.Color.red()
-            )
-            for child in self.children:
+            self.texto_status = "💥 A dinamite falhou e explodiu na hora errada! A mineração foi perdida. Espere 1 hora para minerar novamente."
+            for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
                 child.disabled = True
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+            self.montar()
+            await interaction.response.edit_message(view=self, attachments=[])
             MINERACAO_ATIVAS.discard(self.usuario_id)
             return
 
@@ -2455,17 +2472,11 @@ class ViewMineracao(discord.ui.View):
                     (penalidade_ate, str(self.usuario_id)))
         con.commit()
         con.close()
-        for child in self.children:
-            child.disabled = True
-        try:
-            await self.message.edit(view=self)
-        except:
-            pass
         MINERACAO_ATIVAS.discard(self.usuario_id)
 
     async def finalizar_mineracao(self, motivo):
         self.finalizado = True
-        for child in self.children:
+        for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
 
         if motivo == "parou":
@@ -2490,14 +2501,23 @@ class ViewMineracao(discord.ui.View):
             "dinamite": "🧨 Mineração Explodida!",
             "parou": "❌ Mineração Interrompida"
         }
-        embed = discord.Embed(title=titulo_map.get(motivo, "⛏️ Mineração Finalizada"), color=discord.Color.gold())
-        embed.add_field(name="💎 Joyogens ganhas", value=str(self.joyogens_ganhas), inline=False)
-        texto_minerios = "\n".join(f"- {n}: {q}" for n, q in self.minerios_ganhos.items() if q > 0)
-        embed.add_field(name="Minérios coletados", value=texto_minerios or "Nenhum", inline=False)
         stats = buscar_stats(self.usuario_id)
-        embed.set_footer(text=f"HP atual: {stats['hp_atual']}/{hp_maximo(self.usuario_id)}")
+        texto_minerios = "\n".join(f"- {n}: {q}" for n, q in self.minerios_ganhos.items() if q > 0) or "Nenhum"
+
+        layout_final = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            f"### {titulo_map.get(motivo, '⛏️ Mineração Finalizada')}\n"
+            f"💎 **Joyogens ganhas:** {self.joyogens_ganhas}\n\n"
+            f"**Minérios coletados:**\n{texto_minerios}"
+        ))
+        container.add_item(ui.Separator())
+        container.add_item(ui.TextDisplay(f"-# ❤️ HP atual: {stats['hp_atual']}/{hp_maximo(self.usuario_id)}"))
+        layout_final.add_item(container)
+
         try:
-            await self.message.edit(embed=embed, view=self, attachments=[])
+            await self.message.edit(view=layout_final, attachments=[])
         except:
             pass
         MINERACAO_ATIVAS.discard(self.usuario_id)
