@@ -1377,11 +1377,6 @@ def tempo_restante_minerar(usuario_id):
     cur.execute("SELECT ultimo_minerar, penalidade_ate FROM usuario_stats WHERE usuario_id = ?", (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
-    con2 = sqlite3.connect("jogadorbot.db")
-    cur2 = con2.cursor()
-    cur2.execute("UPDATE usuario_stats SET pimenta_ativa = 0 WHERE usuario_id = ?", (str(self.usuario_id),))
-    con2.commit()
-    con2.close()
     if not resultado:
         return True, None
     ultimo_minerar, penalidade_ate = resultado
@@ -2946,6 +2941,12 @@ class ViewMineracao(ui.LayoutView):
         con.commit()
         con.close()
 
+        con2 = sqlite3.connect("jogadorbot.db")
+        cur2 = con2.cursor()
+        cur2.execute("UPDATE usuario_stats SET pimenta_ativa = 0 WHERE usuario_id = ?", (str(self.usuario_id),))
+        con2.commit()
+        con2.close()
+        
         titulo_map = {
             "completa": "⛏️ Mineração Concluída!",
             "dinamite": "🧨 Mineração Explodida!",
