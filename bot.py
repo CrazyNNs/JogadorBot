@@ -2378,7 +2378,9 @@ class ViewConsumiveisMineracao(ui.LayoutView):
         async def voltar_cb(interaction):
             await interaction.response.edit_message(view=self.view_mineracao)
         btn_voltar.callback = voltar_cb
-        container.add_item(btn_voltar)
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
 
         self.add_item(container)
 
