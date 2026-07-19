@@ -595,6 +595,10 @@ def iniciar_banco():
         cur.execute("ALTER TABLE usuario_stats ADD COLUMN penalidade_ate TEXT")
     except:
         pass
+    try:
+        cur.execute("ALTER TABLE usuario_stats ADD COLUMN pimenta_ativa INTEGER DEFAULT 0")
+    except:
+        pass
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_usuarios_mineracao (
@@ -1356,11 +1360,48 @@ def buscar_stats(usuario_id):
     garantir_stats(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens FROM usuario_stats WHERE usuario_id = ?",
+    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens, pimenta_ativa FROM usuario_stats WHERE usuario_id = ?",
                 (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
-    return {"hp_atual": resultado[0], "tem_capacete": resultado[1], "picareta_usos": resultado[2], "joyogens": resultado[3]}
+    return {
+        "hp_atual": resultado[0], "tem_capacete": resultado[1],
+        "picareta_usos": resultado[2], "joyogens": resultado[3],
+        "pimenta_ativa": resultado[4] if len(resultado) > 4 else 0
+    }
+
+def tempo_restante_minerar(usuario_id):
+    """Retorna (pode_minerar, texto_tempo)."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT ultimo_minerar, penalidade_ate FROM usuario_stats WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    con2 = sqlite3.connect("jogadorbot.db")
+        cur2 = con2.cursor()
+        cur2.execute("UPDATE usuario_stats SET pimenta_ativa = 0 WHERE usuario_id = ?", (str(self.usuario_id),))
+        con2.commit()
+        con2.close()
+    if not resultado:
+        return True, None
+    ultimo_minerar, penalidade_ate = resultado
+    agora = datetime.datetime.now()
+
+    if penalidade_ate:
+        penalidade_dt = datetime.datetime.fromisoformat(penalidade_ate)
+        if agora < penalidade_dt:
+            restante = penalidade_dt - agora
+            minutos = int(restante.total_seconds() // 60) + 1
+            return False, f"⏰ Você está penalizado! Pode minerar novamente em **{minutos} minuto(s)**."
+
+    if ultimo_minerar:
+        ultimo_dt = datetime.datetime.fromisoformat(ultimo_minerar)
+        if (agora - ultimo_dt) < datetime.timedelta(minutes=10):
+            restante = datetime.timedelta(minutes=10) - (agora - ultimo_dt)
+            minutos = int(restante.total_seconds() // 60) + 1
+            return False, f"⏰ Você precisa esperar mais **{minutos} minuto(s)** para minerar novamente."
+
+    return True, None
 
 def hp_maximo(usuario_id):
     stats = buscar_stats(usuario_id)
@@ -2213,6 +2254,89 @@ class ViewInventarioCategoria(ui.LayoutView):
 # ============================================================
 # VIEW (BOTÕES) - Mineração - Tela inicial
 # ============================================================
+class ViewConsumiveis(ui.LayoutView):
+    def __init__(self, usuario_id, view_inicio):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.view_inicio = view_inicio
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.green()
+        container.add_item(ui.TextDisplay("### ☕ Consumíveis\nEscolha um item para usar:"))
+        container.add_item(ui.Separator())
+
+        stats = buscar_stats(self.usuario_id)
+        marmita_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Marmita")
+        pimenta_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta")
+
+        container.add_item(ui.TextDisplay(
+            f"🍱 **Marmita** ({marmita_qtd}x)\n-# Recupera 20 de HP."
+        ))
+        linha_marmita = ui.ActionRow()
+        btn_marmita = ui.Button(label="Usar Marmita", style=discord.ButtonStyle.success, disabled=marmita_qtd <= 0)
+
+        async def usar_marmita(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            if buscar_qtd_item_mineracao(self.usuario_id, "Marmita") <= 0:
+                await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
+                return
+            remover_item_mineracao(self.usuario_id, "Marmita", 1)
+            stats_atual = buscar_stats(self.usuario_id)
+            novo_hp = atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
+            self.montar()
+            self.view_inicio.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(f"✅ Você comeu uma marmita e recuperou HP! HP atual: {novo_hp}/{hp_maximo(self.usuario_id)}", ephemeral=True)
+
+        btn_marmita.callback = usar_marmita
+        linha_marmita.add_item(btn_marmita)
+        container.add_item(linha_marmita)
+        container.add_item(ui.Separator())
+
+        pimenta_status = "🔥 Ativa para a próxima mineração!" if stats["pimenta_ativa"] else "Inativa"
+        container.add_item(ui.TextDisplay(
+            f"🌶️ **Pimenta** ({pimenta_qtd}x)\n-# Aumenta o dano de ataque em 30% na próxima mineração.\n-# Status: {pimenta_status}"
+        ))
+        linha_pimenta = ui.ActionRow()
+        btn_pimenta = ui.Button(label="Usar Pimenta", style=discord.ButtonStyle.success,
+                                 disabled=pimenta_qtd <= 0 or stats["pimenta_ativa"] == 1)
+
+        async def usar_pimenta(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            if buscar_qtd_item_mineracao(self.usuario_id, "Pimenta") <= 0:
+                await interaction.response.send_message("Você não tem mais pimentas!", ephemeral=True)
+                return
+            remover_item_mineracao(self.usuario_id, "Pimenta", 1)
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("UPDATE usuario_stats SET pimenta_ativa = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+            con.commit()
+            con.close()
+            self.montar()
+            self.view_inicio.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send("🌶️ Você comeu a pimenta! Seu próximo ataque na mineração terá +30% de dano.", ephemeral=True)
+
+        btn_pimenta.callback = usar_pimenta
+        linha_pimenta.add_item(btn_pimenta)
+        container.add_item(linha_pimenta)
+
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        async def voltar_cb(interaction):
+            self.view_inicio.montar()
+            await interaction.response.edit_message(view=self.view_inicio)
+        btn_voltar.callback = voltar_cb
+        container.add_item(btn_voltar)
+
+        self.add_item(container)
+
 class ViewMinerarInicio(ui.LayoutView):
     def __init__(self, usuario_id, ctx):
         super().__init__(timeout=120)
@@ -2223,22 +2347,39 @@ class ViewMinerarInicio(ui.LayoutView):
     def montar(self):
         self.clear_items()
         stats = buscar_stats(self.usuario_id)
+        pode_minerar, aviso = tempo_restante_minerar(self.usuario_id)
+
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
-        container.add_item(ui.TextDisplay(
+        texto = (
             f"### ⛏️ Mineração\n"
             f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
             f"⛏️ **Usos da picareta:** {stats['picareta_usos']}"
-        ))
+        )
+        if stats["pimenta_ativa"]:
+            texto += "\n🌶️ **Bônus de dano ativo!**"
+        if not pode_minerar:
+            texto += f"\n\n{aviso}"
+        container.add_item(ui.TextDisplay(texto))
         container.add_item(ui.Separator())
 
         linha = ui.ActionRow()
-        btn_comecar = ui.Button(label="▶️ Começar", style=discord.ButtonStyle.success, disabled=stats["picareta_usos"] <= 0)
+        btn_comecar = ui.Button(label="▶️ Começar", style=discord.ButtonStyle.success,
+                                 disabled=stats["picareta_usos"] <= 0 and pode_minerar)
         btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
+        btn_consumir = ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
 
         async def comecar_cb(interaction):
             if interaction.user.id != self.usuario_id:
                 await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            pode, aviso_atual = tempo_restante_minerar(self.usuario_id)
+            if not pode:
+                await interaction.response.send_message(aviso_atual, ephemeral=True)
+                return
+            stats_atual = buscar_stats(self.usuario_id)
+            if stats_atual["picareta_usos"] <= 0:
+                await interaction.response.send_message("❌ Você não tem uma picareta! Compre uma em `!loja` na categoria ⛏️ Mineração.", ephemeral=True)
                 return
             MINERACAO_ATIVAS.add(self.usuario_id)
             view = ViewMineracao(self.usuario_id, self.ctx)
@@ -2251,10 +2392,19 @@ class ViewMinerarInicio(ui.LayoutView):
             view = ViewVenderMinerios(self.usuario_id, self)
             await interaction.response.edit_message(view=view)
 
+        async def consumir_cb(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            view = ViewConsumiveis(self.usuario_id, self)
+            await interaction.response.edit_message(view=view)
+
         btn_comecar.callback = comecar_cb
         btn_vender.callback = vender_cb
+        btn_consumir.callback = consumir_cb
         linha.add_item(btn_comecar)
         linha.add_item(btn_vender)
+        linha.add_item(btn_consumir)
         container.add_item(linha)
 
         self.add_item(container)
@@ -2532,11 +2682,8 @@ class ViewMineracao(ui.LayoutView):
                 self.imagem_atual = "minerar1.png"
                 await self.atualizar_mensagem()
             else:
-                self.texto_status = "💀 Um desmoronamento fatal aconteceu! Você não sobreviveu..."
-                for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
-                    child.disabled = True
-                await self.atualizar_mensagem()
-                await self.aplicar_penalidade_morte()
+                causa = "Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
+                await self.aplicar_penalidade_morte(causa)
             return
 
         monstro = MONSTROS[tipo]
@@ -2579,7 +2726,8 @@ class ViewMineracao(ui.LayoutView):
 
             if atacou_a_tempo:
                 stats = buscar_stats(self.usuario_id)
-                tem_pimenta = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta") > 0
+                stats_pimenta = buscar_stats(self.usuario_id)
+                tem_pimenta = stats_pimenta["pimenta_ativa"] == 1
                 errou = random.random() < 0.10
                 critico = random.random() < 0.30
 
@@ -2625,12 +2773,8 @@ class ViewMineracao(ui.LayoutView):
                 self.btn_atacar.label = "⚔️ Atacar"
 
                 if novo_hp <= 0:
-                    self.texto_status += "\n💀 Você não resistiu..."
-                    self.em_combate = False
-                    for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
-                        child.disabled = True
-                    await self.atualizar_mensagem()
-                    await self.aplicar_penalidade_morte()
+                    causa = f"Um **{self.monstro_atual}** te atacou enquanto você hesitava, e o golpe foi fatal."
+                    await self.aplicar_penalidade_morte(causa)
                     return
                 else:
                     await self.atualizar_mensagem()
@@ -2750,16 +2894,33 @@ class ViewMineracao(ui.LayoutView):
         await interaction.response.defer()
         await self.finalizar_mineracao("parou")
 
-    async def aplicar_penalidade_morte(self):
+    async def aplicar_penalidade_morte(self, causa):
         self.finalizado = True
         self.em_combate = False
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         penalidade_ate = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
-        cur.execute("UPDATE usuario_stats SET penalidade_ate = ? WHERE usuario_id = ?",
+        cur.execute("UPDATE usuario_stats SET penalidade_ate = ?, pimenta_ativa = 0 WHERE usuario_id = ?",
                     (penalidade_ate, str(self.usuario_id)))
         con.commit()
         con.close()
+
+        stats = buscar_stats(self.usuario_id)
+        layout_morte = ui.LayoutView()
+        container = ui.Container()
+        container.accent_color = discord.Colour.dark_red()
+        container.add_item(ui.TextDisplay(
+            f"### 💀 Você morreu!\n{causa}\n\n"
+            f"Sua mineração foi perdida. Você precisará esperar **1 hora** antes de minerar novamente."
+        ))
+        container.add_item(ui.Separator())
+        container.add_item(ui.TextDisplay(f"-# ❤️ HP: 0/{hp_maximo(self.usuario_id)}"))
+        layout_morte.add_item(container)
+
+        try:
+            await self.message.edit(view=layout_morte, attachments=[])
+        except:
+            pass
         MINERACAO_ATIVAS.discard(self.usuario_id)
 
     async def finalizar_mineracao(self, motivo):
@@ -5077,40 +5238,12 @@ async def pets(ctx):
     view = ViewPets(ctx.author.id)
     await ctx.send(view=view)
 
-@bot.command(name="minerar")
+@@bot.command(name="minerar")
 async def minerar(ctx):
     garantir_stats(ctx.author.id)
-
     if ctx.author.id in MINERACAO_ATIVAS:
         await ctx.send("❌ Você já está minerando! Termine a mineração atual primeiro.")
         return
-
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT ultimo_minerar, penalidade_ate FROM usuario_stats WHERE usuario_id = ?",
-                (str(ctx.author.id),))
-    resultado = cur.fetchone()
-    con.close()
-
-    ultimo_minerar, penalidade_ate = resultado
-    agora = datetime.datetime.now()
-
-    if penalidade_ate:
-        penalidade_dt = datetime.datetime.fromisoformat(penalidade_ate)
-        if agora < penalidade_dt:
-            restante = penalidade_dt - agora
-            minutos = int(restante.total_seconds() // 60)
-            await ctx.send(f"⏰ Você está penalizado! Pode minerar novamente em **{minutos} minuto(s)**.")
-            return
-
-    if ultimo_minerar:
-        ultimo_dt = datetime.datetime.fromisoformat(ultimo_minerar)
-        if (agora - ultimo_dt) < datetime.timedelta(minutes=10):
-            restante = datetime.timedelta(minutes=10) - (agora - ultimo_dt)
-            minutos = int(restante.total_seconds() // 60) + 1
-            await ctx.send(f"⏰ Você precisa esperar mais **{minutos} minuto(s)** para minerar novamente.")
-            return
-
     view = ViewMinerarInicio(ctx.author.id, ctx)
     await ctx.send(view=view)
 
