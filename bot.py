@@ -5238,7 +5238,7 @@ async def pets(ctx):
     view = ViewPets(ctx.author.id)
     await ctx.send(view=view)
 
-@@bot.command(name="minerar")
+@bot.command(name="minerar")
 async def minerar(ctx):
     garantir_stats(ctx.author.id)
     if ctx.author.id in MINERACAO_ATIVAS:
