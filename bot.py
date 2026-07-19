@@ -2328,9 +2328,9 @@ class ViewConsumiveis(ui.LayoutView):
             self.view_inicio.montar()
             await interaction.response.edit_message(view=self.view_inicio)
         btn_voltar.callback = voltar_cb
-        container.add_item(btn_voltar)
-
-        self.add_item(container)
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
 
 class ViewConsumiveisMineracao(ui.LayoutView):
     def __init__(self, usuario_id, view_mineracao):
