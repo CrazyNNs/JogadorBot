@@ -2332,6 +2332,8 @@ class ViewConsumiveis(ui.LayoutView):
         linha_voltar.add_item(btn_voltar)
         container.add_item(linha_voltar)
 
+        self.add_item(container)
+
 class ViewConsumiveisMineracao(ui.LayoutView):
     def __init__(self, usuario_id, view_mineracao):
         super().__init__(timeout=120)
