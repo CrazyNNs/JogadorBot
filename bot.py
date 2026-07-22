@@ -1485,6 +1485,8 @@ def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
         cur.execute("UPDATE usuario_stats SET tem_capacete = 1 WHERE usuario_id = ?", (str(usuario_id),))
         con.commit()
         con.close()
+        stats_atual = buscar_stats(usuario_id)
+        atualizar_hp(usuario_id, stats_atual["hp_atual"] + HP_BONUS_CAPACETE)
     else:
         adicionar_item_mineracao(usuario_id, item_nome, 1)
 
@@ -1506,6 +1508,14 @@ def adicionar_minerio(usuario_id, minerio, qtd):
         INSERT INTO minerios_usuarios (usuario_id, minerio, quantidade) VALUES (?, ?, ?)
         ON CONFLICT(usuario_id, minerio) DO UPDATE SET quantidade = quantidade + ?
     """, (str(usuario_id), minerio, qtd, qtd))
+    con.commit()
+    con.close()
+    
+async def expirar_pimenta_depois(usuario_id, segundos):
+    await asyncio.sleep(segundos)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET pimenta_ativa = 0 WHERE usuario_id = ?", (str(usuario_id),))
     con.commit()
     con.close()
 
@@ -2293,9 +2303,8 @@ class ViewConsumiveis(ui.LayoutView):
         container.add_item(linha_marmita)
         container.add_item(ui.Separator())
 
-        pimenta_status = "🔥 Ativa para a próxima mineração!" if stats["pimenta_ativa"] else "Inativa"
         container.add_item(ui.TextDisplay(
-            f"🌶️ **Pimenta** ({pimenta_qtd}x)\n-# Aumenta o dano de ataque em 30% na próxima mineração.\n-# Status: {pimenta_status}"
+            f"🌶️ **Pimenta** ({pimenta_qtd}x)\n-# Aumenta o dano em 30% por 60 segundos.\n-# ⚠️ Só pode ser usada durante a mineração!"
         ))
         linha_pimenta = ui.ActionRow()
         btn_pimenta = ui.Button(label="Usar Pimenta", style=discord.ButtonStyle.success,
@@ -2375,6 +2384,42 @@ class ViewConsumiveisMineracao(ui.LayoutView):
         btn_marmita.callback = usar_marmita
         linha_marmita.add_item(btn_marmita)
         container.add_item(linha_marmita)
+        container.add_item(ui.Separator())
+
+        stats_pimenta = buscar_stats(self.usuario_id)
+        pimenta_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta")
+        pimenta_status = "🔥 Ativa!" if stats_pimenta["pimenta_ativa"] else "Inativa"
+        container.add_item(ui.TextDisplay(
+            f"🌶️ **Pimenta** ({pimenta_qtd}x)\n-# +30% de dano por 60 segundos.\n-# Status: {pimenta_status}"
+        ))
+        linha_pimenta = ui.ActionRow()
+        btn_pimenta = ui.Button(label="Usar Pimenta", style=discord.ButtonStyle.success,
+                                 disabled=pimenta_qtd <= 0 or stats_pimenta["pimenta_ativa"] == 1)
+
+        async def usar_pimenta(interaction):
+            try:
+                if interaction.user.id != self.usuario_id:
+                    await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                    return
+                if buscar_qtd_item_mineracao(self.usuario_id, "Pimenta") <= 0:
+                    await interaction.response.send_message("Você não tem mais pimentas!", ephemeral=True)
+                    return
+                remover_item_mineracao(self.usuario_id, "Pimenta", 1)
+                con = sqlite3.connect("jogadorbot.db")
+                cur = con.cursor()
+                cur.execute("UPDATE usuario_stats SET pimenta_ativa = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+                con.commit()
+                con.close()
+                bot.loop.create_task(expirar_pimenta_depois(self.usuario_id, 60))
+                await interaction.response.edit_message(view=self.view_mineracao)
+                self.view_mineracao.montar()
+                await self.view_mineracao.atualizar_mensagem()
+            except Exception as e:
+                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+
+        btn_pimenta.callback = usar_pimenta
+        linha_pimenta.add_item(btn_pimenta)
+        container.add_item(linha_pimenta)
 
         btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
@@ -3011,10 +3056,6 @@ class ViewMineracao(ui.LayoutView):
         self.em_combate = False
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
-
-        if motivo == "parou":
-            self.joyogens_ganhas = int(self.joyogens_ganhas * 0.5)
-            self.minerios_ganhos = {nome: int(qtd * 0.5) for nome, qtd in self.minerios_ganhos.items()}
 
         if self.joyogens_ganhas > 0:
             adicionar_joyogens(self.usuario_id, self.joyogens_ganhas)
