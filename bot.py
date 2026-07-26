@@ -2447,7 +2447,7 @@ class ViewMinerarInicio(ui.LayoutView):
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
         texto = (
-            f"### ⛏️ Mineração\n"
+            f"# 🪨 Mineração\n"
             f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
             f"⛏️ **Usos da picareta:** {stats['picareta_usos']}"
         )
