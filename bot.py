@@ -2246,10 +2246,10 @@ class ViewInventarioCategoria(ui.LayoutView):
                 "\n".join(f"- {n}: {q}" for n, q in minerios) if minerios else "Você não possui nenhum minério."
             ))
 
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="🔙 Fechar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
-            self.view_menu.montar()
-            await interaction.response.edit_message(view=self.view_menu)
+            await interaction.response.defer()
+            await interaction.delete_original_response()
         btn_voltar.callback = voltar_cb
         linha_voltar = ui.ActionRow()
         linha_voltar.add_item(btn_voltar)
@@ -2281,11 +2281,16 @@ class ViewConsumiveis(ui.LayoutView):
             f"🍱 **Marmita** ({marmita_qtd}x)\n-# Recupera 20 de HP."
         ))
         linha_marmita = ui.ActionRow()
-        btn_marmita = ui.Button(label="Usar Marmita", style=discord.ButtonStyle.success, disabled=marmita_qtd <= 0)
+        hp_cheio = stats["hp_atual"] >= hp_maximo(self.usuario_id)
+        btn_marmita = ui.Button(label="Usar Marmita", style=discord.ButtonStyle.success, disabled=marmita_qtd <= 0 or hp_cheio)
 
         async def usar_marmita(interaction):
             if interaction.user.id != self.usuario_id:
                 await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            stats_atual = buscar_stats(self.usuario_id)
+            if stats_atual["hp_atual"] >= hp_maximo(self.usuario_id):
+                await interaction.response.send_message("❌ Seu HP já está cheio!", ephemeral=True)
                 return
             if buscar_qtd_item_mineracao(self.usuario_id, "Marmita") <= 0:
                 await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
@@ -2362,20 +2367,25 @@ class ViewConsumiveisMineracao(ui.LayoutView):
 
         container.add_item(ui.TextDisplay(f"🍱 **Marmita** ({marmita_qtd}x)\n-# Recupera 20 de HP."))
         linha_marmita = ui.ActionRow()
-        btn_marmita = ui.Button(label="Usar Marmita", style=discord.ButtonStyle.success, disabled=marmita_qtd <= 0)
+        hp_cheio = stats["hp_atual"] >= hp_maximo(self.usuario_id)
+        btn_marmita = ui.Button(label="Usar Marmita", style=discord.ButtonStyle.success, disabled=marmita_qtd <= 0 or hp_cheio)
 
         async def usar_marmita(interaction):
             try:
                 if interaction.user.id != self.usuario_id:
                     await interaction.response.send_message("Isso não é seu!", ephemeral=True)
                     return
+                stats_atual = buscar_stats(self.usuario_id)
+                if stats_atual["hp_atual"] >= hp_maximo(self.usuario_id):
+                    await interaction.response.send_message("❌ Seu HP já está cheio!", ephemeral=True)
+                    return
                 if buscar_qtd_item_mineracao(self.usuario_id, "Marmita") <= 0:
                     await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
                     return
                 remover_item_mineracao(self.usuario_id, "Marmita", 1)
                 stats_atual = buscar_stats(self.usuario_id)
-                atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
-                await interaction.response.edit_message(view=self.view_mineracao)
+                novo_hp = atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
+                await interaction.response.send_message(f"✅ Você comeu uma marmita! HP: {novo_hp}/{hp_maximo(self.usuario_id)}", ephemeral=True)
                 self.view_mineracao.montar()
                 await self.view_mineracao.atualizar_mensagem()
             except Exception as e:
@@ -2411,7 +2421,7 @@ class ViewConsumiveisMineracao(ui.LayoutView):
                 con.commit()
                 con.close()
                 bot.loop.create_task(expirar_pimenta_depois(self.usuario_id, 60))
-                await interaction.response.edit_message(view=self.view_mineracao)
+                await interaction.response.send_message("🌶️ Pimenta ativada! +30% de dano por 60 segundos.", ephemeral=True)
                 self.view_mineracao.montar()
                 await self.view_mineracao.atualizar_mensagem()
             except Exception as e:
@@ -2727,7 +2737,7 @@ class ViewMineracao(ui.LayoutView):
                 await interaction.response.send_message("❌ Você não pode consumir itens durante um combate!", ephemeral=True)
                 return
             view = ViewConsumiveisMineracao(self.usuario_id, self)
-            await interaction.response.edit_message(view=view)
+            await interaction.response.send_message(view=view, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
     
