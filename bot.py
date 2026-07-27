@@ -2337,6 +2337,15 @@ class ViewConsumiveis(ui.LayoutView):
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
 
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        async def voltar_cb(interaction):
+            self.view_inicio.montar()
+            await interaction.response.edit_message(view=self.view_inicio)
+        btn_voltar.callback = voltar_cb
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
+        
         self.add_item(container)
 
 class ViewConsumiveisMineracao(ui.LayoutView):
@@ -2421,14 +2430,6 @@ class ViewConsumiveisMineracao(ui.LayoutView):
         btn_pimenta.callback = usar_pimenta
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
-
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
-        async def voltar_cb(interaction):
-            await interaction.response.edit_message(view=self.view_mineracao)
-        btn_voltar.callback = voltar_cb
-        linha_voltar = ui.ActionRow()
-        linha_voltar.add_item(btn_voltar)
-        container.add_item(linha_voltar)
 
         self.add_item(container)
 
