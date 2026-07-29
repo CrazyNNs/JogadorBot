@@ -4132,27 +4132,23 @@ class ViewCatalogoBanners(discord.ui.View):
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pagina_anterior = self.pagina
+        pagina_antiga = self.pagina
         self.pagina -= 1
         self.atualizar_botoes()
-        embed = self.gerar_embed()
-        arquivo = ...  # seu código de gerar arquivo aqui
         try:
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+            await self.atualizar_mensagem(interaction)
         except (discord.errors.NotFound, discord.errors.HTTPException):
-            self.pagina = pagina_anterior  # reverte, já que a edição falhou
+            self.pagina = pagina_antiga
             self.atualizar_botoes()
-
+            
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pagina_anterior = self.pagina
+        pagina_antiga = self.pagina
         self.pagina += 1
         self.atualizar_botoes()
-        embed = self.gerar_embed()
-        arquivo = ...  # seu código de gerar arquivo aqui
         try:
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+            await self.atualizar_mensagem(interaction)
         except (discord.errors.NotFound, discord.errors.HTTPException):
-            self.pagina = pagina_anterior
+            self.pagina = pagina_antiga
             self.atualizar_botoes()
 
     @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
