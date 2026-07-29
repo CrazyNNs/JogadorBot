@@ -4147,8 +4147,8 @@ class ViewCatalogoBanners(discord.ui.View):
         self.pagina += 1
         self.atualizar_botoes()
         try:
-            await self.atualizar_mensagem(interaction)
-        except (discord.errors.NotFound, discord.errors.HTTPException):
+    await self.atualizar_mensagem(interaction)
+except (discord.errors.NotFound, discord.errors.HTTPException):
 
     @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
