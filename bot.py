@@ -4141,6 +4141,7 @@ class ViewCatalogoBanners(discord.ui.View):
             self.pagina = pagina_antiga
             self.atualizar_botoes()
             
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
         pagina_antiga = self.pagina
         self.pagina += 1
@@ -4148,8 +4149,6 @@ class ViewCatalogoBanners(discord.ui.View):
         try:
             await self.atualizar_mensagem(interaction)
         except (discord.errors.NotFound, discord.errors.HTTPException):
-            self.pagina = pagina_antiga
-            self.atualizar_botoes()
 
     @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
