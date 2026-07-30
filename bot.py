@@ -505,6 +505,20 @@ def iniciar_banco():
             joyens_acumulados INTEGER DEFAULT 0
         )
     """)
+
+    # Novos contadores — mineração e pets (missões personalizadas)
+    for coluna in [
+        "mineracao_tempo_segundos INTEGER DEFAULT 0",
+        "mineracao_monstro INTEGER DEFAULT 0",
+        "mineracao_dinamite INTEGER DEFAULT 0",
+        "pet_brincadeira INTEGER DEFAULT 0",
+        "pet_alimentar INTEGER DEFAULT 0",
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE contadores_usuarios ADD COLUMN {coluna}")
+        except sqlite3.OperationalError:
+            pass
+    con.commit()
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS missoes_customizadas (
@@ -1690,6 +1704,7 @@ async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None
         return
 
     dados = dict(zip(cols, row))
+    dados["mineracao_tempo"] = (dados.get("mineracao_tempo_segundos", 0) or 0) // 60
     agora = datetime.datetime.now().isoformat()
     canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
     missoes = buscar_missoes_customizadas()
@@ -2663,6 +2678,7 @@ class ViewMineracao(ui.LayoutView):
         self.monstro_atual = None
         self.monstro_hp = 0
         self.finalizado = False
+        self.tempo_registrado = False
         self.ataque_event = asyncio.Event()
         self.texto_status = "⛏️ Você começou a minerar. O som da picareta ecoa pela caverna..."
         self.imagem_atual = "minerar1.png"
@@ -2883,6 +2899,8 @@ class ViewMineracao(ui.LayoutView):
                 if self.monstro_hp <= 0:
                     self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉"
                     self.em_combate = False
+                    atualizar_contador(self.usuario_id, "mineracao_monstro", 1)
+                    await verificar_missoes_customizadas_usuario(str(self.usuario_id), self.ctx)
                     await self.atualizar_mensagem()
                     await asyncio.sleep(2)
                     self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
@@ -2912,7 +2930,16 @@ class ViewMineracao(ui.LayoutView):
                     self.texto_status = f"O **{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e se prepara para atacar novamente!"
                     await self.atualizar_mensagem()
                     continue
-
+                    
+    def registrar_tempo_mineracao(self):
+        """Registra o tempo efetivamente minerado (em segundos) uma única vez por sessão."""
+        if self.tempo_registrado:
+            return
+        self.tempo_registrado = True
+        segundos = self.tick * 10
+        if segundos > 0:
+            atualizar_contador(self.usuario_id, "mineracao_tempo_segundos", segundos)
+    
     async def atacar_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message("Essa não é sua mineração!", ephemeral=True)
@@ -2984,6 +3011,8 @@ class ViewMineracao(ui.LayoutView):
         self.finalizado = True
         self.em_combate = False
         remover_item_mineracao(self.usuario_id, "Dinamite", 1)
+        atualizar_contador(self.usuario_id, "mineracao_dinamite", 1)
+        await verificar_missoes_customizadas_usuario(str(self.usuario_id), self.ctx)
 
         if random.random() < 0.10:
             con = sqlite3.connect("jogadorbot.db")
@@ -2996,6 +3025,7 @@ class ViewMineracao(ui.LayoutView):
             self.texto_status = "💥 A dinamite falhou e explodiu na hora errada! A mineração foi perdida. Espere 1 hora para minerar novamente."
             for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
                 child.disabled = True
+            self.registrar_tempo_mineracao()
             self.montar()
             await interaction.response.edit_message(view=self, attachments=[])
             MINERACAO_ATIVAS.discard(self.usuario_id)
@@ -3027,6 +3057,7 @@ class ViewMineracao(ui.LayoutView):
     async def aplicar_penalidade_morte(self, causa):
         self.finalizado = True
         self.em_combate = False
+        self.registrar_tempo_mineracao()
         maximo = hp_maximo(self.usuario_id)
         hp_recuperado = int(maximo * 0.25)
         con = sqlite3.connect("jogadorbot.db")
@@ -3056,6 +3087,8 @@ class ViewMineracao(ui.LayoutView):
     async def finalizar_mineracao(self, motivo):
         self.finalizado = True
         self.em_combate = False
+        self.registrar_tempo_mineracao()
+        await verificar_missoes_customizadas_usuario(str(self.usuario_id), self.ctx)
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
 
@@ -3481,6 +3514,8 @@ class ViewEscolherPetisco(discord.ui.View):
 
         atualizar_stats_pet(self.pet_id)
         aplicar_efeito_pet(self.pet_id, fome=FOME_ALIMENTAR, felicidade=FELICIDADE_ALIMENTAR)
+        atualizar_contador(self.usuario_id, "pet_alimentar", 1)
+        await verificar_missoes_customizadas_usuario(str(self.usuario_id), interaction.channel)
 
         # Atualiza a mensagem principal do /pets (status), igual o Brincar e o Banho já fazem
         if self.view_pets is not None and self.mensagem_pets is not None:
@@ -3768,6 +3803,8 @@ class ViewPets(discord.ui.LayoutView):
             higiene=BRINCAR_HIGIENE,
             fome=BRINCAR_FOME
         )
+        atualizar_contador(self.usuario_id, "pet_brincadeira", 1)
+        await verificar_missoes_customizadas_usuario(str(self.usuario_id), interaction.channel)
 
         self.montar()
         await interaction.response.edit_message(view=self)
@@ -6142,6 +6179,31 @@ async def level_dar_error(interaction: discord.Interaction, error: app_commands.
     else:
         raise error
 
+async def avisar_membros_nova_missao(guild, nome, descricao, data_fim_iso, tipo_recompensa, qtd_recompensa):
+    """Envia uma DM para todos os membros do servidor avisando sobre uma nova missão."""
+    if guild is None:
+        return
+
+    recompensa_texto = f"{qtd_recompensa} {'Joyens' if tipo_recompensa == 'joyens' else 'XP'}"
+
+    embed = discord.Embed(
+        title="📢 Nova Missão Disponível!",
+        description=f"**{nome}**\n{descricao}",
+        color=discord.Color.blurple()
+    )
+    if data_fim_iso:
+        expira_dt = datetime.datetime.fromisoformat(data_fim_iso)
+        embed.add_field(name="⏳ Expira em", value=expira_dt.strftime("%d/%m/%Y às %H:%M"), inline=False)
+    embed.add_field(name="🎁 Recompensa", value=recompensa_texto, inline=False)
+
+    for membro in guild.members:
+        if membro.bot:
+            continue
+        try:
+            await membro.send(embed=embed)
+        except (discord.Forbidden, discord.HTTPException):
+            continue
+
 missao_group = app_commands.Group(name="missao", description="Gerenciamento de missões")
 
 @missao_group.command(name="criar", description="Cria uma nova missão (admin)")
@@ -6197,6 +6259,7 @@ async def missao_criar(
         """, (nome, descricao, tipo, condicoes, meta if meta > 0 else None, tipo_recompensa, quantidade_recompensa, data_fim_iso))
         con.commit()
         await interaction.response.send_message(f"✅ Missão **{nome}** criada com sucesso!", ephemeral=True)
+        await avisar_membros_nova_missao(interaction.guild, nome, descricao, data_fim_iso, tipo_recompensa, quantidade_recompensa)
     except sqlite3.IntegrityError:
         await interaction.response.send_message(f"❌ Já existe uma missão com o nome **{nome}**.", ephemeral=True)
     finally:
