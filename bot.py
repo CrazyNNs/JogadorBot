@@ -339,7 +339,7 @@ BONUS_DANO_PIMENTA = 0.30
 # ============================================================
 # INVENTÁRIO — Estrutura de categorias e subcategorias
 # ============================================================
-URL_MOCHILA_INVENTARIO = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/blob/main/Imagens/mochila.png"
+URL_MOCHILA_INVENTARIO = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/mochila.png"
 
 INVENTARIO_ESTRUTURA = {
     "banners": {
