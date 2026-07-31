@@ -4085,7 +4085,7 @@ class ViewMochilaBanners(discord.ui.View):
                                           disabled=self.pagina == 0, row=3)
         btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
                                          disabled=self.pagina >= self.total_paginas - 1, row=3)
-        btn_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Perfil", style=discord.ButtonStyle.danger, row=3)
+        btn_voltar = discord.ui.Button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>",style=discord.ButtonStyle.danger, row=3)
 
         async def anterior_callback(interaction):
             self.pagina -= 1
