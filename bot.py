@@ -5130,7 +5130,7 @@ async def diario(ctx):
     con_seq.close()
 
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
-    await adiciona"r_xp(str(ctx.author.id), xp_ganho, ctx)
+    await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
 
 @bot.command(name="saldo")
 async def saldo(ctx, membro: discord.Member = None):
