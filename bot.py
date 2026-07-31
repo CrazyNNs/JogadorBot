@@ -282,7 +282,7 @@ ITENS_MINERACAO = {
         "emoji": "⛏️",
         "subcategoria": "Ferramentas",
         "preco": 1000,
-        "moeda": "Joyogens"
+        "moeda": "Joyogens",
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
     },
