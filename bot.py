@@ -1513,14 +1513,14 @@ def buscar_stats(usuario_id):
     }
 
 def tempo_restante_minerar(usuario_id):
-    """Retorna (pode_minerar, texto_tempo)."""
+    """Retorna (pode_minerar, texto_aviso, timestamp_unix_liberacao)."""
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("SELECT ultimo_minerar, penalidade_ate FROM usuario_stats WHERE usuario_id = ?", (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
     if not resultado:
-        return True, None
+        return True, None, None
     ultimo_minerar, penalidade_ate = resultado
     agora = datetime.datetime.now()
 
@@ -1529,16 +1529,17 @@ def tempo_restante_minerar(usuario_id):
         if agora < penalidade_dt:
             restante = penalidade_dt - agora
             minutos = int(restante.total_seconds() // 60) + 1
-            return False, f"⏰ Você está penalizado! Pode minerar novamente em **{minutos} minuto(s)**."
+            return False, f"⏰ Você está penalizado! Pode minerar novamente em **{minutos} minuto(s)**.", int(penalidade_dt.timestamp())
 
     if ultimo_minerar:
         ultimo_dt = datetime.datetime.fromisoformat(ultimo_minerar)
         if (agora - ultimo_dt) < datetime.timedelta(minutes=10):
-            restante = datetime.timedelta(minutes=10) - (agora - ultimo_dt)
+            liberacao_dt = ultimo_dt + datetime.timedelta(minutes=10)
+            restante = liberacao_dt - agora
             minutos = int(restante.total_seconds() // 60) + 1
-            return False, f"⏰ Você precisa esperar mais **{minutos} minuto(s)** para minerar novamente."
+            return False, f"⏰ Você precisa esperar mais **{minutos} minuto(s)** para minerar novamente.", int(liberacao_dt.timestamp())
 
-    return True, None
+    return True, None, None
 
 def hp_maximo(usuario_id):
     stats = buscar_stats(usuario_id)
@@ -2430,11 +2431,20 @@ class ViewMochilaItens(ui.LayoutView):
 # VIEW (BOTÕES) - Mineração - Tela inicial
 # ============================================================
 class ViewConsumiveis(ui.LayoutView):
-    def __init__(self, usuario_id, view_inicio):
+    def __init__(self, usuario_id, view_inicio, mensagem_inicio=None):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.view_inicio = view_inicio
+        self.mensagem_inicio = mensagem_inicio
         self.montar()
+
+    async def atualizar_tela_inicial(self):
+        if self.view_inicio is not None and self.mensagem_inicio is not None:
+            self.view_inicio.montar()
+            try:
+                await self.mensagem_inicio.edit(view=self.view_inicio)
+            except discord.HTTPException:
+                pass
 
     def montar(self):
         self.clear_items()
@@ -2469,9 +2479,9 @@ class ViewConsumiveis(ui.LayoutView):
             stats_atual = buscar_stats(self.usuario_id)
             novo_hp = atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
             self.montar()
-            self.view_inicio.montar()
             await interaction.response.edit_message(view=self)
             await interaction.followup.send(f"✅ Você comeu uma marmita e recuperou HP! HP atual: {novo_hp}/{hp_maximo(self.usuario_id)}", ephemeral=True)
+            await self.atualizar_tela_inicial()
 
         btn_marmita.callback = usar_marmita
         linha_marmita.add_item(btn_marmita)
@@ -2499,23 +2509,14 @@ class ViewConsumiveis(ui.LayoutView):
             con.commit()
             con.close()
             self.montar()
-            self.view_inicio.montar()
             await interaction.response.edit_message(view=self)
             await interaction.followup.send("🌶️ Você comeu a pimenta! Seu próximo ataque na mineração terá +30% de dano.", ephemeral=True)
+            await self.atualizar_tela_inicial()
 
         btn_pimenta.callback = usar_pimenta
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
 
-        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
-        async def voltar_cb(interaction):
-            self.view_inicio.montar()
-            await interaction.response.edit_message(view=self.view_inicio)
-        btn_voltar.callback = voltar_cb
-        linha_voltar = ui.ActionRow()
-        linha_voltar.add_item(btn_voltar)
-        container.add_item(linha_voltar)
-        
         self.add_item(container)
 
 class ViewConsumiveisMineracao(ui.LayoutView):
@@ -2613,7 +2614,7 @@ class ViewMinerarInicio(ui.LayoutView):
     def montar(self):
         self.clear_items()
         stats = buscar_stats(self.usuario_id)
-        pode_minerar, aviso = tempo_restante_minerar(self.usuario_id)
+        pode_minerar, aviso, timestamp_liberacao = tempo_restante_minerar(self.usuario_id)
         sem_hp = stats["hp_atual"] <= 0
 
         container = ui.Container()
@@ -2625,8 +2626,8 @@ class ViewMinerarInicio(ui.LayoutView):
         )
         if stats["pimenta_ativa"]:
             texto += "\n🌶️ **Bônus de dano ativo!**"
-        if not pode_minerar:
-            texto += f"\n\n{aviso}"
+        if not pode_minerar and timestamp_liberacao:
+            texto += f"\n\n⏳ Próxima mineração: <t:{timestamp_liberacao}:R>"
         if sem_hp:
             texto += "\n\n💀 Seu HP está zerado! Use uma Marmita para se recuperar antes de minerar."
         container.add_item(ui.TextDisplay(texto))
@@ -2636,7 +2637,7 @@ class ViewMinerarInicio(ui.LayoutView):
         btn_comecar = ui.Button(
             label="▶️ Começar",
             style=discord.ButtonStyle.success,
-            disabled=(stats["picareta_usos"] <= 0) or (not pode_minerar) or sem_hp
+            disabled=(stats["picareta_usos"] <= 0) or sem_hp
         )
         btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
         btn_consumir = ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
@@ -2646,7 +2647,7 @@ class ViewMinerarInicio(ui.LayoutView):
                 if interaction.user.id != self.usuario_id:
                     await interaction.response.send_message("Isso não é seu!", ephemeral=True)
                     return
-                pode, aviso_atual = tempo_restante_minerar(self.usuario_id)
+                pode, aviso_atual, _ = tempo_restante_minerar(self.usuario_id)
                 if not pode:
                     await interaction.response.send_message(aviso_atual, ephemeral=True)
                     return
@@ -2678,8 +2679,8 @@ class ViewMinerarInicio(ui.LayoutView):
                 if interaction.user.id != self.usuario_id:
                     await interaction.response.send_message("Isso não é seu!", ephemeral=True)
                     return
-                view = ViewConsumiveis(self.usuario_id, self)
-                await interaction.response.edit_message(view=view)
+                view = ViewConsumiveis(self.usuario_id, self, mensagem_inicio=interaction.message)
+                await interaction.response.send_message(view=view, ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
 
