@@ -707,6 +707,14 @@ def buscar_joyens(usuario_id):
     con.close()
     return resultado[0] if resultado else 0
 
+def buscar_joyogens(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT joyogens FROM economia WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else 0
+
 def adicionar_joyens(usuario_id, quantidade):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -5136,8 +5144,10 @@ async def saldo(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
     joyens = buscar_joyens(membro.id)
+    joyogens = buscar_joyogens(membro.id)
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
     embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=False)
+    embed.add_field(name="Joyogens", value=f"{joyogens} Joyogens", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="loja")
