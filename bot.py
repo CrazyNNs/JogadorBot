@@ -2003,7 +2003,7 @@ class ViewConquistas(discord.ui.View):
         self.atualizar_botoes()
         await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
 
-    @discord.ui.button(label="🔙 Perfil", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Perfil", style=discord.ButtonStyle.danger)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         membro = self.usuario
         level, xp = buscar_level(membro.id)
@@ -2164,7 +2164,7 @@ class ViewLoja(discord.ui.View):
         )
         await interaction.message.edit(view=self)
 
-    @discord.ui.button(label="🔙 Loja", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Loja", style=discord.ButtonStyle.danger, row=0)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="🏪 Loja do JogadorBot",
@@ -2232,7 +2232,7 @@ class ViewLojaMineracao(discord.ui.View):
             botao.callback = callback
             self.add_item(botao)
 
-        btn_voltar = discord.ui.Button(label="🔙 Loja", style=discord.ButtonStyle.danger, row=1)
+        btn_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Loja", style=discord.ButtonStyle.danger, row=1)
         async def voltar_callback(interaction):
             embed = discord.Embed(
                 title="🏪 Loja do JogadorBot",
@@ -2266,7 +2266,7 @@ class ViewItensMineracao(discord.ui.View):
             botao.callback = callback
             self.add_item(botao)
 
-        btn_voltar = discord.ui.Button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=1)
+        btn_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Categorias", style=discord.ButtonStyle.danger, row=1)
         async def voltar_callback(interaction):
             view = ViewLojaMineracao(self.usuario_id)
             embed = discord.Embed(
@@ -2374,7 +2374,7 @@ class ViewMochilaSubcategorias(ui.LayoutView):
             linha.add_item(botao)
         container.add_item(linha)
 
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
             if interaction.user.id != self.usuario.id:
                 await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
@@ -2413,7 +2413,7 @@ class ViewMochilaItens(ui.LayoutView):
         else:
             container.add_item(ui.TextDisplay("Você não possui nenhum item nesta subcategoria."))
 
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
             if interaction.user.id != self.usuario.id:
                 await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
@@ -2507,7 +2507,7 @@ class ViewConsumiveis(ui.LayoutView):
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
 
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
             self.view_inicio.montar()
             await interaction.response.edit_message(view=self.view_inicio)
@@ -2805,7 +2805,7 @@ class ViewVenderMinerios(ui.LayoutView):
                 container.add_item(linha)
                 container.add_item(ui.Separator())
 
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
             self.view_inicio.montar()
             await interaction.response.edit_message(view=self.view_inicio)
@@ -3339,7 +3339,7 @@ class ViewMenuPetshop(discord.ui.View):
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
-    @discord.ui.button(label="🔙 Loja", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Loja", style=discord.ButtonStyle.danger)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="🏪 Loja do JogadorBot",
@@ -3475,7 +3475,7 @@ class ViewComprarPet(discord.ui.View):
             botao.callback = self.criar_callback(especie)
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -3522,7 +3522,7 @@ class ViewComprarPetisco(discord.ui.View):
             botao.callback = self.criar_callback(dados["petisco_nome"], dados["petisco_preco"])
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -3565,7 +3565,7 @@ class ViewComprarBrinquedo(discord.ui.View):
             botao.callback = self.criar_callback(dados["brinquedo_nome"], dados["brinquedo_preco"], dados["brinquedo_usos"])
             self.add_item(botao)
 
-        botao_voltar = discord.ui.Button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
+        botao_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Petshop", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_petshop
         self.add_item(botao_voltar)
 
@@ -3607,7 +3607,7 @@ class ViewComprarSabonete(discord.ui.View):
             ModalQuantidadeCompra(self.usuario_id, "sabonete", SABONETE_NOME, SABONETE_PRECO)
         )
 
-    @discord.ui.button(label="🔙 Petshop", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Petshop", style=discord.ButtonStyle.danger)
     async def voltar_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewMenuPetshop(self.usuario_id)
         embed = gerar_embed_petshop(self.usuario_id)
@@ -4084,7 +4084,7 @@ class ViewMochilaBanners(discord.ui.View):
                                           disabled=self.pagina == 0, row=3)
         btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
                                          disabled=self.pagina >= self.total_paginas - 1, row=3)
-        btn_voltar = discord.ui.Button(label="🔙 Perfil", style=discord.ButtonStyle.danger, row=3)
+        btn_voltar = discord.ui.Button(label="<:SaidaIcon:1532863338902589500> Perfil", style=discord.ButtonStyle.danger, row=3)
 
         async def anterior_callback(interaction):
             self.pagina -= 1
@@ -4236,7 +4236,7 @@ class ViewCategoriaCatalogo(discord.ui.View):
         self.usuario_id = usuario_id
         self.add_item(SelectCategoriaCatalogo(usuario_id))
 
-    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger, row=1)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="📖 Catálogo do JogadorBot",
@@ -4344,7 +4344,7 @@ class ViewCatalogoBanners(discord.ui.View):
             self.pagina = pagina_antiga
             self.atualizar_botoes()
             
-    @discord.ui.button(label="🔙 Categorias", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Categorias", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewCategoriaCatalogo(self.usuario_id)
         embed = discord.Embed(
@@ -4731,7 +4731,7 @@ class ViewAjudaCategoria(discord.ui.View):
     async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_slash(), view=self)
 
-    @discord.ui.button(label="🔙 Voltar", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger, row=1)
     async def btn_voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_inicial(), view=ViewAjuda())
 
@@ -4817,7 +4817,7 @@ class ViewMissoesSemanais(ui.LayoutView):
         linha = ui.ActionRow()
         btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
         btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
 
         async def ir_anterior(interaction: discord.Interaction):
             self.pagina -= 1
@@ -4895,7 +4895,7 @@ class ViewMissoesCustomizadas(ui.LayoutView):
         linha = ui.ActionRow()
         btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
         btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
-        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
 
         async def ir_anterior(interaction: discord.Interaction):
             self.pagina -= 1
