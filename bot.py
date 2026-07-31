@@ -337,6 +337,42 @@ DANO_BASE_MAX = 20
 BONUS_DANO_PIMENTA = 0.30
 
 # ============================================================
+# INVENTÁRIO — Estrutura de categorias e subcategorias
+# ============================================================
+URL_MOCHILA_INVENTARIO = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/blob/main/Imagens/mochila.png"
+
+INVENTARIO_ESTRUTURA = {
+    "banners": {
+        "emoji": "🖼️",
+        "nome": "Banners",
+        "subcategorias": {
+            "estaticos": {"emoji": "🖼️", "nome": "Estáticos"},
+            "animados": {"emoji": "🎞️", "nome": "Animados"},
+        }
+    },
+    "petshop": {
+        "emoji": "🐾",
+        "nome": "Petshop",
+        "subcategorias": {
+            "pets": {"emoji": "🐾", "nome": "Pets"},
+            "petiscos": {"emoji": "🍖", "nome": "Petiscos"},
+            "brinquedos": {"emoji": "🧸", "nome": "Brinquedos"},
+            "higiene": {"emoji": "🧼", "nome": "Higiene"},
+        }
+    },
+    "minerar": {
+        "emoji": "⛏️",
+        "nome": "Minerar",
+        "subcategorias": {
+            "ferramentas": {"emoji": "⚒️", "nome": "Ferramentas"},
+            "equipamentos": {"emoji": "🛡️", "nome": "Equipamentos"},
+            "consumiveis": {"emoji": "☕", "nome": "Consumíveis"},
+            "minerios": {"emoji": "💎", "nome": "Minérios"},
+        }
+    },
+}
+
+# ============================================================
 # BANCO DE DADOS
 # ============================================================
 def iniciar_banco():
@@ -833,6 +869,90 @@ def aplicar_efeito_pet(pet_id, fome=0, energia=0, higiene=0, felicidade=0):
     """, (novo_fome, novo_energia, novo_higiene, novo_felicidade, agora, pet_id))
     con.commit()
     con.close()
+
+# ============================================================
+# SISTEMA DA MOCHILA
+def _listar_banners_usuario(usuario_id, animados):
+    """Retorna os banners do usuário filtrados por estático (.png/.jpg) ou animado (.gif)."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT b.nome, b.arquivo FROM banners_usuarios bu JOIN banners b ON bu.banner_id = b.id
+        WHERE bu.usuario_id = ? ORDER BY b.nome
+    """, (str(usuario_id),))
+    banners = cur.fetchall()
+    con.close()
+    filtrados = [nome for nome, arquivo in banners if arquivo.lower().endswith(".gif") == animados]
+    return [f"🖼️ **{nome}**" for nome in filtrados] or None
+
+
+def buscar_itens_mochila(usuario, categoria, subcategoria):
+    """
+    Retorna uma lista de strings com os itens do usuário para a subcategoria pedida,
+    ou None se ele não tiver nada.
+
+    Para adicionar um item/produto novo no futuro: crie (ou reaproveite) uma função
+    'buscar_X_usuario' que retorne os dados do banco, e adicione um bloco abaixo
+    dizendo como formatar o texto.
+    """
+    usuario_id = usuario.id
+
+    if categoria == "banners" and subcategoria == "estaticos":
+        return _listar_banners_usuario(usuario_id, animados=False)
+
+    if categoria == "banners" and subcategoria == "animados":
+        return _listar_banners_usuario(usuario_id, animados=True)
+
+    if categoria == "petshop" and subcategoria == "pets":
+        pets = listar_pets(usuario_id)
+        if not pets:
+            return None
+        return [
+            f"{PETS_DISPONIVEIS.get(especie, {}).get('emoji', '🐾')} **{nome}** ({especie})"
+            for _, especie, nome in pets
+        ]
+
+    if categoria == "petshop" and subcategoria == "petiscos":
+        petiscos = buscar_petiscos_usuario(usuario_id)
+        return [f"🍖 **{tipo}** — {qtd} unidade(s)" for tipo, qtd in petiscos] or None
+
+    if categoria == "petshop" and subcategoria == "brinquedos":
+        brinquedos = buscar_brinquedos_usuario(usuario_id)
+        return [f"🧸 **{tipo}** — {usos} uso(s) restante(s)" for tipo, usos in brinquedos] or None
+
+    if categoria == "petshop" and subcategoria == "higiene":
+        qtd = buscar_sabonetes_usuario(usuario_id)
+        return [f"🧼 **Sabonete** — {qtd} unidade(s)"] if qtd > 0 else None
+
+    if categoria == "minerar" and subcategoria == "ferramentas":
+        stats = buscar_stats(usuario_id)
+        dinamite_qtd = buscar_qtd_item_mineracao(usuario_id, "Dinamite")
+        itens = []
+        if stats["picareta_usos"] > 0:
+            itens.append(f"⛏️ **Picareta** — {stats['picareta_usos']} uso(s) restante(s)")
+        if dinamite_qtd > 0:
+            itens.append(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)")
+        return itens or None
+
+    if categoria == "minerar" and subcategoria == "equipamentos":
+        stats = buscar_stats(usuario_id)
+        return ["🪖 **Capacete** — Equipado ✅"] if stats["tem_capacete"] else None
+
+    if categoria == "minerar" and subcategoria == "consumiveis":
+        marmita_qtd = buscar_qtd_item_mineracao(usuario_id, "Marmita")
+        pimenta_qtd = buscar_qtd_item_mineracao(usuario_id, "Pimenta")
+        itens = []
+        if marmita_qtd > 0:
+            itens.append(f"🍱 **Marmita** — {marmita_qtd} unidade(s)")
+        if pimenta_qtd > 0:
+            itens.append(f"🌶️ **Pimenta** — {pimenta_qtd} unidade(s)")
+        return itens or None
+
+    if categoria == "minerar" and subcategoria == "minerios":
+        minerios = buscar_minerios_usuario(usuario_id)
+        return [f"💎 **{n}** — {q}" for n, q in minerios if q > 0] or None
+
+    return None
 
 # ============================================================
 # BANNER NA ROTAÇÃO DA LOJA
@@ -1824,7 +1944,7 @@ class ViewPerfil(discord.ui.View):
         if not resultado:
             await interaction.response.send_message("Este usuário não tem nenhum banner! Use `!loja` para comprar.", ephemeral=True)
             return
-        view = ViewInventarioBanners(self.usuario)
+        view = ViewMochilaBanners(self.usuario)
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
@@ -2168,7 +2288,7 @@ class ViewItensMineracao(discord.ui.View):
 # ============================================================
 # VIEW (BOTÕES) - Inventário Geral
 # ============================================================
-class ViewInventarioMenu(ui.LayoutView):
+class ViewMochilaMenu(ui.LayoutView):
     def __init__(self, usuario: discord.Member):
         super().__init__(timeout=120)
         self.usuario = usuario
@@ -2178,33 +2298,43 @@ class ViewInventarioMenu(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.blurple()
-        container.add_item(ui.TextDisplay(f"### 🎒 Inventário de {self.usuario.display_name}\n-# Escolha uma categoria abaixo."))
+
+        descricao = "\n".join(
+            f"{dados['emoji']} **{dados['nome']}**" for dados in INVENTARIO_ESTRUTURA.values()
+        )
+        texto = f"### 🎒 Mochila de {self.usuario.display_name}\n{descricao}"
+        thumbnail = ui.Thumbnail(URL_MOCHILA_INVENTARIO)
+        secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
+        container.add_item(secao)
         container.add_item(ui.Separator())
 
         linha = ui.ActionRow()
-        categorias = [
-            ("🖼️ Banners", "banner"),
-            ("⚒️ Ferramentas", "ferramenta"),
-            ("🛡️ Equipamento", "equipamento"),
-            ("☕ Consumíveis", "consumivel"),
-            ("💎 Minérios", "minerio"),
-        ]
-        for label, chave in categorias:
-            botao = ui.Button(label=label, style=discord.ButtonStyle.primary)
+        for chave, dados in INVENTARIO_ESTRUTURA.items():
+            botao = ui.Button(label=dados["nome"], emoji=dados["emoji"], style=discord.ButtonStyle.primary)
             async def cb(interaction, categoria=chave):
                 if interaction.user.id != self.usuario.id:
-                    await interaction.response.send_message("Esse inventário não é seu!", ephemeral=True)
+                    await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
                     return
-                view = ViewInventarioCategoria(self.usuario, categoria, self)
+                view = ViewMochilaSubcategorias(self.usuario, categoria, self)
                 await interaction.response.edit_message(view=view)
             botao.callback = cb
             linha.add_item(botao)
         container.add_item(linha)
+
+        btn_fechar = ui.Button(label="❌ Fechar", style=discord.ButtonStyle.danger)
+        async def fechar_cb(interaction):
+            await interaction.response.defer()
+            await interaction.delete_original_response()
+        btn_fechar.callback = fechar_cb
+        linha_fechar = ui.ActionRow()
+        linha_fechar.add_item(btn_fechar)
+        container.add_item(linha_fechar)
+
         self.add_item(container)
 
 
-class ViewInventarioCategoria(ui.LayoutView):
-    def __init__(self, usuario: discord.Member, categoria: str, view_menu: ViewInventarioMenu):
+class ViewMochilaSubcategorias(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, categoria: str, view_menu: ViewMochilaMenu):
         super().__init__(timeout=120)
         self.usuario = usuario
         self.categoria = categoria
@@ -2213,58 +2343,75 @@ class ViewInventarioCategoria(ui.LayoutView):
 
     def montar(self):
         self.clear_items()
-        titulos = {
-            "banner": "🖼️ Banners", "ferramenta": "⚒️ Ferramentas",
-            "equipamento": "🛡️ Equipamento", "consumivel": "☕ Consumíveis",
-            "minerio": "💎 Minérios",
-        }
+        dados_categoria = INVENTARIO_ESTRUTURA[self.categoria]
+
         container = ui.Container()
         container.accent_color = discord.Colour.blurple()
-        container.add_item(ui.TextDisplay(f"### {titulos[self.categoria]}\n-# {self.usuario.display_name}"))
+        descricao = "\n".join(
+            f"{sub['emoji']} **{sub['nome']}**" for sub in dados_categoria["subcategorias"].values()
+        )
+        container.add_item(ui.TextDisplay(f"### {dados_categoria['emoji']} {dados_categoria['nome']}\n{descricao}"))
         container.add_item(ui.Separator())
 
-        if self.categoria == "banner":
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("""
-                SELECT b.nome FROM banners_usuarios bu JOIN banners b ON bu.banner_id = b.id
-                WHERE bu.usuario_id = ? ORDER BY b.nome
-            """, (str(self.usuario.id),))
-            banners = [r[0] for r in cur.fetchall()]
-            con.close()
-            container.add_item(ui.TextDisplay("\n".join(f"- {n}" for n in banners) if banners else "Você não possui nenhum banner."))
+        linha = ui.ActionRow()
+        for chave_sub, sub in dados_categoria["subcategorias"].items():
+            botao = ui.Button(label=sub["nome"], emoji=sub["emoji"], style=discord.ButtonStyle.secondary)
+            async def cb(interaction, subcategoria=chave_sub):
+                if interaction.user.id != self.usuario.id:
+                    await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                    return
+                view = ViewMochilaItens(self.usuario, self.categoria, subcategoria, self)
+                await interaction.response.edit_message(view=view)
+            botao.callback = cb
+            linha.add_item(botao)
+        container.add_item(linha)
 
-        elif self.categoria == "ferramenta":
-            stats = buscar_stats(self.usuario.id)
-            dinamite_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Dinamite")
-            container.add_item(ui.TextDisplay(
-                f"⛏️ **Picareta** — {stats['picareta_usos']} uso(s) restante(s)\n"
-                f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)"
-            ))
-
-        elif self.categoria == "equipamento":
-            stats = buscar_stats(self.usuario.id)
-            texto = "🪖 **Capacete** — " + ("Equipado ✅" if stats["tem_capacete"] else "Não possui ❌")
-            container.add_item(ui.TextDisplay(texto))
-
-        elif self.categoria == "consumivel":
-            marmita_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Marmita")
-            pimenta_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Pimenta")
-            container.add_item(ui.TextDisplay(
-                f"🍱 **Marmita** — {marmita_qtd} unidade(s)\n"
-                f"🌶️ **Pimenta** — {pimenta_qtd} unidade(s)"
-            ))
-
-        elif self.categoria == "minerio":
-            minerios = buscar_minerios_usuario(self.usuario.id)
-            container.add_item(ui.TextDisplay(
-                "\n".join(f"- {n}: {q}" for n, q in minerios) if minerios else "Você não possui nenhum minério."
-            ))
-
-        btn_voltar = ui.Button(label="🔙 Fechar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
-            await interaction.response.defer()
-            await interaction.delete_original_response()
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                return
+            self.view_menu.montar()
+            await interaction.response.edit_message(view=self.view_menu)
+        btn_voltar.callback = voltar_cb
+        linha_voltar = ui.ActionRow()
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
+
+
+class ViewMochilaItens(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, categoria: str, subcategoria: str, view_subcategorias: ViewMochilaSubcategorias):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.categoria = categoria
+        self.subcategoria = subcategoria
+        self.view_subcategorias = view_subcategorias
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        dados_sub = INVENTARIO_ESTRUTURA[self.categoria]["subcategorias"][self.subcategoria]
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.blurple()
+        container.add_item(ui.TextDisplay(f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"))
+        container.add_item(ui.Separator())
+
+        itens = buscar_itens_mochila(self.usuario, self.categoria, self.subcategoria)
+        if itens:
+            container.add_item(ui.TextDisplay("\n".join(itens)))
+        else:
+            container.add_item(ui.TextDisplay("Você não possui nenhum item nesta subcategoria."))
+
+        btn_voltar = ui.Button(label="🔙 Voltar", style=discord.ButtonStyle.danger)
+        async def voltar_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                return
+            self.view_subcategorias.montar()
+            await interaction.response.edit_message(view=self.view_subcategorias)
         btn_voltar.callback = voltar_cb
         linha_voltar = ui.ActionRow()
         linha_voltar.add_item(btn_voltar)
@@ -3864,7 +4011,7 @@ class ViewPets(discord.ui.LayoutView):
 # VIEW (BOTÕES) - Inventário de banner
 # ============================================================
 
-class ViewInventarioBanners(discord.ui.View):
+class ViewMochilaBanners(discord.ui.View):
     def __init__(self, usuario: discord.Member, pagina: int = 0):
         super().__init__(timeout=120)
         self.usuario = usuario
@@ -5426,12 +5573,12 @@ async def minerar(ctx):
     view = ViewMinerarInicio(ctx.author.id, ctx)
     await ctx.send(view=view)
 
-@bot.command(name="inventario")
-async def inventario(ctx, membro: discord.Member = None):
+@bot.command(name="mochila")
+async def mochila(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
     garantir_stats(membro.id)
-    view = ViewInventarioMenu(membro)
+    view = ViewMochilaMenu(membro)
     await ctx.send(view=view)
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
