@@ -278,12 +278,26 @@ MISSOES_SEMANAIS = [
 # ITENS DE MINERAÇÃO — Loja e sistema de mineração
 # ============================================================
 ITENS_MINERACAO = {
-    "Picareta": {
-        "emoji": "⛏️",
+    "Picareta  Enferrujada": {
+        "emoji": "<:PicaretaEnferrujadaIcon:1532975172359815168>",
         "subcategoria": "Ferramentas",
         "preco": 1000,
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
+    },
+    "Picareta": {
+        "emoji": "<:PicaretaIcon:1532959065641062410>",
+        "subcategoria": "Ferramentas",
+        "preco": 2000,
+        "descricao": "Necessária para minerar. Aguenta 20 usos.",
+        "usos": 20,
+    },
+    "Picareta Fortificada": {
+        "emoji": "<:PicaretaFortificadaIcon:1532962738257662193>",
+        "subcategoria": "Ferramentas",
+        "preco": 4500,
+        "descricao": "Necessária para minerar. Aguenta 35 usos.",
+        "usos": 35,
     },
     "Dinamite": {
         "emoji": "🧨",
