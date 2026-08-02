@@ -305,11 +305,17 @@ ITENS_MINERACAO = {
         "preco": 30000,
         "descricao": "Minera instantaneamente. 10% de chance de falhar.",
     },
-    "Capacete": {
-        "emoji": "🪖",
+    "Capacete Antigo AINDA EM PROCESSO": {
+        "emoji": "<:CapaceteAntigoIcon:1533279462043418684>",
         "subcategoria": "Equipamento",
-        "preco": 2500,
+        "preco": 99999999,
         "descricao": "Aumenta o HP máximo em 30 pontos.",
+    },
+    "Capacete": {
+        "emoji": "<:CapaceteMedioIcon:1533279479353446480>",
+        "subcategoria": "Equipamento",
+        "preco": 4500,
+        "descricao": "Aumenta o HP máximo em 50 pontos.",
     },
     "Marmita": {
         "emoji": "🍱",
@@ -958,7 +964,7 @@ def buscar_itens_mochila(usuario, categoria, subcategoria):
 
     if categoria == "minerar" and subcategoria == "equipamentos":
         stats = buscar_stats(usuario_id)
-        return ["🪖 **Capacete** — Equipado ✅"] if stats["tem_capacete"] else None
+        return ["<:CapaceteMedioIcon:1533279479353446480> **Capacete** — Equipado ✅"] if stats["tem_capacete"] else None
 
     if categoria == "minerar" and subcategoria == "consumiveis":
         marmita_qtd = buscar_qtd_item_mineracao(usuario_id, "Marmita")
