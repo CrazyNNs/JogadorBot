@@ -309,13 +309,15 @@ ITENS_MINERACAO = {
         "emoji": "<:CapaceteAntigoIcon:1533279462043418684>",
         "subcategoria": "Equipamento",
         "preco": 99999999,
-        "descricao": "Aumenta o HP máximo em 30 pontos.",
+        "descricao": "Absorve até 80 de dano antes de quebrar.",
+        "durabilidade": 80,
     },
     "Capacete": {
         "emoji": "<:CapaceteMedioIcon:1533279479353446480>",
         "subcategoria": "Equipamento",
         "preco": 4500,
-        "descricao": "Aumenta o HP máximo em 50 pontos.",
+        "descricao": "Absorve até 150 de dano antes de quebrar.",
+        "durabilidade": 150,
     },
     "Marmita": {
         "emoji": "🍱",
@@ -351,7 +353,6 @@ MONSTROS = {
 MINERACAO_ATIVAS = set()  # IDs de usuários minerando no momento
 
 HP_MAXIMO_BASE = 100
-HP_BONUS_CAPACETE = 30
 DANO_BASE_MIN = 15
 DANO_BASE_MAX = 20
 BONUS_DANO_PIMENTA = 0.30
@@ -669,6 +670,30 @@ def iniciar_banco():
         cur.execute("ALTER TABLE usuario_stats ADD COLUMN pimenta_ativa INTEGER DEFAULT 0")
     except:
         pass
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS equipamentos_usuario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id TEXT NOT NULL,
+            item_nome TEXT NOT NULL,
+            durabilidade_atual INTEGER NOT NULL,
+            equipado INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    # Migração única: quem já tinha o Capacete antigo (tem_capacete = 1) ganha
+    # o item correspondente já equipado no novo sistema, sem perder o que comprou.
+    cur.execute("SELECT usuario_id FROM usuario_stats WHERE tem_capacete = 1")
+    usuarios_com_capacete_antigo = cur.fetchall()
+    for (uid,) in usuarios_com_capacete_antigo:
+        cur.execute("SELECT 1 FROM equipamentos_usuario WHERE usuario_id = ? AND item_nome = ?", (uid, "Capacete"))
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO equipamentos_usuario (usuario_id, item_nome, durabilidade_atual, equipado) VALUES (?, ?, ?, 1)",
+                (uid, "Capacete", ITENS_MINERACAO["Capacete"]["durabilidade"])
+            )
+    cur.execute("UPDATE usuario_stats SET tem_capacete = 0")
+    con.commit()
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_usuarios_mineracao (
@@ -961,10 +986,6 @@ def buscar_itens_mochila(usuario, categoria, subcategoria):
         if dinamite_qtd > 0:
             itens.append(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)")
         return itens or None
-
-    if categoria == "minerar" and subcategoria == "equipamentos":
-        stats = buscar_stats(usuario_id)
-        return ["<:CapaceteMedioIcon:1533279479353446480> **Capacete** — Equipado ✅"] if stats["tem_capacete"] else None
 
     if categoria == "minerar" and subcategoria == "consumiveis":
         marmita_qtd = buscar_qtd_item_mineracao(usuario_id, "Marmita")
@@ -1562,8 +1583,7 @@ def tempo_restante_minerar(usuario_id):
     return True, None, None
 
 def hp_maximo(usuario_id):
-    stats = buscar_stats(usuario_id)
-    return HP_MAXIMO_BASE + (HP_BONUS_CAPACETE if stats["tem_capacete"] else 0)
+    return HP_MAXIMO_BASE
 
 def atualizar_hp(usuario_id, novo_hp):
     garantir_stats(usuario_id)
@@ -1575,6 +1595,74 @@ def atualizar_hp(usuario_id, novo_hp):
     con.commit()
     con.close()
     return novo_hp
+
+def buscar_equipamentos_usuario(usuario_id):
+    """Lista todos os equipamentos que o usuário possui (equipado ou guardado)."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute(
+        "SELECT id, item_nome, durabilidade_atual, equipado FROM equipamentos_usuario "
+        "WHERE usuario_id = ? ORDER BY equipado DESC, id",
+        (str(usuario_id),)
+    )
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def buscar_equipamento_ativo(usuario_id):
+    """Retorna (id, item_nome, durabilidade_atual) do equipamento equipado, ou None."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute(
+        "SELECT id, item_nome, durabilidade_atual FROM equipamentos_usuario WHERE usuario_id = ? AND equipado = 1",
+        (str(usuario_id),)
+    )
+    resultado = cur.fetchone()
+    con.close()
+    return resultado
+
+def equipar_item(usuario_id, equipamento_id):
+    """Equipa um item da mochila, desequipando qualquer outro que o usuário tivesse."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE equipamentos_usuario SET equipado = 0 WHERE usuario_id = ?", (str(usuario_id),))
+    cur.execute("UPDATE equipamentos_usuario SET equipado = 1 WHERE id = ? AND usuario_id = ?",
+                (equipamento_id, str(usuario_id)))
+    con.commit()
+    con.close()
+
+def sofrer_dano_mineracao(usuario_id, dano):
+    """
+    Aplica dano ao jogador. Se houver um equipamento equipado, ele absorve o dano
+    primeiro (como um escudo) e quebra se a durabilidade zerar.
+    Retorna (novo_hp, texto_extra_para_mensagem, equipamento_quebrou).
+    """
+    equipamento = buscar_equipamento_ativo(usuario_id)
+    texto_extra = ""
+    quebrou = False
+
+    if equipamento:
+        equip_id, item_nome, durabilidade_atual = equipamento
+        absorvido = min(dano, durabilidade_atual)
+        dano = dano - absorvido
+        nova_durabilidade = durabilidade_atual - absorvido
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        if nova_durabilidade <= 0:
+            cur.execute("DELETE FROM equipamentos_usuario WHERE id = ?", (equip_id,))
+            quebrou = True
+            texto_extra = f"\n🛡️ Seu **{item_nome}** absorveu {absorvido} de dano e **quebrou**!"
+        else:
+            cur.execute("UPDATE equipamentos_usuario SET durabilidade_atual = ? WHERE id = ?",
+                        (nova_durabilidade, equip_id))
+            texto_extra = f"\n🛡️ Seu **{item_nome}** absorveu {absorvido} de dano ({nova_durabilidade} restante(s))."
+        con.commit()
+        con.close()
+
+    stats = buscar_stats(usuario_id)
+    novo_hp = atualizar_hp(usuario_id, stats["hp_atual"] - dano)
+    return novo_hp, texto_extra, quebrou
 
 def adicionar_joyogens(usuario_id, quantidade):
     garantir_stats(usuario_id)
@@ -1635,24 +1723,30 @@ def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
     remover_joyens(usuario_id, preco)
     garantir_stats(usuario_id)
 
-    if item_nome == "Picareta":
+    if item["subcategoria"] == "Ferramentas" and "usos" in item:
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("UPDATE usuario_stats SET picareta_usos = picareta_usos + ? WHERE usuario_id = ?",
                     (item["usos"], str(usuario_id)))
         con.commit()
         con.close()
-    elif item_nome == "Capacete":
+        return True, f"**{item_nome}** comprado com sucesso por {preco} Joyens!"
+
+    if item["subcategoria"] == "Equipamento":
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
-        cur.execute("UPDATE usuario_stats SET tem_capacete = 1 WHERE usuario_id = ?", (str(usuario_id),))
+        cur.execute(
+            "INSERT INTO equipamentos_usuario (usuario_id, item_nome, durabilidade_atual, equipado) VALUES (?, ?, ?, 0)",
+            (str(usuario_id), item_nome, item.get("durabilidade", 0))
+        )
         con.commit()
         con.close()
-        stats_atual = buscar_stats(usuario_id)
-        atualizar_hp(usuario_id, stats_atual["hp_atual"] + HP_BONUS_CAPACETE)
-    else:
-        adicionar_item_mineracao(usuario_id, item_nome, 1)
+        return True, (
+            f"**{item_nome}** comprado e guardado na sua mochila! "
+            f"Use `!mochila` → ⛏️ Minerar → 🛡️ Equipamento para equipar."
+        )
 
+    adicionar_item_mineracao(usuario_id, item_nome, 1)
     return True, f"**{item_nome}** comprado com sucesso por {preco} Joyens!"
 
 def buscar_minerios_usuario(usuario_id):
@@ -2431,11 +2525,47 @@ class ViewMochilaItens(ui.LayoutView):
         container.add_item(ui.TextDisplay(f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"))
         container.add_item(ui.Separator())
 
-        itens = buscar_itens_mochila(self.usuario, self.categoria, self.subcategoria)
-        if itens:
-            container.add_item(ui.TextDisplay("\n".join(itens)))
+        if self.categoria == "minerar" and self.subcategoria == "equipamentos":
+            equipamentos = buscar_equipamentos_usuario(self.usuario.id)
+            if not equipamentos:
+                container.add_item(ui.TextDisplay(
+                    "Você não possui nenhum equipamento.\nCompre um em `!loja` → ⛏️ Mineração → 🛡️ Equipamento."
+                ))
+            else:
+                for equip_id, item_nome, durabilidade_atual, equipado in equipamentos:
+                    dados_item = ITENS_MINERACAO.get(item_nome, {})
+                    durabilidade_max = dados_item.get("durabilidade", durabilidade_atual)
+                    status = "✅ Equipado" if equipado else "Guardado na mochila"
+                    texto_item = (
+                        f"{dados_item.get('emoji', '🛡️')} **{item_nome}**\n"
+                        f"-# {durabilidade_atual}/{durabilidade_max} de durabilidade · {status}"
+                    )
+
+                    botao_equip = ui.Button(
+                        label="Equipado" if equipado else "Equipar",
+                        style=discord.ButtonStyle.secondary if equipado else discord.ButtonStyle.success,
+                        disabled=bool(equipado)
+                    )
+
+                    def criar_equipar_cb(equip_id_local):
+                        async def equipar_cb(interaction):
+                            if interaction.user.id != self.usuario.id:
+                                await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                                return
+                            equipar_item(self.usuario.id, equip_id_local)
+                            self.montar()
+                            await interaction.response.edit_message(view=self)
+                        return equipar_cb
+
+                    botao_equip.callback = criar_equipar_cb(equip_id)
+                    container.add_item(ui.Section(ui.TextDisplay(texto_item), accessory=botao_equip))
+                    container.add_item(ui.Separator())
         else:
-            container.add_item(ui.TextDisplay("Você não possui nenhum item nesta subcategoria."))
+            itens = buscar_itens_mochila(self.usuario, self.categoria, self.subcategoria)
+            if itens:
+                container.add_item(ui.TextDisplay("\n".join(itens)))
+            else:
+                container.add_item(ui.TextDisplay("Você não possui nenhum item nesta subcategoria."))
 
         btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
         async def voltar_cb(interaction):
@@ -2647,6 +2777,10 @@ class ViewMinerarInicio(ui.LayoutView):
             f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
             f"⛏️ **Usos da picareta:** {stats['picareta_usos']}"
         )
+        equipamento_ativo = buscar_equipamento_ativo(self.usuario_id)
+        if equipamento_ativo:
+            _, nome_equip, durabilidade_equip = equipamento_ativo
+            texto += f"\n🛡️ **{nome_equip}:** {durabilidade_equip} de durabilidade"
         if stats["pimenta_ativa"]:
             texto += "\n🌶️ **Bônus de dano ativo!**"
         if not pode_minerar and timestamp_liberacao:
@@ -3093,10 +3227,13 @@ class ViewMineracao(ui.LayoutView):
                     await self.atualizar_mensagem()
                     continue
             else:
+                else:
                 monstro = MONSTROS[self.monstro_atual]
-                stats = buscar_stats(self.usuario_id)
-                novo_hp = atualizar_hp(self.usuario_id, stats["hp_atual"] - monstro["dano"])
-                self.texto_status = f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou causando {monstro['dano']} de dano!"
+                novo_hp, texto_extra, quebrou = sofrer_dano_mineracao(self.usuario_id, monstro["dano"])
+                self.texto_status = (
+                    f"Você não atacou a tempo! O **{self.monstro_atual}** te acertou "
+                    f"causando {monstro['dano']} de dano!{texto_extra}"
+                )
                 self.btn_atacar.label = "⚔️ Atacar"
 
                 if novo_hp <= 0:
