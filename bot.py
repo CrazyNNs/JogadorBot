@@ -3226,7 +3226,6 @@ class ViewMineracao(ui.LayoutView):
                     self.texto_status = f"O **{self.monstro_atual}** ainda tem {max(0, self.monstro_hp)} HP e se prepara para atacar novamente!"
                     await self.atualizar_mensagem()
                     continue
-            else:
                 else:
                 monstro = MONSTROS[self.monstro_atual]
                 novo_hp, texto_extra, quebrou = sofrer_dano_mineracao(self.usuario_id, monstro["dano"])
