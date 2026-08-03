@@ -305,10 +305,10 @@ ITENS_MINERACAO = {
         "preco": 30000,
         "descricao": "Minera instantaneamente. 10% de chance de falhar.",
     },
-    "Capacete Antigo AINDA EM PROCESSO": {
+    "Capacete Antigo": {
         "emoji": "<:CapaceteAntigoIcon:1533279462043418684>",
         "subcategoria": "Equipamento",
-        "preco": 99999999,
+        "preco": 2500,
         "descricao": "Absorve até 80 de dano antes de quebrar.",
         "durabilidade": 80,
     },
