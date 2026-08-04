@@ -694,6 +694,30 @@ def iniciar_banco():
             )
     cur.execute("UPDATE usuario_stats SET tem_capacete = 0")
     con.commit()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ferramentas_usuario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id TEXT NOT NULL,
+            item_nome TEXT NOT NULL,
+            usos_restantes INTEGER NOT NULL,
+            equipado INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    # Migração única: quem já tinha usos de picareta soltos (picareta_usos) ganha
+    # uma "Picareta" já equipada no novo sistema, sem perder o progresso.
+    cur.execute("SELECT usuario_id, picareta_usos FROM usuario_stats WHERE picareta_usos > 0")
+    usuarios_com_picareta_antiga = cur.fetchall()
+    for uid, usos in usuarios_com_picareta_antiga:
+        cur.execute("SELECT 1 FROM ferramentas_usuario WHERE usuario_id = ? AND item_nome = ?", (uid, "Picareta"))
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO ferramentas_usuario (usuario_id, item_nome, usos_restantes, equipado) VALUES (?, ?, ?, 1)",
+                (uid, "Picareta", usos)
+            )
+    cur.execute("UPDATE usuario_stats SET picareta_usos = 0")
+    con.commit()
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS itens_usuarios_mineracao (
@@ -978,11 +1002,8 @@ def buscar_itens_mochila(usuario, categoria, subcategoria):
         return [f"🧼 **Sabonete** — {qtd} unidade(s)"] if qtd > 0 else None
 
     if categoria == "minerar" and subcategoria == "ferramentas":
-        stats = buscar_stats(usuario_id)
         dinamite_qtd = buscar_qtd_item_mineracao(usuario_id, "Dinamite")
         itens = []
-        if stats["picareta_usos"] > 0:
-            itens.append(f"⛏️ **Picareta** — {stats['picareta_usos']} uso(s) restante(s)")
         if dinamite_qtd > 0:
             itens.append(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)")
         return itens or None
@@ -1631,6 +1652,41 @@ def equipar_item(usuario_id, equipamento_id):
     con.commit()
     con.close()
 
+def buscar_ferramentas_usuario(usuario_id):
+    """Lista todas as ferramentas (picaretas) que o usuário possui (equipada ou guardada)."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute(
+        "SELECT id, item_nome, usos_restantes, equipado FROM ferramentas_usuario "
+        "WHERE usuario_id = ? ORDER BY equipado DESC, id",
+        (str(usuario_id),)
+    )
+    resultado = cur.fetchall()
+    con.close()
+    return resultado
+
+def buscar_ferramenta_ativa(usuario_id):
+    """Retorna (id, item_nome, usos_restantes) da ferramenta equipada, ou None."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute(
+        "SELECT id, item_nome, usos_restantes FROM ferramentas_usuario WHERE usuario_id = ? AND equipado = 1",
+        (str(usuario_id),)
+    )
+    resultado = cur.fetchone()
+    con.close()
+    return resultado
+
+def equipar_ferramenta(usuario_id, ferramenta_id):
+    """Equipa uma ferramenta da mochila, desequipando qualquer outra que o usuário tivesse."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE ferramentas_usuario SET equipado = 0 WHERE usuario_id = ?", (str(usuario_id),))
+    cur.execute("UPDATE ferramentas_usuario SET equipado = 1 WHERE id = ? AND usuario_id = ?",
+                (ferramenta_id, str(usuario_id)))
+    con.commit()
+    con.close()
+
 def sofrer_dano_mineracao(usuario_id, dano):
     """
     Aplica dano ao jogador. Se houver um equipamento equipado, ele absorve o dano
@@ -1726,11 +1782,16 @@ def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
     if item["subcategoria"] == "Ferramentas" and "usos" in item:
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
-        cur.execute("UPDATE usuario_stats SET picareta_usos = picareta_usos + ? WHERE usuario_id = ?",
-                    (item["usos"], str(usuario_id)))
+        cur.execute(
+            "INSERT INTO ferramentas_usuario (usuario_id, item_nome, usos_restantes, equipado) VALUES (?, ?, ?, 0)",
+            (str(usuario_id), item_nome, item["usos"])
+        )
         con.commit()
         con.close()
-        return True, f"**{item_nome}** comprado com sucesso por {preco} Joyens!"
+        return True, (
+            f"**{item_nome}** comprado e guardado na sua mochila! "
+            f"Use `!mochila` → ⛏️ Minerar → 🔧 Ferramentas para equipar."
+        )
 
     if item["subcategoria"] == "Equipamento":
         con = sqlite3.connect("jogadorbot.db")
@@ -2525,6 +2586,8 @@ class ViewMochilaItens(ui.LayoutView):
         container.add_item(ui.TextDisplay(f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"))
         container.add_item(ui.Separator())
 
+        em_mineracao = self.usuario.id in MINERACAO_ATIVAS
+
         if self.categoria == "minerar" and self.subcategoria == "equipamentos":
             equipamentos = buscar_equipamentos_usuario(self.usuario.id)
             if not equipamentos:
@@ -2532,6 +2595,8 @@ class ViewMochilaItens(ui.LayoutView):
                     "Você não possui nenhum equipamento.\nCompre um em `!loja` → ⛏️ Mineração → 🛡️ Equipamento."
                 ))
             else:
+                if em_mineracao:
+                    container.add_item(ui.TextDisplay("-# ⛏️ Você está minerando — não é possível trocar de equipamento agora."))
                 for equip_id, item_nome, durabilidade_atual, equipado in equipamentos:
                     dados_item = ITENS_MINERACAO.get(item_nome, {})
                     durabilidade_max = dados_item.get("durabilidade", durabilidade_atual)
@@ -2544,13 +2609,18 @@ class ViewMochilaItens(ui.LayoutView):
                     botao_equip = ui.Button(
                         label="Equipado" if equipado else "Equipar",
                         style=discord.ButtonStyle.secondary if equipado else discord.ButtonStyle.success,
-                        disabled=bool(equipado)
+                        disabled=bool(equipado) or em_mineracao
                     )
 
                     def criar_equipar_cb(equip_id_local):
                         async def equipar_cb(interaction):
                             if interaction.user.id != self.usuario.id:
                                 await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                                return
+                            if self.usuario.id in MINERACAO_ATIVAS:
+                                await interaction.response.send_message(
+                                    "❌ Você não pode trocar de equipamento enquanto está minerando!", ephemeral=True
+                                )
                                 return
                             equipar_item(self.usuario.id, equip_id_local)
                             self.montar()
@@ -2560,6 +2630,54 @@ class ViewMochilaItens(ui.LayoutView):
                     botao_equip.callback = criar_equipar_cb(equip_id)
                     container.add_item(ui.Section(ui.TextDisplay(texto_item), accessory=botao_equip))
                     container.add_item(ui.Separator())
+
+        elif self.categoria == "minerar" and self.subcategoria == "ferramentas":
+            ferramentas = buscar_ferramentas_usuario(self.usuario.id)
+            dinamite_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Dinamite")
+
+            if not ferramentas and dinamite_qtd <= 0:
+                container.add_item(ui.TextDisplay(
+                    "Você não possui nenhuma ferramenta.\nCompre uma em `!loja` → ⛏️ Mineração → 🔧 Ferramentas."
+                ))
+            else:
+                if em_mineracao and ferramentas:
+                    container.add_item(ui.TextDisplay("-# ⛏️ Você está minerando — não é possível trocar de picareta agora."))
+                for ferr_id, item_nome, usos_atual, equipado in ferramentas:
+                    dados_item = ITENS_MINERACAO.get(item_nome, {})
+                    usos_max = dados_item.get("usos", usos_atual)
+                    status = "✅ Equipada" if equipado else "Guardada na mochila"
+                    texto_item = (
+                        f"{dados_item.get('emoji', '⛏️')} **{item_nome}**\n"
+                        f"-# {usos_atual}/{usos_max} usos restantes · {status}"
+                    )
+
+                    botao_equip = ui.Button(
+                        label="Equipada" if equipado else "Equipar",
+                        style=discord.ButtonStyle.secondary if equipado else discord.ButtonStyle.success,
+                        disabled=bool(equipado) or em_mineracao
+                    )
+
+                    def criar_equipar_ferramenta_cb(ferr_id_local):
+                        async def equipar_cb(interaction):
+                            if interaction.user.id != self.usuario.id:
+                                await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
+                                return
+                            if self.usuario.id in MINERACAO_ATIVAS:
+                                await interaction.response.send_message(
+                                    "❌ Você não pode trocar de picareta enquanto está minerando!", ephemeral=True
+                                )
+                                return
+                            equipar_ferramenta(self.usuario.id, ferr_id_local)
+                            self.montar()
+                            await interaction.response.edit_message(view=self)
+                        return equipar_cb
+
+                    botao_equip.callback = criar_equipar_ferramenta_cb(ferr_id)
+                    container.add_item(ui.Section(ui.TextDisplay(texto_item), accessory=botao_equip))
+                    container.add_item(ui.Separator())
+
+                if dinamite_qtd > 0:
+                    container.add_item(ui.TextDisplay(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)"))
         else:
             itens = buscar_itens_mochila(self.usuario, self.categoria, self.subcategoria)
             if itens:
@@ -2771,12 +2889,15 @@ class ViewMinerarInicio(ui.LayoutView):
         sem_hp = stats["hp_atual"] <= 0
 
         container = ui.Container()
+        container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
-        texto = (
-            f"# 🪨 Mineração\n"
-            f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
-            f"⛏️ **Usos da picareta:** {stats['picareta_usos']}"
-        )
+        ferramenta_ativa = buscar_ferramenta_ativa(self.usuario_id)
+        texto = f"# 🪨 Mineração\n❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}"
+        if ferramenta_ativa:
+            _, nome_ferramenta, usos_ferramenta = ferramenta_ativa
+            texto += f"\n⛏️ **{nome_ferramenta}:** {usos_ferramenta} uso(s) restante(s)"
+        else:
+            texto += "\n⛏️ **Nenhuma picareta equipada!**"
         equipamento_ativo = buscar_equipamento_ativo(self.usuario_id)
         if equipamento_ativo:
             _, nome_equip, durabilidade_equip = equipamento_ativo
@@ -2787,6 +2908,8 @@ class ViewMinerarInicio(ui.LayoutView):
             texto += f"\n\n⏳ Próxima mineração: <t:{timestamp_liberacao}:R>"
         if sem_hp:
             texto += "\n\n💀 Seu HP está zerado! Use uma Marmita para se recuperar antes de minerar."
+        if not ferramenta_ativa:
+            texto += "\n\n⚠️ Equipe uma picareta em `!mochila` → ⛏️ Minerar → 🔧 Ferramentas antes de minerar."
         container.add_item(ui.TextDisplay(texto))
         container.add_item(ui.Separator())
 
@@ -2794,7 +2917,7 @@ class ViewMinerarInicio(ui.LayoutView):
         btn_comecar = ui.Button(
             label="▶️ Começar",
             style=discord.ButtonStyle.success,
-            disabled=(stats["picareta_usos"] <= 0) or sem_hp
+            disabled=(not ferramenta_ativa) or sem_hp
         )
         btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
         btn_consumir = ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
@@ -2812,8 +2935,11 @@ class ViewMinerarInicio(ui.LayoutView):
                 if stats_atual["hp_atual"] <= 0:
                     await interaction.response.send_message("❌ Seu HP está zerado! Use uma Marmita antes de minerar.", ephemeral=True)
                     return
-                if stats_atual["picareta_usos"] <= 0:
-                    await interaction.response.send_message("❌ Você não tem uma picareta! Compre uma em `!loja` na categoria ⛏️ Mineração.", ephemeral=True)
+                if not buscar_ferramenta_ativa(self.usuario_id):
+                    await interaction.response.send_message(
+                        "❌ Você não tem uma picareta equipada! Vá em `!mochila` → ⛏️ Minerar → 🔧 Ferramentas.",
+                        ephemeral=True
+                    )
                     return
                 MINERACAO_ATIVAS.add(self.usuario_id)
                 view = ViewMineracao(self.usuario_id, self.ctx)
@@ -3016,7 +3142,13 @@ class ViewMineracao(ui.LayoutView):
 
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
-        container.add_item(ui.TextDisplay(f"### ⛏️ Mineração\n{self.texto_status}"))
+
+        cabecalho = "### ⛏️ Mineração"
+        if self.monstro_atual and self.em_combate:
+            monstro_dados = MONSTROS[self.monstro_atual]
+            cabecalho += f"\n👾 **{self.monstro_atual}:** {max(0, self.monstro_hp)} HP | {monstro_dados['dano']} Dano"
+        cabecalho += f"\n{self.texto_status}"
+        container.add_item(ui.TextDisplay(cabecalho))
 
         if os.path.exists(self.imagem_atual):
             container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{self.imagem_atual}")))
@@ -3026,8 +3158,6 @@ class ViewMineracao(ui.LayoutView):
             f"💎 **Joyogens:** {self.joyogens_ganhas}\n"
             f"📊 **Progresso:** `{barra}` {pct}%"
         )
-        if self.monstro_atual and self.em_combate:
-            status_texto += f"\n👾 **{self.monstro_atual} HP:** {max(0, self.monstro_hp)}"
         if self.minerios_ganhos:
             status_texto += "\n\n**Minérios coletados:**\n" + "\n".join(
                 f"- {n}: {q}" for n, q in self.minerios_ganhos.items()
@@ -3096,12 +3226,20 @@ class ViewMineracao(ui.LayoutView):
                 continue
             self.tick += 1
 
-            stats = buscar_stats(self.usuario_id)
-            novo_usos = stats["picareta_usos"] - 1
+            ferramenta_ativa = buscar_ferramenta_ativa(self.usuario_id)
+            if not ferramenta_ativa:
+                await self.picareta_quebrou()
+                return
+
+            ferramenta_id, ferramenta_nome, usos_atuais = ferramenta_ativa
+            novo_usos = usos_atuais - 1
             con = sqlite3.connect("jogadorbot.db")
             cur = con.cursor()
-            cur.execute("UPDATE usuario_stats SET picareta_usos = ? WHERE usuario_id = ?",
-                        (max(0, novo_usos), str(self.usuario_id)))
+            if novo_usos <= 0:
+                cur.execute("DELETE FROM ferramentas_usuario WHERE id = ?", (ferramenta_id,))
+            else:
+                cur.execute("UPDATE ferramentas_usuario SET usos_restantes = ? WHERE id = ?",
+                            (novo_usos, ferramenta_id))
             con.commit()
             con.close()
 
@@ -3290,7 +3428,19 @@ class ViewMineracao(ui.LayoutView):
             if not sucesso:
                 await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
                 return
-            await interaction.response.send_message("✅ Nova picareta comprada! Continuando a mineração...", ephemeral=True)
+
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute(
+                "SELECT id FROM ferramentas_usuario WHERE usuario_id = ? AND item_nome = ? AND equipado = 0 ORDER BY id DESC LIMIT 1",
+                (str(self.usuario_id), "Picareta")
+            )
+            nova_ferramenta = cur.fetchone()
+            con.close()
+            if nova_ferramenta:
+                equipar_ferramenta(self.usuario_id, nova_ferramenta[0])
+
+            await interaction.response.send_message("✅ Nova picareta comprada e equipada! Continuando a mineração...", ephemeral=True)
             self.btn_dinamite.disabled = not (buscar_qtd_item_mineracao(self.usuario_id, "Dinamite") > 0)
             self.btn_parar.disabled = False
             self.texto_status = "⛏️ Picareta trocada! Você volta a minerar..."
