@@ -345,9 +345,9 @@ MINERIOS = {
 }
 
 MONSTROS = {
-    "Morcego": {"hp": 30, "dano": 5, "imagem": "atkmorcego1.png", "mensagem": "🦇 Um morcego surge das sombras e ataca!"},
-    "Slime":   {"hp": 50, "dano": 9, "imagem": "atkslime1.png", "mensagem": "🟢 Um slime pulou em sua direção!"},
-    "Cobra":   {"hp": 60, "dano": 13, "imagem": "atkcobra1.png", "mensagem": "🐍 Uma cobra venenosa ataca do nada!"},
+    "Morcego": {"hp": 30, "dano": 5, "emoji": "🦇", "imagem": "atkmorcego1.png", "mensagem": "🦇 Um morcego surge das sombras e ataca!"},
+    "Slime":   {"hp": 50, "dano": 9, "emoji": "🟢", "imagem": "atkslime1.png", "mensagem": "🟢 Um slime pulou em sua direção!"},
+    "Cobra":   {"hp": 60, "dano": 13, "emoji": "🐍", "imagem": "atkcobra1.png", "mensagem": "🐍 Uma cobra venenosa ataca do nada!"},
 }
 
 MINERACAO_ATIVAS = set()  # IDs de usuários minerando no momento
@@ -1687,6 +1687,13 @@ def equipar_ferramenta(usuario_id, ferramenta_id):
     con.commit()
     con.close()
 
+def mensagem_sem_picareta(usuario_id):
+    """Texto explicando o que fazer: se o usuário já tem picareta(s) na mochila (só não
+    equipou nenhuma), manda pro !mochila. Se não tem nenhuma comprada, manda pro !loja."""
+    if buscar_ferramentas_usuario(usuario_id):
+        return "Você tem picareta(s) na mochila, mas nenhuma equipada! Use `!mochila` → ⛏️ Minerar → 🔧 Ferramentas para equipar."
+    return "Você não tem nenhuma picareta! Compre uma em `!loja` → ⛏️ Mineração → 🔧 Ferramentas."
+
 def sofrer_dano_mineracao(usuario_id, dano):
     """
     Aplica dano ao jogador. Se houver um equipamento equipado, ele absorve o dano
@@ -2909,7 +2916,7 @@ class ViewMinerarInicio(ui.LayoutView):
         if sem_hp:
             texto += "\n\n💀 Seu HP está zerado! Use uma Marmita para se recuperar antes de minerar."
         if not ferramenta_ativa:
-            texto += "\n\n⚠️ Equipe uma picareta em `!mochila` → ⛏️ Minerar → 🔧 Ferramentas antes de minerar."
+            texto += f"\n\n⚠️ {mensagem_sem_picareta(self.usuario_id)}"
         container.add_item(ui.TextDisplay(texto))
         container.add_item(ui.Separator())
 
@@ -2937,7 +2944,7 @@ class ViewMinerarInicio(ui.LayoutView):
                     return
                 if not buscar_ferramenta_ativa(self.usuario_id):
                     await interaction.response.send_message(
-                        "❌ Você não tem uma picareta equipada! Vá em `!mochila` → ⛏️ Minerar → 🔧 Ferramentas.",
+                        f"❌ {mensagem_sem_picareta(self.usuario_id)}",
                         ephemeral=True
                     )
                     return
@@ -3146,7 +3153,7 @@ class ViewMineracao(ui.LayoutView):
         cabecalho = "### ⛏️ Mineração"
         if self.monstro_atual and self.em_combate:
             monstro_dados = MONSTROS[self.monstro_atual]
-            cabecalho += f"\n👾 **{self.monstro_atual}:** {max(0, self.monstro_hp)} HP | {monstro_dados['dano']} Dano"
+            cabecalho += f"\n{monstro_dados.get('emoji', '👾')} **{self.monstro_atual}:** {max(0, self.monstro_hp)} HP | {monstro_dados['dano']} Dano"
         cabecalho += f"\n{self.texto_status}"
         container.add_item(ui.TextDisplay(cabecalho))
 
