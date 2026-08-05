@@ -2287,7 +2287,7 @@ class ViewLoja(discord.ui.View):
         else:
             embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
         if os.path.exists(arquivo):
-            embed.set_image(url="attachment://preview.png")
+            embed.set_image(url="attachment://preview.gif")
         return embed
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
