@@ -1487,7 +1487,7 @@ def sortear_nova_rotacao():
 
     if len(disponiveis) < BANNERS_POR_ROTACAO:
         con.close()
-        return None, f"❌ Não há banners suficientes no catálogo! São necessários pelo menos {BANNERS_POR_ROTACAO} banners."
+        return None, f"<:Atencao:1534592266625093662> Não há banners suficientes no catálogo! São necessários pelo menos {BANNERS_POR_ROTACAO} banners."
 
     # Sorteia baseado na raridade
     pesos = []
@@ -2275,12 +2275,12 @@ class ViewLoja(discord.ui.View):
             color=discord.Color.gold()
         )
         embed.add_field(name="Raridade", value=f"**{raridade}**", inline=True)
-        embed.add_field(name="Preço", value=f"{preco} Joyens", inline=True)
+        embed.add_field(name="Preço", value=f"<:JoyensIcon:1533279494784417902>{preco} Joyens", inline=True)
         embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
         if tem:
             embed.add_field(name="Status", value="✅ Você já possui este banner", inline=False)
         elif joyens < preco:
-            embed.add_field(name="Status", value="❌ Joyens insuficientes", inline=False)
+            embed.add_field(name="Status", value="<:Atencao:1534592266625093662> Joyens insuficientes", inline=False)
         if self.expira:
             expira_dt = datetime.datetime.fromisoformat(self.expira)
             embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)} • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
@@ -2321,13 +2321,13 @@ class ViewLoja(discord.ui.View):
         joyens = buscar_joyens(comprador_id)
         if joyens < preco:
             await interaction.response.send_message(
-                f"❌ Você não tem Joyens suficientes! Você tem {joyens} e precisa de {preco}.",
+                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1533279494784417902>{joyens} e precisa de <:JoyensIcon:1533279494784417902>{preco}.",
                 ephemeral=True
             )
             return
         if usuario_tem_banner(comprador_id, banner_id):
             await interaction.response.send_message(
-                "❌ Você já possui este banner!",
+                "<:Atencao:1534592266625093662> Você já possui este banner!",
                 ephemeral=True
             )
             return
@@ -2448,7 +2448,7 @@ class ViewItensMineracao(discord.ui.View):
                 if sucesso:
                     await interaction.response.send_message(f"✅ {msg}", ephemeral=True)
                 else:
-                    await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+                    await interaction.response.send_message(f"<:Atencao:1534592266625093662> {msg}", ephemeral=True)
             botao.callback = callback
             self.add_item(botao)
 
@@ -2515,7 +2515,7 @@ class ViewMochilaMenu(ui.LayoutView):
             linha.add_item(botao)
         container.add_item(linha)
 
-        btn_fechar = ui.Button(label="❌ Fechar", style=discord.ButtonStyle.danger)
+        btn_fechar = ui.Button(label="<:Atencao:1534592266625093662> Fechar", style=discord.ButtonStyle.danger)
         async def fechar_cb(interaction):
             await interaction.response.defer()
             await interaction.delete_original_response()
@@ -2626,7 +2626,7 @@ class ViewMochilaItens(ui.LayoutView):
                                 return
                             if self.usuario.id in MINERACAO_ATIVAS:
                                 await interaction.response.send_message(
-                                    "❌ Você não pode trocar de equipamento enquanto está minerando!", ephemeral=True
+                                    "<:Atencao:1534592266625093662> Você não pode trocar de equipamento enquanto está minerando!", ephemeral=True
                                 )
                                 return
                             equipar_item(self.usuario.id, equip_id_local)
@@ -2671,7 +2671,7 @@ class ViewMochilaItens(ui.LayoutView):
                                 return
                             if self.usuario.id in MINERACAO_ATIVAS:
                                 await interaction.response.send_message(
-                                    "❌ Você não pode trocar de picareta enquanto está minerando!", ephemeral=True
+                                    "<:Atencao:1534592266625093662> Você não pode trocar de picareta enquanto está minerando!", ephemeral=True
                                 )
                                 return
                             equipar_ferramenta(self.usuario.id, ferr_id_local)
@@ -2748,7 +2748,7 @@ class ViewConsumiveis(ui.LayoutView):
                 return
             stats_atual = buscar_stats(self.usuario_id)
             if stats_atual["hp_atual"] >= hp_maximo(self.usuario_id):
-                await interaction.response.send_message("❌ Seu HP já está cheio!", ephemeral=True)
+                await interaction.response.send_message("<:Atencao:1534592266625093662> Seu HP já está cheio!", ephemeral=True)
                 return
             if buscar_qtd_item_mineracao(self.usuario_id, "Marmita") <= 0:
                 await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
@@ -2826,7 +2826,7 @@ class ViewConsumiveisMineracao(ui.LayoutView):
                     return
                 stats_atual = buscar_stats(self.usuario_id)
                 if stats_atual["hp_atual"] >= hp_maximo(self.usuario_id):
-                    await interaction.response.send_message("❌ Seu HP já está cheio!", ephemeral=True)
+                    await interaction.response.send_message("<:Atencao:1534592266625093662> Seu HP já está cheio!", ephemeral=True)
                     return
                 if buscar_qtd_item_mineracao(self.usuario_id, "Marmita") <= 0:
                     await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
@@ -2838,7 +2838,7 @@ class ViewConsumiveisMineracao(ui.LayoutView):
                 self.view_mineracao.montar()
                 await self.view_mineracao.atualizar_mensagem()
             except Exception as e:
-                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
 
         btn_marmita.callback = usar_marmita
         linha_marmita.add_item(btn_marmita)
@@ -2874,7 +2874,7 @@ class ViewConsumiveisMineracao(ui.LayoutView):
                 self.view_mineracao.montar()
                 await self.view_mineracao.atualizar_mensagem()
             except Exception as e:
-                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
 
         btn_pimenta.callback = usar_pimenta
         linha_pimenta.add_item(btn_pimenta)
@@ -2940,11 +2940,11 @@ class ViewMinerarInicio(ui.LayoutView):
                     return
                 stats_atual = buscar_stats(self.usuario_id)
                 if stats_atual["hp_atual"] <= 0:
-                    await interaction.response.send_message("❌ Seu HP está zerado! Use uma Marmita antes de minerar.", ephemeral=True)
+                    await interaction.response.send_message("<:Atencao:1534592266625093662> Seu HP está zerado! Use uma Marmita antes de minerar.", ephemeral=True)
                     return
                 if not buscar_ferramenta_ativa(self.usuario_id):
                     await interaction.response.send_message(
-                        f"❌ {mensagem_sem_picareta(self.usuario_id)}",
+                        f"<:Atencao:1534592266625093662> {mensagem_sem_picareta(self.usuario_id)}",
                         ephemeral=True
                     )
                     return
@@ -2952,7 +2952,7 @@ class ViewMinerarInicio(ui.LayoutView):
                 view = ViewMineracao(self.usuario_id, self.ctx)
                 await view.iniciar(interaction=interaction)
             except Exception as e:
-                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
 
         async def vender_cb(interaction):
             try:
@@ -2962,7 +2962,7 @@ class ViewMinerarInicio(ui.LayoutView):
                 view = ViewVenderMinerios(self.usuario_id, self)
                 await interaction.response.edit_message(view=view)
             except Exception as e:
-                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
 
         async def consumir_cb(interaction):
             try:
@@ -2972,7 +2972,7 @@ class ViewMinerarInicio(ui.LayoutView):
                 view = ViewConsumiveis(self.usuario_id, self, mensagem_inicio=interaction.message)
                 await interaction.response.send_message(view=view, ephemeral=True)
             except Exception as e:
-                await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
 
         btn_comecar.callback = comecar_cb
         btn_vender.callback = vender_cb
@@ -3002,10 +3002,10 @@ class ModalVenderMinerio(discord.ui.Modal):
         try:
             qtd = int(self.quantidade_input.value)
         except ValueError:
-            await interaction.response.send_message("❌ Digite um número válido!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Digite um número válido!", ephemeral=True)
             return
         if qtd <= 0:
-            await interaction.response.send_message("❌ A quantidade precisa ser maior que 0!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade precisa ser maior que 0!", ephemeral=True)
             return
 
         con = sqlite3.connect("jogadorbot.db")
@@ -3016,7 +3016,7 @@ class ModalVenderMinerio(discord.ui.Modal):
         qtd_atual = r[0] if r else 0
         if qtd > qtd_atual:
             con.close()
-            await interaction.response.send_message(f"❌ Você só tem {qtd_atual}x {self.minerio_nome}!", ephemeral=True)
+            await interaction.response.send_message(f"<:Atencao:1534592266625093662> Você só tem {qtd_atual}x {self.minerio_nome}!", ephemeral=True)
             return
 
         preco_unit = MINERIOS[self.minerio_nome]["preco"]
@@ -3134,7 +3134,7 @@ class ViewMineracao(ui.LayoutView):
         self.btn_dinamite = discord.ui.Button(label="🧨 Dinamite", style=discord.ButtonStyle.secondary,
                                                disabled=not (buscar_qtd_item_mineracao(usuario_id, "Dinamite") > 0))
         self.btn_dinamite.callback = self.dinamite_callback
-        self.btn_parar = discord.ui.Button(label="❌ Parar", style=discord.ButtonStyle.secondary)
+        self.btn_parar = discord.ui.Button(label="<:Atencao:1534592266625093662> Parar", style=discord.ButtonStyle.secondary)
         self.btn_parar.callback = self.parar_callback
 
         self.btn_consumir = discord.ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
@@ -3192,12 +3192,12 @@ class ViewMineracao(ui.LayoutView):
                 await interaction.response.send_message("Essa não é sua mineração!", ephemeral=True)
                 return
             if self.em_combate:
-                await interaction.response.send_message("❌ Você não pode consumir itens durante um combate!", ephemeral=True)
+                await interaction.response.send_message("<:Atencao:1534592266625093662> Você não pode consumir itens durante um combate!", ephemeral=True)
                 return
             view = ViewConsumiveisMineracao(self.usuario_id, self)
             await interaction.response.send_message(view=view, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Erro: `{e}`", ephemeral=True)
+            await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
     
     async def iniciar(self, interaction=None):
         self.montar()
@@ -3425,7 +3425,7 @@ class ViewMineracao(ui.LayoutView):
         ))
 
         btn_comprar = discord.ui.Button(label=f"⛏️ Comprar nova ({preco_nova} Joyens)", style=discord.ButtonStyle.success)
-        btn_parar_quebra = discord.ui.Button(label="❌ Parar mineração", style=discord.ButtonStyle.danger)
+        btn_parar_quebra = discord.ui.Button(label="<:Atencao:1534592266625093662> Parar mineração", style=discord.ButtonStyle.danger)
 
         async def comprar_cb(interaction):
             if interaction.user.id != self.usuario_id:
@@ -3433,7 +3433,7 @@ class ViewMineracao(ui.LayoutView):
                 return
             sucesso, msg = comprar_item_mineracao(self.usuario_id, "Picareta", preco_customizado=preco_nova)
             if not sucesso:
-                await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> {msg}", ephemeral=True)
                 return
 
             con = sqlite3.connect("jogadorbot.db")
@@ -3587,7 +3587,7 @@ class ViewMineracao(ui.LayoutView):
         titulo_map = {
             "completa": "⛏️ Mineração Concluída!",
             "dinamite": "🧨 Mineração Explodida!",
-            "parou": "❌ Mineração Interrompida"
+            "parou": "<:Atencao:1534592266625093662> Mineração Interrompida"
         }
         stats = buscar_stats(self.usuario_id)
         texto_minerios = "\n".join(f"- {n}: {q}" for n, q in self.minerios_ganhos.items() if q > 0) or "Nenhum"
@@ -3690,14 +3690,14 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
 
         if contar_pets(self.usuario_id) >= LIMITE_PETS:
             await interaction.response.send_message(
-                f"❌ Você já atingiu o limite de {LIMITE_PETS} pets!", ephemeral=True
+                f"<:Atencao:1534592266625093662> Você já atingiu o limite de {LIMITE_PETS} pets!", ephemeral=True
             )
             return
 
         saldo = buscar_joyens(self.usuario_id)
         if saldo < dados["preco"]:
             await interaction.response.send_message(
-                f"❌ Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
+                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
             )
             return
 
@@ -3738,7 +3738,7 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
         texto = self.quantidade.value.strip()
         if not texto.isdigit() or int(texto) <= 0:
             await interaction.response.send_message(
-                "❌ Digite um número inteiro maior que 0!", ephemeral=True
+                "<:Atencao:1534592266625093662> Digite um número inteiro maior que 0!", ephemeral=True
             )
             return
 
@@ -3748,7 +3748,7 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
         saldo = buscar_joyens(self.usuario_id)
         if saldo < preco_total:
             await interaction.response.send_message(
-                f"❌ Você não tem Joyens suficientes! Precisa de {preco_total} Joyens, "
+                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Precisa de {preco_total} Joyens, "
                 f"mas seu saldo é {saldo} Joyens.",
                 ephemeral=True
             )
@@ -3807,7 +3807,7 @@ class ViewComprarPet(discord.ui.View):
         async def callback(interaction: discord.Interaction):
             if contar_pets(self.usuario_id) >= LIMITE_PETS:
                 await interaction.response.send_message(
-                    f"❌ Você já tem o máximo de {LIMITE_PETS} pets! Confira com `/pet ver`.",
+                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `/pet ver`.",
                     ephemeral=True
                 )
                 return
@@ -3976,7 +3976,7 @@ class ViewEscolherPetisco(discord.ui.View):
         resultado = cur.fetchone()
         if not resultado or resultado[0] <= 0:
             con.close()
-            await interaction.response.edit_message(content=f"❌ Você não tem mais **{tipo}**!", view=None)
+            await interaction.response.edit_message(content=f"<:Atencao:1534592266625093662> Você não tem mais **{tipo}**!", view=None)
             return
 
         cur.execute(
@@ -4035,7 +4035,7 @@ class ViewConfirmarAdocao(discord.ui.View):
 
         if not alterou:
             await interaction.response.edit_message(
-                content="❌ Não foi possível colocar esse pet para adoção (ele já pode ter sido movido).",
+                content="<:Atencao:1534592266625093662> Não foi possível colocar esse pet para adoção (ele já pode ter sido movido).",
                 view=None
             )
             return
@@ -4055,7 +4055,7 @@ class ViewConfirmarAdocao(discord.ui.View):
             except discord.HTTPException:
                 pass
 
-    @discord.ui.button(label="Cancelar", emoji="❌", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Cancelar", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         for item in self.children:
             item.disabled = True
@@ -4110,7 +4110,7 @@ class ViewPets(discord.ui.LayoutView):
         pet = self.buscar_pet_atualizado()
         if pet is None:
             container = discord.ui.Container(
-                discord.ui.TextDisplay("❌ Esse pet não foi encontrado.")
+                discord.ui.TextDisplay("<:Atencao:1534592266625093662> Esse pet não foi encontrado.")
             )
             self.add_item(container)
             return
@@ -4169,7 +4169,7 @@ class ViewPets(discord.ui.LayoutView):
     async def abrir_adocao(self, interaction: discord.Interaction):
         pet = self.buscar_pet_atualizado()
         if pet is None:
-            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
         pet_id, especie, nome = pet[0], pet[1], pet[2]
 
@@ -4202,7 +4202,7 @@ class ViewPets(discord.ui.LayoutView):
     async def abrir_alimentar(self, interaction: discord.Interaction):
         pet = self.buscar_pet_atualizado()
         if pet is None:
-            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
         pet_id, especie, nome = pet[0], pet[1], pet[2]
 
@@ -4220,7 +4220,7 @@ class ViewPets(discord.ui.LayoutView):
 
         if not resultado or resultado[0] <= 0:
             await interaction.response.send_message(
-                f"❌ Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!loja` → PetShop → Petiscos.",
+                f"<:Atencao:1534592266625093662> Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!loja` → PetShop → Petiscos.",
                 ephemeral=True
             )
             return
@@ -4234,7 +4234,7 @@ class ViewPets(discord.ui.LayoutView):
     async def brincar(self, interaction: discord.Interaction):
         pet = self.buscar_pet_atualizado()
         if pet is None:
-            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
         pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
 
@@ -4258,7 +4258,7 @@ class ViewPets(discord.ui.LayoutView):
         if not resultado or resultado[0] <= 0:
             con.close()
             await interaction.response.send_message(
-                f"❌ Você não tem um **{brinquedo_nome}**! Compre na `!loja` → Petshop → Brinquedos.",
+                f"<:Atencao:1534592266625093662> Você não tem um **{brinquedo_nome}**! Compre na `!loja` → Petshop → Brinquedos.",
                 ephemeral=True
             )
             return
@@ -4286,14 +4286,14 @@ class ViewPets(discord.ui.LayoutView):
     async def banho(self, interaction: discord.Interaction):
         pet = self.buscar_pet_atualizado()
         if pet is None:
-            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
         pet_id = pet[0]
 
         sabonetes = buscar_sabonetes_usuario(self.usuario_id)
         if sabonetes <= 0:
             await interaction.response.send_message(
-                "❌ Você não tem Sabonete! Compre na `!loja` → Petshop → Higiene.",
+                "<:Atencao:1534592266625093662> Você não tem Sabonete! Compre na `!loja` → Petshop → Higiene.",
                 ephemeral=True
             )
             return
@@ -4315,7 +4315,7 @@ class ViewPets(discord.ui.LayoutView):
     async def dormir(self, interaction: discord.Interaction):
         pet = self.buscar_pet_atualizado()
         if pet is None:
-            await interaction.response.send_message("❌ Pet não encontrado.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
         pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
 
@@ -4511,7 +4511,7 @@ class SelectCategoriaCatalogo(discord.ui.Select):
             return
         banners = buscar_banners_categoria_catalogo(categoria_id)
         if not banners:
-            await interaction.response.send_message("❌ Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
             return
         view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
         embed, arquivo = await view.gerar_embed_e_imagem()
@@ -4538,7 +4538,7 @@ class SelectMenuCatalogo(discord.ui.Select):
         if self.values[0] == "banners":
             categorias = buscar_todas_categorias()
             if not categorias:
-                await interaction.response.send_message("❌ Nenhuma categoria de banners criada ainda!", ephemeral=True)
+                await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhuma categoria de banners criada ainda!", ephemeral=True)
                 return
             view = ViewCategoriaCatalogo(self.usuario_id)
             embed = discord.Embed(
@@ -4688,14 +4688,14 @@ class ViewCatalogoBanners(discord.ui.View):
     async def toggle_favorito(self, interaction: discord.Interaction, indice: int):
         pagina_banners = self.pagina_atual()
         if indice >= len(pagina_banners):
-            await interaction.response.send_message("❌ Não há banner nessa posição!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Não há banner nessa posição!", ephemeral=True)
             return
 
         banner_id, nome, _, _, _, _ = pagina_banners[indice]
 
         if usuario_tem_banner(self.usuario_id, banner_id):
             await interaction.response.send_message(
-                f"❌ Você já possui o banner **{nome}**! Só é possível favoritar banners que você ainda não tem.",
+                f"<:Atencao:1534592266625093662> Você já possui o banner **{nome}**! Só é possível favoritar banners que você ainda não tem.",
                 ephemeral=True
             )
             return
@@ -4737,7 +4737,7 @@ class ViewPagamento(discord.ui.View):
         # Apenas quem vai RECEBER o pagamento pode aceitar/recusar
         if interaction.user.id != self.destinatario.id:
             await interaction.response.send_message(
-                "❌ Apenas o destinatário pode responder a esta solicitação de pagamento.",
+                "<:Atencao:1534592266625093662> Apenas o destinatário pode responder a esta solicitação de pagamento.",
                 ephemeral=True
             )
             return False
@@ -4769,7 +4769,7 @@ class ViewPagamento(discord.ui.View):
             embed.color = discord.Color.red()
             embed.add_field(
                 name="Status",
-                value=f"❌ Pagamento cancelado: {self.remetente.mention} não tem mais Joyens suficientes.",
+                value=f"<:Atencao:1534592266625093662> Pagamento cancelado: {self.remetente.mention} não tem mais Joyens suficientes.",
                 inline=False
             )
             await interaction.response.edit_message(embed=embed, view=self)
@@ -4789,7 +4789,7 @@ class ViewPagamento(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="❌ Recusar", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="<:Atencao:1534592266625093662> Recusar", style=discord.ButtonStyle.danger)
     async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
         for item in self.children:
@@ -4798,7 +4798,7 @@ class ViewPagamento(discord.ui.View):
         embed.color = discord.Color.red()
         embed.add_field(
             name="Status",
-            value=f"❌ Pagamento recusado por {self.destinatario.mention}.",
+            value=f"<:Atencao:1534592266625093662> Pagamento recusado por {self.destinatario.mention}.",
             inline=False
         )
         await interaction.response.edit_message(embed=embed, view=self)
@@ -4812,7 +4812,7 @@ class LayoutEmpregos(ui.LayoutView):
         level_usuario, _ = buscar_level(usuario_id)
 
         container = ui.Container(
-            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
+            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com <:Atencao:1534592266625093662> precisam de level maior.")
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
@@ -4828,7 +4828,7 @@ class LayoutEmpregos(ui.LayoutView):
             )
 
             botao = ui.Button(
-                label="✅ Escolher" if pode else "❌ Escolher",
+                label="✅ Escolher" if pode else "<:Atencao:1534592266625093662> Escolher",
                 style=discord.ButtonStyle.success if pode else discord.ButtonStyle.danger
             )
             botao.callback = self.criar_callback(nome)
@@ -4850,7 +4850,7 @@ class LayoutEmpregos(ui.LayoutView):
 
         if level_usuario < emprego["level_necessario"]:
             await interaction.response.send_message(
-                f"❌ Você precisa ser **Level {emprego['level_necessario']}** para se tornar {emprego_nome}! Seu level atual é **{level_usuario}**.",
+                f"<:Atencao:1534592266625093662> Você precisa ser **Level {emprego['level_necessario']}** para se tornar {emprego_nome}! Seu level atual é **{level_usuario}**.",
                 ephemeral=True
             )
             return
@@ -4966,7 +4966,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}dado [lados]`", value="Rola um dado. Ex: `!dado 20`", inline=False)
         embed.add_field(name=f"`{PREFIX}moeda`", value="Joga uma moeda (cara ou coroa)", inline=False)
         embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
-        embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e ❌", inline=False)
+        embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e <:Atencao:1534592266625093662>", inline=False)
         embed.add_field(name=f"`{PREFIX}minerar`", value="Minera Joyogens e minérios raros", inline=False)
         embed.set_footer(text="🎮 Diversão • JogadorBot")
         return embed
@@ -5295,7 +5295,7 @@ async def userinfo(ctx, membro: discord.Member = None):
 @commands.has_permissions(manage_messages=True)
 async def limpar(ctx, quantidade: int = 5):
     if not ctx.guild.me.guild_permissions.manage_messages:
-        await ctx.send("❌ Eu não tenho permissão para apagar mensagens aqui.")
+        await ctx.send("<:Atencao:1534592266625093662> Eu não tenho permissão para apagar mensagens aqui.")
         return
     if quantidade > 1000:
         await ctx.send("Você pode apagar no máximo 1000 mensagens de uma vez.")
@@ -5310,7 +5310,7 @@ async def enquete(ctx, *, pergunta: str):
     embed.set_footer(text=f"Pergunta feita por {ctx.author.display_name}")
     mensagem = await ctx.send(embed=embed)
     await mensagem.add_reaction("✅")
-    await mensagem.add_reaction("❌")
+    await mensagem.add_reaction("<:Atencao:1534592266625093662>")
     await ctx.message.delete()
 
 @bot.command(name="perfil")
@@ -5486,7 +5486,7 @@ async def loja(ctx):
 @bot.command(name="addjoyens")
 async def addjoyens(ctx, membro: discord.Member, quantidade: int):
     if not eh_admin(ctx.author.id):
-        await ctx.send("❌ Você não tem permissão para usar este comando.")
+        await ctx.send("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.")
         return
     adicionar_joyens(membro.id, quantidade)
     novo_saldo = buscar_joyens(membro.id)
@@ -5559,7 +5559,7 @@ async def catalogo(ctx):
 @bot.command(name="pagar")
 async def pay(ctx, membro: discord.Member = None, quantidade: int = None):
     if membro is None or quantidade is None:
-        await ctx.send("❌ Uso correto: `!pagar @usuário quantidade`")
+        await ctx.send("<:Atencao:1534592266625093662> Uso correto: `!pagar @usuário quantidade`")
         return
 
     if membro.id == ctx.author.id:
@@ -5626,7 +5626,7 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
 
     if categoria not in CATEGORIAS_VENDAVEIS:
         categorias_disponiveis = ", ".join(CATEGORIAS_VENDAVEIS.keys())
-        await ctx.send(f"❌ Categoria **{categoria}** inválida! Categorias disponíveis: `{categorias_disponiveis}`")
+        await ctx.send(f"<:Atencao:1534592266625093662> Categoria **{categoria}** inválida! Categorias disponíveis: `{categorias_disponiveis}`")
         return
 
     config = CATEGORIAS_VENDAVEIS[categoria]
@@ -5647,7 +5647,7 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
     produto = cur.fetchone()
 
     if not produto:
-        await ctx.send(f"❌ Produto **{nome_produto}** não encontrado na categoria **{categoria}**.")
+        await ctx.send(f"<:Atencao:1534592266625093662> Produto **{nome_produto}** não encontrado na categoria **{categoria}**.")
         con.close()
         return
 
@@ -5659,7 +5659,7 @@ async def vender(ctx, categoria: str, *, nome_produto: str):
     possui = cur.fetchone()
 
     if not possui:
-        await ctx.send(f"❌ Você não possui o produto **{produto_nome}**!")
+        await ctx.send(f"<:Atencao:1534592266625093662> Você não possui o produto **{produto_nome}**!")
         con.close()
         return
 
@@ -5723,7 +5723,7 @@ async def trabalhar(ctx):
 
     emprego = EMPREGOS.get(emprego_nome)
     if not emprego:
-        await ctx.send("❌ Seu emprego não foi encontrado! Use `!empregos` para escolher um novo.")
+        await ctx.send("<:Atencao:1534592266625093662> Seu emprego não foi encontrado! Use `!empregos` para escolher um novo.")
         return
 
     # Calcula salário e XP
@@ -5774,7 +5774,7 @@ async def infojob(ctx, membro: discord.Member = None):
     emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
     emprego = EMPREGOS.get(emprego_nome)
     if not emprego:
-        await ctx.send("❌ Emprego não encontrado no sistema.")
+        await ctx.send("<:Atencao:1534592266625093662> Emprego não encontrado no sistema.")
         return
 
     restante = tempo_restante_trabalho(ultimo_trabalho)
@@ -5817,7 +5817,7 @@ async def rank(ctx, tipo: str = "joyens"):
     try:
         tipo = tipo.lower()
         if tipo not in ["joyens", "level"]:
-            await ctx.send("❌ Tipo inválido! Use `!rank joyens` ou `!rank level`.")
+            await ctx.send("<:Atencao:1534592266625093662> Tipo inválido! Use `!rank joyens` ou `!rank level`.")
             return
 
         con = sqlite3.connect("jogadorbot.db")
@@ -5838,7 +5838,7 @@ async def rank(ctx, tipo: str = "joyens"):
         con.close()
 
         if not resultados:
-            await ctx.send("❌ Nenhum dado encontrado para o ranking!")
+            await ctx.send("<:Atencao:1534592266625093662> Nenhum dado encontrado para o ranking!")
             return
 
         medalhas = ["🥇", "🥈", "🥉"]
@@ -5878,7 +5878,7 @@ async def rank(ctx, tipo: str = "joyens"):
         await ctx.send(view=layout)
 
     except Exception as e:
-        await ctx.send(f"❌ Erro ao gerar ranking: `{e}`")
+        await ctx.send(f"<:Atencao:1534592266625093662> Erro ao gerar ranking: `{e}`")
 
 @bot.command(name="missoes")
 async def missoes(ctx, membro: discord.Member = None):
@@ -5897,7 +5897,7 @@ async def pets(ctx):
 async def minerar(ctx):
     garantir_stats(ctx.author.id)
     if ctx.author.id in MINERACAO_ATIVAS:
-        await ctx.send("❌ Você já está minerando! Termine a mineração atual primeiro.")
+        await ctx.send("<:Atencao:1534592266625093662> Você já está minerando! Termine a mineração atual primeiro.")
         return
     view = ViewMinerarInicio(ctx.author.id, ctx)
     await ctx.send(view=view)
@@ -5929,7 +5929,7 @@ async def conquista_criar(interaction: discord.Interaction, nome: str, descricao
         con.commit()
         await interaction.response.send_message(f"✅ Conquista **{emoji} {nome}** criada com sucesso!", ephemeral=True)
     except sqlite3.IntegrityError:
-        await interaction.response.send_message(f"❌ Já existe uma conquista com o nome **{nome}**.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Já existe uma conquista com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
 
@@ -5948,7 +5948,7 @@ async def conquista_dar(interaction: discord.Interaction, membro: discord.Member
     conquista = cur.fetchone()
 
     if conquista is None:
-        await interaction.response.send_message(f"❌ Conquista **{nome}** não encontrada. Use `/conquista lista` para ver as disponíveis.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Conquista **{nome}** não encontrada. Use `/conquista lista` para ver as disponíveis.", ephemeral=True)
         con.close()
         return
 
@@ -5973,7 +5973,7 @@ async def conquista_dar(interaction: discord.Interaction, membro: discord.Member
 
     canal = bot.get_channel(CANAL_CONQUISTAS_ID)
     if canal is None:
-        await interaction.response.send_message("❌ Canal de conquistas não encontrado.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Canal de conquistas não encontrado.", ephemeral=True)
         return
 
     embed = discord.Embed(
@@ -6031,7 +6031,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
     if raridade not in RARIDADES:
         raridades_disponiveis = ", ".join(RARIDADES.keys())
         await interaction.response.send_message(
-            f"❌ Raridade **{raridade}** inválida! Use: `{raridades_disponiveis}`",
+            f"<:Atencao:1534592266625093662> Raridade **{raridade}** inválida! Use: `{raridades_disponiveis}`",
             ephemeral=True
         )
         return
@@ -6042,7 +6042,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
     resultado = cur.fetchone()
     if not resultado:
         await interaction.response.send_message(
-            f"❌ Categoria **{categoria}** não encontrada.",
+            f"<:Atencao:1534592266625093662> Categoria **{categoria}** não encontrada.",
             ephemeral=True
         )
         con.close()
@@ -6078,7 +6078,7 @@ async def banner_adicionar(interaction: discord.Interaction, nome: str, descrica
             f"✅ Banner **{nome}** ({raridade}) adicionado por {preco} Joyens!", ephemeral=True
         )
     except sqlite3.IntegrityError:
-        await interaction.response.send_message(f"❌ Já existe um banner com o nome **{nome}**.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Já existe um banner com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
 
@@ -6091,7 +6091,7 @@ async def banner_deletar(interaction: discord.Interaction, nome: str):
     cur.execute("SELECT id, arquivo FROM banners WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
     if not resultado:
-        await interaction.response.send_message(f"❌ Banner **{nome}** não encontrado.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Banner **{nome}** não encontrado.", ephemeral=True)
         con.close()
         return
     banner_id, arquivo_path = resultado
@@ -6118,14 +6118,14 @@ admin_group = app_commands.Group(name="adminbot", description="Gerenciamento de 
 )
 async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.Member, acao: str, tempo: str = "infinito"):
     if interaction.user.id != DONO_ID:
-        await interaction.response.send_message("❌ Apenas o dono do bot pode usar este comando.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Apenas o dono do bot pode usar este comando.", ephemeral=True)
         return
 
     if acao.lower() == "adicionar":
         try:
             segundos = parsear_tempo(tempo)
         except ValueError:
-            await interaction.response.send_message("❌ Formato de tempo inválido! Use algo como `1d5h30m` ou `infinito`.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Formato de tempo inválido! Use algo como `1d5h30m` ou `infinito`.", ephemeral=True)
             return
 
         expira = None if segundos is None else (datetime.datetime.now() + datetime.timedelta(seconds=segundos)).isoformat()
@@ -6152,16 +6152,16 @@ async def adminbot_gerenciar(interaction: discord.Interaction, usuario: discord.
         con.close()
         await interaction.response.send_message(f"✅ Admin de **{usuario.display_name}** removido.", ephemeral=True)
         try:
-            await usuario.send("❌ Seu acesso de admin no **JogadorBot** foi removido.")
+            await usuario.send("<:Atencao:1534592266625093662> Seu acesso de admin no **JogadorBot** foi removido.")
         except:
             pass
     else:
-        await interaction.response.send_message("❌ Ação inválida! Use `adicionar` ou `remover`.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Ação inválida! Use `adicionar` ou `remover`.", ephemeral=True)
 
 @admin_group.command(name="lista", description="Lista todos os admins ativos")
 async def adminbot_lista(interaction: discord.Interaction):
     if interaction.user.id != DONO_ID:
-        await interaction.response.send_message("❌ Apenas o dono do bot pode ver esta lista.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Apenas o dono do bot pode ver esta lista.", ephemeral=True)
         return
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -6195,7 +6195,7 @@ async def categoria_criar(interaction: discord.Interaction, nome: str, emoji: st
         con.commit()
         await interaction.response.send_message(f"✅ Categoria **{emoji} {nome}** criada!", ephemeral=True)
     except sqlite3.IntegrityError:
-        await interaction.response.send_message(f"❌ Já existe uma categoria com o nome **{nome}**.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Já existe uma categoria com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
 
@@ -6208,7 +6208,7 @@ async def categoria_deletar(interaction: discord.Interaction, nome: str):
     cur.execute("SELECT id FROM categorias_banner WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
     if not resultado:
-        await interaction.response.send_message(f"❌ Categoria **{nome}** não encontrada.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Categoria **{nome}** não encontrada.", ephemeral=True)
         con.close()
         return
     cat_id = resultado[0]
@@ -6268,18 +6268,18 @@ async def adminbot_dar(
     membro: discord.Member
 ):
     if membro.bot:
-        await interaction.response.send_message("❌ Não é possível dar itens para um bot!", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Não é possível dar itens para um bot!", ephemeral=True)
         return
 
     cat = categoria.value
 
     if cat == "xp":
         if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para XP, o valor deve ser um número inteiro.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Para XP, o valor deve ser um número inteiro.", ephemeral=True)
             return
         quantidade = int(valor)
         if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade deve ser maior que 0!", ephemeral=True)
             return
 
         con = sqlite3.connect("jogadorbot.db")
@@ -6298,11 +6298,11 @@ async def adminbot_dar(
 
     elif cat == "level":
         if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para Level, o valor deve ser um número inteiro.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Para Level, o valor deve ser um número inteiro.", ephemeral=True)
             return
         quantidade = int(valor)
         if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade deve ser maior que 0!", ephemeral=True)
             return
 
         con = sqlite3.connect("jogadorbot.db")
@@ -6334,11 +6334,11 @@ async def adminbot_dar(
 
     elif cat == "joyens":
         if not valor.lstrip("-").isdigit():
-            await interaction.response.send_message("❌ Para Joyens, o valor deve ser um número inteiro.", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Para Joyens, o valor deve ser um número inteiro.", ephemeral=True)
             return
         quantidade = int(valor)
         if quantidade <= 0:
-            await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade deve ser maior que 0!", ephemeral=True)
             return
 
         adicionar_joyens(membro.id, quantidade)
@@ -6362,7 +6362,7 @@ async def adminbot_dar(
         if not resultado:
             con.close()
             await interaction.response.send_message(
-                f"❌ Banner **{valor}** não encontrado. Confira o nome exato no catálogo.",
+                f"<:Atencao:1534592266625093662> Banner **{valor}** não encontrado. Confira o nome exato no catálogo.",
                 ephemeral=True
             )
             return
@@ -6372,7 +6372,7 @@ async def adminbot_dar(
         if usuario_tem_banner(membro.id, banner_id):
             con.close()
             await interaction.response.send_message(
-                f"❌ {membro.mention} já possui o banner **{banner_nome}**.", ephemeral=True
+                f"<:Atencao:1534592266625093662> {membro.mention} já possui o banner **{banner_nome}**.", ephemeral=True
             )
             return
 
@@ -6398,7 +6398,7 @@ async def adminbot_dar(
 @adminbot_dar.error
 async def adminbot_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.", ephemeral=True)
     else:
         raise error
 
@@ -6435,7 +6435,7 @@ async def editar(
     if tipo not in TIPOS_EDITAVEIS:
         tipos_disponiveis = ", ".join(TIPOS_EDITAVEIS.keys())
         await interaction.response.send_message(
-            f"❌ Tipo **{tipo}** inválido! Tipos disponíveis: `{tipos_disponiveis}`",
+            f"<:Atencao:1534592266625093662> Tipo **{tipo}** inválido! Tipos disponíveis: `{tipos_disponiveis}`",
             ephemeral=True
         )
         return
@@ -6452,7 +6452,7 @@ async def editar(
     resultado = cur.fetchone()
     if not resultado:
         await interaction.response.send_message(
-            f"❌ {tipo.capitalize()} **{nome}** não encontrado.", ephemeral=True
+            f"<:Atencao:1534592266625093662> {tipo.capitalize()} **{nome}** não encontrado.", ephemeral=True
         )
         con.close()
         return
@@ -6485,7 +6485,7 @@ async def editar(
         if raridade not in RARIDADES:
             raridades_disponiveis = ", ".join(RARIDADES.keys())
             await interaction.response.send_message(
-                f"❌ Raridade inválida! Use: `{raridades_disponiveis}`", ephemeral=True
+                f"<:Atencao:1534592266625093662> Raridade inválida! Use: `{raridades_disponiveis}`", ephemeral=True
             )
             con.close()
             return
@@ -6498,7 +6498,7 @@ async def editar(
         cat_resultado = cur.fetchone()
         if not cat_resultado:
             await interaction.response.send_message(
-                f"❌ Categoria **{categoria}** não encontrada. Use `/categoria lista` para ver as disponíveis.",
+                f"<:Atencao:1534592266625093662> Categoria **{categoria}** não encontrada. Use `/categoria lista` para ver as disponíveis.",
                 ephemeral=True
             )
             con.close()
@@ -6523,7 +6523,7 @@ async def editar(
 
     if not alteracoes:
         await interaction.response.send_message(
-            "❌ Nenhuma alteração foi feita! Preencha pelo menos um campo para editar.",
+            "<:Atencao:1534592266625093662> Nenhuma alteração foi feita! Preencha pelo menos um campo para editar.",
             ephemeral=True
         )
         con.close()
@@ -6607,11 +6607,11 @@ level_group = app_commands.Group(name="level", description="Gerenciamento de lev
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
 async def level_dar(interaction: discord.Interaction, tipo: app_commands.Choice[str], quantidade: int, membro: discord.Member):
     if membro.bot:
-        await interaction.response.send_message("❌ Não é possível dar XP/Level para um bot!", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Não é possível dar XP/Level para um bot!", ephemeral=True)
         return
 
     if quantidade <= 0:
-        await interaction.response.send_message("❌ A quantidade deve ser maior que 0!", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade deve ser maior que 0!", ephemeral=True)
         return
 
     con = sqlite3.connect("jogadorbot.db")
@@ -6651,7 +6651,7 @@ async def level_dar(interaction: discord.Interaction, tipo: app_commands.Choice[
 @level_dar.error
 async def level_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.", ephemeral=True)
     else:
         raise error
 
@@ -6707,22 +6707,22 @@ async def missao_criar(
 ):
     tipo = tipo.lower()
     if tipo not in ["permanente", "temporaria"]:
-        await interaction.response.send_message("❌ Tipo inválido! Use `permanente` ou `temporaria`.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Tipo inválido! Use `permanente` ou `temporaria`.", ephemeral=True)
         return
 
     if tipo_recompensa not in ["joyens", "xp"]:
-        await interaction.response.send_message("❌ Tipo de recompensa inválido! Use `joyens` ou `xp`.", ephemeral=True)
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Tipo de recompensa inválido! Use `joyens` ou `xp`.", ephemeral=True)
         return
 
     data_fim_iso = None
     if tipo == "temporaria":
         if not data_fim:
-            await interaction.response.send_message("❌ Missões temporárias precisam de uma data de fim!", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Missões temporárias precisam de uma data de fim!", ephemeral=True)
             return
         try:
             data_fim_iso = datetime.datetime.strptime(data_fim, "%d/%m/%Y %H:%M").isoformat()
         except ValueError:
-            await interaction.response.send_message("❌ Formato de data inválido! Use DD/MM/AAAA HH:MM", ephemeral=True)
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Formato de data inválido! Use DD/MM/AAAA HH:MM", ephemeral=True)
             return
 
     con = sqlite3.connect("jogadorbot.db")
@@ -6737,7 +6737,7 @@ async def missao_criar(
         await interaction.response.send_message(f"✅ Missão **{nome}** criada com sucesso!", ephemeral=True)
         await avisar_membros_nova_missao(interaction.guild, nome, descricao, data_fim_iso, tipo_recompensa, quantidade_recompensa)
     except sqlite3.IntegrityError:
-        await interaction.response.send_message(f"❌ Já existe uma missão com o nome **{nome}**.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Já existe uma missão com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
 
@@ -6750,7 +6750,7 @@ async def missao_deletar(interaction: discord.Interaction, nome: str):
     cur.execute("SELECT id FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
     if not resultado:
-        await interaction.response.send_message(f"❌ Missão **{nome}** não encontrada.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Missão **{nome}** não encontrada.", ephemeral=True)
         con.close()
         return
     mid = resultado[0]
@@ -6789,7 +6789,7 @@ async def missao_concluir(interaction: discord.Interaction, nome: str, membro: d
     cur.execute("SELECT id, nome, tipo_recompensa, quantidade_recompensa FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
     resultado = cur.fetchone()
     if not resultado:
-        await interaction.response.send_message(f"❌ Missão **{nome}** não encontrada.", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Missão **{nome}** não encontrada.", ephemeral=True)
         con.close()
         return
     mid, nome_real, tipo_recompensa, qtd_recompensa = resultado
@@ -6798,7 +6798,7 @@ async def missao_concluir(interaction: discord.Interaction, nome: str, membro: d
                 (str(membro.id), mid))
     prog = cur.fetchone()
     if prog and prog[0]:
-        await interaction.response.send_message(f"❌ {membro.display_name} já completou esta missão!", ephemeral=True)
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> {membro.display_name} já completou esta missão!", ephemeral=True)
         con.close()
         return
     con.close()
@@ -6884,11 +6884,11 @@ async def on_message(message):
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ Você não tem permissão para usar este comando.")
+        await ctx.send("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.")
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ Falta um argumento. Use `!ajuda` para ver como usar o comando.")
+        await ctx.send("<:Atencao:1534592266625093662> Falta um argumento. Use `!ajuda` para ver como usar o comando.")
     elif isinstance(error, commands.BadArgument):
-        await ctx.send("❌ Argumento inválido. Verifique se digitou corretamente.")
+        await ctx.send("<:Atencao:1534592266625093662> Argumento inválido. Verifique se digitou corretamente.")
     elif isinstance(error, commands.CommandNotFound):
         pass
 
@@ -6897,12 +6897,12 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     if isinstance(error, app_commands.CheckFailure):
         if not interaction.response.is_done():
             await interaction.response.send_message(
-                "❌ Você não tem permissão para usar este comando.", ephemeral=True
+                "<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.", ephemeral=True
             )
     elif isinstance(error, app_commands.MissingPermissions):
         if not interaction.response.is_done():
             await interaction.response.send_message(
-                "❌ Permissões insuficientes.", ephemeral=True
+                "<:Atencao:1534592266625093662> Permissões insuficientes.", ephemeral=True
             )
 
 bot.run(TOKEN)
