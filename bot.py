@@ -3126,7 +3126,7 @@ class ViewMineracao(ui.LayoutView):
         self.finalizado = False
         self.tempo_registrado = False
         self.ataque_event = asyncio.Event()
-        self.texto_status = "⛏️ Você começou a minerar. O som da picareta ecoa pela caverna..."
+        self.texto_status = "> Você começou a minerar. O som da picareta ecoa pela caverna..."
         self.imagem_atual = "minerar1.png"
 
         self.btn_atacar = discord.ui.Button(label="⚔️ Atacar", style=discord.ButtonStyle.danger, disabled=True)
@@ -3266,7 +3266,7 @@ class ViewMineracao(ui.LayoutView):
                 if self.finalizado:
                     return
             else:
-                self.texto_status = "⛏️ Você continua minerando calmamente..."
+                self.texto_status = "> 🪨 Você continua minerando calmamente..."
                 self.imagem_atual = "minerar1.png"
                 await self.atualizar_mensagem()
 
@@ -3279,14 +3279,14 @@ class ViewMineracao(ui.LayoutView):
         if tipo == "Desmoronamento":
             self.imagem_atual = "desmoronamento1.png"
             if random.random() < 0.70:
-                self.texto_status = "💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
+                self.texto_status = "> 🛘 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
                 await self.atualizar_mensagem()
                 await asyncio.sleep(3)
-                self.texto_status = "⛏️ Você retoma a mineração após o susto..."
+                self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
                 self.imagem_atual = "minerar1.png"
                 await self.atualizar_mensagem()
             else:
-                causa = "Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
+                causa = "> 🛘 Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
                 await self.aplicar_penalidade_morte(causa)
             return
 
@@ -4555,7 +4555,7 @@ class ViewCategoriaCatalogo(discord.ui.View):
         self.usuario_id = usuario_id
         self.add_item(SelectCategoriaCatalogo(usuario_id))
 
-    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=1)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title="📖 Catálogo do JogadorBot",
@@ -5050,7 +5050,7 @@ class ViewAjudaCategoria(discord.ui.View):
     async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_slash(), view=self)
 
-    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=1)
     async def btn_voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_inicial(), view=ViewAjuda())
 
@@ -5136,7 +5136,7 @@ class ViewMissoesSemanais(ui.LayoutView):
         linha = ui.ActionRow()
         btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
         btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
-        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
 
         async def ir_anterior(interaction: discord.Interaction):
             self.pagina -= 1
@@ -5214,7 +5214,7 @@ class ViewMissoesCustomizadas(ui.LayoutView):
         linha = ui.ActionRow()
         btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.pagina == 0)
         btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.pagina >= self.total_paginas - 1)
-        btn_voltar = ui.Button(label="<:SaidaIcon:1532863338902589500> Voltar", style=discord.ButtonStyle.danger)
+        btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
 
         async def ir_anterior(interaction: discord.Interaction):
             self.pagina -= 1
