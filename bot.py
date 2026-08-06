@@ -1787,11 +1787,22 @@ def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
         return False, "Item não encontrado."
 
     preco = preco_customizado if preco_customizado else item["preco"]
-    saldo = buscar_joyens(usuario_id)
-    if saldo < preco:
-        return False, f"Joyens insuficientes! Você tem {saldo} e precisa de {preco}."
+    moeda = item.get("moeda", "joyens")
+    nome_moeda = "Joyens" if moeda == "joyens" else "Joyogens"
 
-    remover_joyens(usuario_id, preco)
+    if moeda == "joyens":
+        saldo = buscar_joyens(usuario_id)
+    else:
+        saldo = buscar_stats(usuario_id)["joyogens"]
+
+    if saldo < preco:
+        return False, f"{nome_moeda} insuficientes! Você tem {saldo} e precisa de {preco}."
+
+    if moeda == "joyens":
+        remover_joyens(usuario_id, preco)
+    else:
+        remover_joyogens(usuario_id, preco)
+
     garantir_stats(usuario_id)
 
     if item["subcategoria"] == "Ferramentas" and "usos" in item:
@@ -1823,7 +1834,7 @@ def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
         )
 
     adicionar_item_mineracao(usuario_id, item_nome, 1)
-    return True, f"**{item_nome}** comprado com sucesso por {preco} Joyens!"
+    return True, f"**{item_nome}** comprado com sucesso por {preco} {nome_moeda}!"
 
 def buscar_minerios_usuario(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
