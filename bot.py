@@ -5386,7 +5386,7 @@ async def perfil(ctx, membro: discord.Member = None):
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> <:JoyogenIcon:1534818944115015740> **Joyogens:** ``{joyogens}``",
+        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> **Joyogens:** <:JoyogenIcon:1534818944115015740>``{joyogens}``",
         inline=False
     )
     embed2.add_field(
