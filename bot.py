@@ -5497,8 +5497,8 @@ async def saldo(ctx, membro: discord.Member = None):
     joyens = buscar_joyens(membro.id)
     joyogens = buscar_stats(membro.id)["joyogens"]
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
-    embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1533279494784417902>{joyens}", inline=True)
-    embed.add_field(name="__Joyogens__", value=f"{joyogens}", inline=True)
+    embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1533279494784417902>``{joyens}``", inline=True)
+    embed.add_field(name="__Joyogens__", value=f"``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="loja")
