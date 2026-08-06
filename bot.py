@@ -2515,7 +2515,7 @@ class ViewMochilaMenu(ui.LayoutView):
             linha.add_item(botao)
         container.add_item(linha)
 
-        btn_fechar = ui.Button(label="<:Atencao:1534592266625093662> Fechar", style=discord.ButtonStyle.danger)
+        btn_fechar = ui.Button(label="Fechar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
         async def fechar_cb(interaction):
             await interaction.response.defer()
             await interaction.delete_original_response()
@@ -3415,45 +3415,63 @@ class ViewMineracao(ui.LayoutView):
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
 
-        preco_nova = int(ITENS_MINERACAO["Picareta"]["preco"] * 1.2)
+        ferramentas_disponiveis = {
+            nome: dados for nome, dados in ITENS_MINERACAO.items()
+            if dados.get("subcategoria") == "Ferramentas" and "usos" in dados
+        }
+
         layout_decisao = ui.LayoutView()
         container = ui.Container()
         container.accent_color = discord.Colour.orange()
         container.add_item(ui.TextDisplay(
-            "### ⛏️ Picareta quebrada!\nSua picareta quebrou! Quer comprar uma nova (20% mais cara) "
-            "para continuar ou parar por aqui?"
+            "### ⛏️ Picareta quebrada!\nEscolha uma ferramenta nova (20% mais cara) para continuar minerando:"
         ))
+        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="attachment://vendedordamina1.png")))
+        container.add_item(ui.Separator())
 
-        btn_comprar = discord.ui.Button(label=f"⛏️ Comprar nova ({preco_nova} Joyens)", style=discord.ButtonStyle.success)
-        btn_parar_quebra = discord.ui.Button(label="Parar Mineração", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.danger)
+        for item_nome, dados in ferramentas_disponiveis.items():
+            preco_nova = int(dados["preco"] * 1.2)
+            texto_item = f"{dados.get('emoji', '⛏️')} **{item_nome}** — {preco_nova} Joyens\n-# {dados.get('usos', 0)} usos"
 
-        async def comprar_cb(interaction):
-            if interaction.user.id != self.usuario_id:
-                await interaction.response.send_message("Essa não é sua mineração!", ephemeral=True)
-                return
-            sucesso, msg = comprar_item_mineracao(self.usuario_id, "Picareta", preco_customizado=preco_nova)
-            if not sucesso:
-                await interaction.response.send_message(f"<:Atencao:1534592266625093662> {msg}", ephemeral=True)
-                return
+            botao_comprar = ui.Button(label="Comprar", style=discord.ButtonStyle.success)
 
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute(
-                "SELECT id FROM ferramentas_usuario WHERE usuario_id = ? AND item_nome = ? AND equipado = 0 ORDER BY id DESC LIMIT 1",
-                (str(self.usuario_id), "Picareta")
-            )
-            nova_ferramenta = cur.fetchone()
-            con.close()
-            if nova_ferramenta:
-                equipar_ferramenta(self.usuario_id, nova_ferramenta[0])
+            def criar_comprar_cb(nome_local, preco_local):
+                async def comprar_cb(interaction):
+                    if interaction.user.id != self.usuario_id:
+                        await interaction.response.send_message("Essa não é sua mineração!", ephemeral=True)
+                        return
+                    sucesso, msg = comprar_item_mineracao(self.usuario_id, nome_local, preco_customizado=preco_local)
+                    if not sucesso:
+                        await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+                        return
 
-            await interaction.response.send_message("✅ Nova picareta comprada e equipada! Continuando a mineração...", ephemeral=True)
-            self.btn_dinamite.disabled = not (buscar_qtd_item_mineracao(self.usuario_id, "Dinamite") > 0)
-            self.btn_parar.disabled = False
-            self.texto_status = "⛏️ Picareta trocada! Você volta a minerar..."
-            self.imagem_atual = "minerar1.png"
-            await self.atualizar_mensagem()
-            self.task = bot.loop.create_task(self.loop_mineracao())
+                    con = sqlite3.connect("jogadorbot.db")
+                    cur = con.cursor()
+                    cur.execute(
+                        "SELECT id FROM ferramentas_usuario WHERE usuario_id = ? AND item_nome = ? AND equipado = 0 ORDER BY id DESC LIMIT 1",
+                        (str(self.usuario_id), nome_local)
+                    )
+                    nova_ferramenta = cur.fetchone()
+                    con.close()
+                    if nova_ferramenta:
+                        equipar_ferramenta(self.usuario_id, nova_ferramenta[0])
+
+                    await interaction.response.send_message(
+                        f"✅ {nome_local} comprada e equipada! Continuando a mineração...", ephemeral=True
+                    )
+                    self.btn_dinamite.disabled = not (buscar_qtd_item_mineracao(self.usuario_id, "Dinamite") > 0)
+                    self.btn_parar.disabled = False
+                    self.texto_status = "⛏️ Picareta trocada! Você volta a minerar..."
+                    self.imagem_atual = "minerar1.png"
+                    await self.atualizar_mensagem()
+                    self.task = bot.loop.create_task(self.loop_mineracao())
+                return comprar_cb
+
+            botao_comprar.callback = criar_comprar_cb(item_nome, preco_nova)
+            container.add_item(ui.Section(ui.TextDisplay(texto_item), accessory=botao_comprar))
+
+        container.add_item(ui.Separator())
+        btn_parar_quebra = ui.Button(label="Parar mineração", emoji="❌", style=discord.ButtonStyle.danger)
 
         async def parar_quebra_cb(interaction):
             if interaction.user.id != self.usuario_id:
@@ -3462,16 +3480,21 @@ class ViewMineracao(ui.LayoutView):
             await interaction.response.defer()
             await self.finalizar_mineracao("parou")
 
-        btn_comprar.callback = comprar_cb
         btn_parar_quebra.callback = parar_quebra_cb
-        linha = ui.ActionRow()
-        linha.add_item(btn_comprar)
-        linha.add_item(btn_parar_quebra)
-        container.add_item(linha)
+        linha_parar = ui.ActionRow()
+        linha_parar.add_item(btn_parar_quebra)
+        container.add_item(linha_parar)
         layout_decisao.add_item(container)
 
+        arquivo_vendedor = (
+            discord.File("vendedordamina1.png", filename="vendedordamina1.png")
+            if os.path.exists("vendedordamina1.png") else None
+        )
         try:
-            await self.message.edit(view=layout_decisao, attachments=[])
+            if arquivo_vendedor:
+                await self.message.edit(view=layout_decisao, attachments=[arquivo_vendedor])
+            else:
+                await self.message.edit(view=layout_decisao, attachments=[])
         except:
             pass
 
