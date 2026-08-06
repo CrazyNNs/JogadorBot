@@ -5374,10 +5374,11 @@ async def perfil(ctx, membro: discord.Member = None):
         embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
 
 # Segunda embed — Economia e outros
+    joyogens = buscar_stats(membro.id)["joyogens"]
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** ``{joyens}``",
+        value=f"> **Joyens:** ``{joyens}``\n> 💎 **Joyogens:** ``{joyogens}``",
         inline=False
     )
     embed2.add_field(
@@ -5486,10 +5487,10 @@ async def saldo(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
     joyens = buscar_joyens(membro.id)
-    joyogens = buscar_joyogens(membro.id)
+    joyogens = buscar_stats(membro.id)["joyogens"]
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
-    embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=False)
-    embed.add_field(name="Joyogens", value=f"{joyogens} Joyogens", inline=False)
+    embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=True)
+    embed.add_field(name="💎 Joyogens", value=f"{joyogens} Joyogens", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="loja")
