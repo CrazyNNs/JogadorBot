@@ -2492,7 +2492,7 @@ class ViewItensMineracao(discord.ui.View):
         itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == self.subcategoria}
         for nome, dados in itens.items():
             embed.add_field(
-                name=f"{dados['emoji']} {nome} — {dados['preco']} {nome_moeda}",
+                name=f"{dados['emoji']} {nome} — {dados['preco']} {dados['nome_moeda']}",
                 value=dados["descricao"],
                 inline=False
             )
