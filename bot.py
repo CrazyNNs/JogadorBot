@@ -282,6 +282,7 @@ ITENS_MINERACAO = {
         "emoji": "<:PicaretaEnferrujadaIcon:1532975172359815168>",
         "subcategoria": "Ferramentas",
         "preco": 1000,
+        "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
     },
@@ -289,6 +290,7 @@ ITENS_MINERACAO = {
         "emoji": "<:PicaretaIcon:1532959065641062410>",
         "subcategoria": "Ferramentas",
         "preco": 2000,
+        "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 20 usos.",
         "usos": 20,
     },
@@ -296,6 +298,7 @@ ITENS_MINERACAO = {
         "emoji": "<:PicaretaFortificadaIcon:1532962738257662193>",
         "subcategoria": "Ferramentas",
         "preco": 4500,
+        "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 35 usos.",
         "usos": 35,
     },
@@ -303,12 +306,14 @@ ITENS_MINERACAO = {
         "emoji": "🧨",
         "subcategoria": "Ferramentas",
         "preco": 30000,
+        "moeda": "joyogens",
         "descricao": "Minera instantaneamente. 10% de chance de falhar.",
     },
     "Capacete Antigo": {
         "emoji": "<:CapaceteAntigoIcon:1533279462043418684>",
         "subcategoria": "Equipamento",
         "preco": 2500,
+        "moeda": "joyens",
         "descricao": "Absorve até 80 de dano antes de quebrar.",
         "durabilidade": 80,
     },
@@ -316,6 +321,7 @@ ITENS_MINERACAO = {
         "emoji": "<:CapaceteMedioIcon:1533279479353446480>",
         "subcategoria": "Equipamento",
         "preco": 4500,
+        "moeda": "joyens",
         "descricao": "Absorve até 150 de dano antes de quebrar.",
         "durabilidade": 150,
     },
@@ -323,12 +329,14 @@ ITENS_MINERACAO = {
         "emoji": "🍱",
         "subcategoria": "Consumíveis",
         "preco": 500,
+        "moeda": "joyens",
         "descricao": "Recupera 20 de HP.",
     },
     "Pimenta": {
         "emoji": "🌶️",
         "subcategoria": "Consumíveis",
         "preco": 700,
+        "moeda": "joyens",
         "descricao": "Aumenta o dano de ataque em 30%.",
     },
 }
@@ -5378,7 +5386,7 @@ async def perfil(ctx, membro: discord.Member = None):
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** ``{joyens}``\n> 💎 **Joyogens:** ``{joyogens}``",
+        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> 💎 **Joyogens:** ``{joyogens}``",
         inline=False
     )
     embed2.add_field(
@@ -5489,8 +5497,8 @@ async def saldo(ctx, membro: discord.Member = None):
     joyens = buscar_joyens(membro.id)
     joyogens = buscar_stats(membro.id)["joyogens"]
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
-    embed.add_field(name="Joyens", value=f"{joyens} Joyens", inline=True)
-    embed.add_field(name="💎 Joyogens", value=f"{joyogens} Joyogens", inline=True)
+    embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1533279494784417902>{joyens}", inline=True)
+    embed.add_field(name="__Joyogens__", value=f"{joyogens}", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="loja")
