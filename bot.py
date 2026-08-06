@@ -4663,7 +4663,7 @@ class ViewCatalogoBanners(discord.ui.View):
             self.pagina = pagina_antiga
             self.atualizar_botoes()
             
-    @discord.ui.button(label="<:SaidaIcon:1532863338902589500> Categorias", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="Categorias", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = ViewCategoriaCatalogo(self.usuario_id)
         embed = discord.Embed(
