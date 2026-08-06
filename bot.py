@@ -3170,7 +3170,7 @@ class ViewMineracao(ui.LayoutView):
 
         status_texto = (
             f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
-            f"💎 **Joyogens:** {self.joyogens_ganhas}\n"
+            f"<:JoyogenIcon:1534818944115015740> **Joyogens:** ``{self.joyogens_ganhas}``\n"
             f"📊 **Progresso:** `{barra}` {pct}%"
         )
         if self.minerios_ganhos:
@@ -3628,7 +3628,7 @@ class ViewMineracao(ui.LayoutView):
         container.accent_color = discord.Colour.gold()
         container.add_item(ui.TextDisplay(
             f"### {titulo_map.get(motivo, '⛏️ Mineração Finalizada')}\n"
-            f"💎 **Joyogens ganhas:** {self.joyogens_ganhas}\n\n"
+            f"<:JoyogenIcon:1534818944115015740> **Joyogens conseguidas:** ``{self.joyogens_ganhas}``\n\n"
             f"**Minérios coletados:**\n{texto_minerios}"
         ))
         container.add_item(ui.Separator())
@@ -5386,7 +5386,7 @@ async def perfil(ctx, membro: discord.Member = None):
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> 💎 **Joyogens:** ``{joyogens}``",
+        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> <:JoyogenIcon:1534818944115015740> **Joyogens:** ``{joyogens}``",
         inline=False
     )
     embed2.add_field(
@@ -5498,7 +5498,7 @@ async def saldo(ctx, membro: discord.Member = None):
     joyogens = buscar_stats(membro.id)["joyogens"]
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
     embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1533279494784417902>``{joyens}``", inline=True)
-    embed.add_field(name="__Joyogens__", value=f"``{joyogens}``", inline=True)
+    embed.add_field(name="__Joyogens__", value=f"<:JoyogenIcon:1534818944115015740>``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="loja")
