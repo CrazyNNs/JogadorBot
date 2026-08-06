@@ -3134,7 +3134,7 @@ class ViewMineracao(ui.LayoutView):
         self.btn_dinamite = discord.ui.Button(label="🧨 Dinamite", style=discord.ButtonStyle.secondary,
                                                disabled=not (buscar_qtd_item_mineracao(usuario_id, "Dinamite") > 0))
         self.btn_dinamite.callback = self.dinamite_callback
-        self.btn_parar = discord.ui.Button(label="<:Atencao:1534592266625093662> Parar", style=discord.ButtonStyle.secondary)
+        self.btn_parar = discord.ui.Button(label="Parar", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.secondary)
         self.btn_parar.callback = self.parar_callback
 
         self.btn_consumir = discord.ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
@@ -3279,14 +3279,14 @@ class ViewMineracao(ui.LayoutView):
         if tipo == "Desmoronamento":
             self.imagem_atual = "desmoronamento1.png"
             if random.random() < 0.70:
-                self.texto_status = "> 🛘 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
+                self.texto_status = "> 💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
                 await self.atualizar_mensagem()
                 await asyncio.sleep(3)
                 self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
                 self.imagem_atual = "minerar1.png"
                 await self.atualizar_mensagem()
             else:
-                causa = "> 🛘 Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
+                causa = "> 💥 Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
                 await self.aplicar_penalidade_morte(causa)
             return
 
@@ -3425,7 +3425,7 @@ class ViewMineracao(ui.LayoutView):
         ))
 
         btn_comprar = discord.ui.Button(label=f"⛏️ Comprar nova ({preco_nova} Joyens)", style=discord.ButtonStyle.success)
-        btn_parar_quebra = discord.ui.Button(label="<:Atencao:1534592266625093662> Parar mineração", style=discord.ButtonStyle.danger)
+        btn_parar_quebra = discord.ui.Button(label="Parar Mineração", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.danger)
 
         async def comprar_cb(interaction):
             if interaction.user.id != self.usuario_id:
