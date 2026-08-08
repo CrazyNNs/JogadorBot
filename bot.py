@@ -4685,25 +4685,45 @@ class ViewCatalogoBanners(discord.ui.View):
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pagina_antiga = self.pagina
-        self.pagina -= 1
+        indice_anterior = self.index
+        self.index -= 1
         self.atualizar_botoes()
+        embed = self.gerar_embed()
+        _, _, _, _, arquivo, _ = self.banners[self.index]
         try:
-            await self.atualizar_mensagem(interaction)
-        except (discord.errors.NotFound, discord.errors.HTTPException):
-            self.pagina = pagina_antiga
+            if os.path.exists(arquivo):
+                arquivo_discord = discord.File(arquivo, filename="preview.png")
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        except discord.HTTPException:
+            self.index = indice_anterior
             self.atualizar_botoes()
-            
+            await interaction.followup.send(
+                "❌ A imagem desse banner é grande demais e o Discord recusou o envio. Avise um admin pra reduzir o tamanho do arquivo.",
+                ephemeral=True
+            )
+
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pagina_antiga = self.pagina
-        self.pagina += 1
+        indice_anterior = self.index
+        self.index += 1
         self.atualizar_botoes()
+        embed = self.gerar_embed()
+        _, _, _, _, arquivo, _ = self.banners[self.index]
         try:
-            await self.atualizar_mensagem(interaction)
-        except (discord.errors.NotFound, discord.errors.HTTPException):
-            self.pagina = pagina_antiga
+            if os.path.exists(arquivo):
+                arquivo_discord = discord.File(arquivo, filename="preview.png")
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        except discord.HTTPException:
+            self.index = indice_anterior
             self.atualizar_botoes()
+            await interaction.followup.send(
+                "❌ A imagem desse banner é grande demais e o Discord recusou o envio. Avise um admin pra reduzir o tamanho do arquivo.",
+                ephemeral=True
+            )
             
     @discord.ui.button(label="Categorias", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
     async def voltar_categorias(self, interaction: discord.Interaction, button: discord.ui.Button):
