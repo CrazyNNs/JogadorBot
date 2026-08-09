@@ -485,6 +485,27 @@ def iniciar_banco():
             banner_id INTEGER NOT NULL
         )
     """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rotacao_individual (
+            usuario_id TEXT NOT NULL,
+            banner_id INTEGER NOT NULL,
+            PRIMARY KEY (usuario_id, banner_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rotacao_historico_individual (
+            usuario_id TEXT NOT NULL,
+            banner_id INTEGER NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rotacao_global (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            expira TEXT NOT NULL
+        )
+    """)
+    
     try:
         cur.execute("ALTER TABLE banners ADD COLUMN raridade TEXT DEFAULT 'Comum'")
     except:
@@ -1191,49 +1212,34 @@ async def verificar_admins_expirados():
 
 @tasks.loop(minutes=1)
 async def verificar_rotacao():
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT expira FROM rotacao_atual LIMIT 1")
-    resultado = cur.fetchone()
-    con.close()
+    expira = buscar_expira_global()
+    fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
 
     precisa_rotacionar = False
-    if not resultado:
+    if not expira:
         precisa_rotacionar = True
     else:
-        fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
-        expira = datetime.datetime.fromisoformat(resultado[0])
-        if expira.tzinfo is None:
-            expira = expira.replace(tzinfo=fuso_brasilia)
-        if datetime.datetime.now(fuso_brasilia) >= expira:
+        expira_dt = datetime.datetime.fromisoformat(expira)
+        if expira_dt.tzinfo is None:
+            expira_dt = expira_dt.replace(tzinfo=fuso_brasilia)
+        if datetime.datetime.now(fuso_brasilia) >= expira_dt:
             precisa_rotacionar = True
 
     if precisa_rotacionar:
-        ids_sorteados, expira = sortear_nova_rotacao()
+        sucesso, resultado = sortear_nova_rodada_global()
         canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
         if canal is None:
             return
-        if ids_sorteados is None:
-            await canal.send(f"⚠️ {expira}")
+        if not sucesso:
+            await canal.send(f"⚠️ {resultado}")
             return
 
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("""
-            SELECT b.nome, b.raridade FROM rotacao_atual ra
-            JOIN banners b ON ra.banner_id = b.id
-        """)
-        banners = cur.fetchall()
-        con.close()
-
-        expira_dt = datetime.datetime.fromisoformat(expira)
+        expira_dt = datetime.datetime.fromisoformat(resultado)
         embed = discord.Embed(
             title="🔄 Nova Rotação da Loja!",
-            description="> Os banners da loja mudaram! Corra para conferir antes que acabe.",
+            description="> Os banners da loja mudaram! Cada jogador tem uma seleção diferente — corra pra conferir a sua!",
             color=discord.Color.yellow()
         )
-        for nome, raridade in banners:
-            embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
         await canal.send(embed=embed)
         verificar_favoritos_rotacao.start()
@@ -1249,7 +1255,7 @@ async def verificar_favoritos_rotacao():
         SELECT bf.usuario_id, b.id, b.nome
         FROM banners_favoritos bf
         JOIN banners b ON bf.banner_id = b.id
-        JOIN rotacao_atual ra ON b.id = ra.banner_id
+        JOIN rotacao_individual ri ON b.id = ri.banner_id AND ri.usuario_id = bf.usuario_id
     """)
     resultados = cur.fetchall()
     con.close()
@@ -1403,19 +1409,46 @@ def buscar_banners_por_categoria(categoria_id):
     con.close()
     return resultado
 
-def buscar_banners_rotacao():
+def buscar_expira_global():
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    expira_row = cur.execute("SELECT expira FROM rotacao_atual LIMIT 1").fetchone()
+    cur.execute("SELECT expira FROM rotacao_global WHERE id = 1")
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else None
+
+def buscar_banners_rotacao(usuario_id):
+    """Retorna a rotação individual do usuário, sorteando uma nova se ele ainda não tiver."""
+    expira = buscar_expira_global()
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM rotacao_individual WHERE usuario_id = ?", (str(usuario_id),))
+    tem_rotacao = cur.fetchone()[0] > 0
+    con.close()
+
+    if not tem_rotacao:
+        sortear_rotacao_individual(usuario_id)
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
     cur.execute("""
         SELECT b.id, b.nome, b.descricao, b.preco, b.arquivo, b.raridade
-        FROM rotacao_atual ra
-        JOIN banners b ON ra.banner_id = b.id
-    """)
+        FROM rotacao_individual ri
+        JOIN banners b ON ri.banner_id = b.id
+        WHERE ri.usuario_id = ?
+    """, (str(usuario_id),))
     banners = cur.fetchall()
     con.close()
-    expira = expira_row[0] if expira_row else None
     return banners, expira
+
+def banner_em_rotacao(usuario_id, banner_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM rotacao_individual WHERE usuario_id = ? AND banner_id = ?", (str(usuario_id), banner_id))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado is not None
 
 def buscar_banners_categoria_catalogo(categoria_id):
     con = sqlite3.connect("jogadorbot.db")
@@ -1430,13 +1463,6 @@ def buscar_banners_categoria_catalogo(categoria_id):
     con.close()
     return resultado
 
-def banner_em_rotacao(banner_id):
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT 1 FROM rotacao_atual WHERE banner_id = ?", (banner_id,))
-    resultado = cur.fetchone()
-    con.close()
-    return resultado is not None
 
 def usuario_favoritou_banner(usuario_id, banner_id):
     con = sqlite3.connect("jogadorbot.db")
@@ -1531,6 +1557,80 @@ def sortear_nova_rotacao():
     con.commit()
     con.close()
     return ids_sorteados, expira
+
+def sortear_rotacao_individual(usuario_id):
+    """Sorteia 4 banners para um usuário específico, respeitando o histórico dele."""
+    import random as rnd
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+
+    cur.execute("SELECT banner_id FROM rotacao_historico_individual WHERE usuario_id = ?", (str(usuario_id),))
+    historico = [row[0] for row in cur.fetchall()]
+
+    cur.execute("SELECT id, raridade FROM banners")
+    todos = cur.fetchall()
+
+    disponiveis = [b for b in todos if b[0] not in historico]
+
+    if len(disponiveis) < BANNERS_POR_ROTACAO:
+        cur.execute("DELETE FROM rotacao_historico_individual WHERE usuario_id = ?", (str(usuario_id),))
+        disponiveis = todos
+
+    if len(disponiveis) < BANNERS_POR_ROTACAO:
+        con.close()
+        return None
+
+    pesos = [RARIDADES.get(raridade, 0.50) for _, raridade in disponiveis]
+    total_peso = sum(pesos)
+    pesos_normalizados = [p / total_peso for p in pesos]
+
+    ids_sorteados = []
+    pool = list(zip([b[0] for b in disponiveis], pesos_normalizados))
+
+    for _ in range(BANNERS_POR_ROTACAO):
+        if not pool:
+            break
+        ids = [p[0] for p in pool]
+        pesos_pool = [p[1] for p in pool]
+        total = sum(pesos_pool)
+        pesos_pool = [p / total for p in pesos_pool]
+        escolhido = rnd.choices(ids, weights=pesos_pool, k=1)[0]
+        ids_sorteados.append(escolhido)
+        pool = [p for p in pool if p[0] != escolhido]
+
+    cur.execute("DELETE FROM rotacao_individual WHERE usuario_id = ?", (str(usuario_id),))
+    for bid in ids_sorteados:
+        cur.execute("INSERT OR IGNORE INTO rotacao_individual (usuario_id, banner_id) VALUES (?, ?)", (str(usuario_id), bid))
+        cur.execute("INSERT INTO rotacao_historico_individual (usuario_id, banner_id) VALUES (?, ?)", (str(usuario_id), bid))
+
+    con.commit()
+    con.close()
+    return ids_sorteados
+
+
+def sortear_nova_rodada_global():
+    """Define quando a próxima rotação global expira e limpa as rotações individuais antigas."""
+    fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
+    expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(minutes=DURACAO_ROTACAO_HORAS)).isoformat()
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM banners")
+    total_banners = cur.fetchone()[0]
+    con.close()
+
+    if total_banners < BANNERS_POR_ROTACAO:
+        return None, f"<:Atencao:1534592266625093662> Não há banners suficientes no catálogo! São necessários pelo menos {BANNERS_POR_ROTACAO} banners."
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("DELETE FROM rotacao_individual")
+    cur.execute("INSERT OR REPLACE INTO rotacao_global (id, expira) VALUES (1, ?)", (expira,))
+    con.commit()
+    con.close()
+
+    return True, expira
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Empregos e Trabalhar
@@ -2277,6 +2377,15 @@ class ViewLoja(discord.ui.View):
         self.index = 0
         self.atualizar_botoes()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                ephemeral=True
+            )
+            return False
+        return True
+
     def atualizar_botoes(self):
         self.anterior.disabled = self.index == 0
         self.proximo.disabled = self.index >= len(self.banners) - 1
@@ -2359,7 +2468,7 @@ class ViewLoja(discord.ui.View):
                     (str(comprador_id), banner_id))
         con.commit()
         con.close()
-        
+
         await interaction.response.send_message(
             f"✅ Banner **{nome}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
             ephemeral=True
@@ -2386,12 +2495,21 @@ class ViewMenuLoja(discord.ui.View):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                ephemeral=True
+            )
+            return False
+        return True
+    
     @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
     async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
-        banners, expira = buscar_banners_rotacao()
+        banners, expira = buscar_banners_rotacao(self.usuario_id)
         if not banners:
             await interaction.response.send_message(
-                "Nenhum banner disponível na rotação atual!", ephemeral=True
+                "Nenhum banner disponível na sua rotação no momento! Tente novamente mais tarde.", ephemeral=True
             )
             return
         view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira)
