@@ -87,9 +87,9 @@ EMPREGOS = {
         "emoji": "<:GariIcon:1525380207907704914>",
         "descricao": "Mantém as ruas limpas da cidade.",
         "acoes": [
-            "Você varreu as ruas do centro e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você recolheu o lixo do bairro e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você limpou a praça principal e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
+            "Você varreu as ruas do centro e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você recolheu o lixo do bairro e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você limpou a praça principal e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
     "Fotografo": {
@@ -99,9 +99,9 @@ EMPREGOS = {
         "emoji": "<:FotografoIcon:1525381107867193354>",
         "descricao": "Registra momentos especiais com sua câmera.",
         "acoes": [
-            "Você fotografou um casamento e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você fez um ensaio fotográfico e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você fotografou um evento corporativo e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
+            "Você fotografou um casamento e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você fez um ensaio fotográfico e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você fotografou um evento corporativo e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
     "Barman": {
@@ -111,9 +111,9 @@ EMPREGOS = {
         "emoji": "<:BarmanIcon:1525381712387772597>",
         "descricao": "Prepara drinks e anima o bar todas as noites.",
         "acoes": [
-            "Você preparou drinks a noite toda e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você atendeu uma festa VIP no bar e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você criou um novo drink especial e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
+            "Você preparou drinks a noite toda e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você atendeu uma festa VIP no bar e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você criou um novo drink especial e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
     "Motorista Particular": {
@@ -123,9 +123,9 @@ EMPREGOS = {
         "emoji": "<:MotoristaParticularIcon:1527099360331038790>",
         "descricao": "Dirige por toda cidade e deixa o seu cliente no destino desejado.",
         "acoes": [
-            "Você dirigiu ao shooping e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você deixou seu cliente em casa e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
-            "Você passeou de carro com o cliente e ganhou <:JoyensIcon:1533279494784417902>{salario}Joyens!",
+            "Você dirigiu ao shooping e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você deixou seu cliente em casa e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você passeou de carro com o cliente e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
 }
@@ -2403,7 +2403,7 @@ class ViewLoja(discord.ui.View):
             color=discord.Color.gold()
         )
         embed.add_field(name="Raridade", value=f"**{raridade}**", inline=True)
-        embed.add_field(name="Preço", value=f"<:JoyensIcon:1533279494784417902>{preco} Joyens", inline=True)
+        embed.add_field(name="Preço", value=f"<:JoyensIcon:1536254492797050880>{preco} Joyens", inline=True)
         embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
         if tem:
             embed.add_field(name="Status", value="✅ Você já possui este banner", inline=False)
@@ -2449,7 +2449,7 @@ class ViewLoja(discord.ui.View):
         joyens = buscar_joyens(comprador_id)
         if joyens < preco:
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1533279494784417902>{joyens} e precisa de <:JoyensIcon:1533279494784417902>{preco}.",
+                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1536254492797050880>{joyens} e precisa de <:JoyensIcon:1536254492797050880>{preco}.",
                 ephemeral=True
             )
             return
@@ -3334,7 +3334,7 @@ class ViewMineracao(ui.LayoutView):
 
         status_texto = (
             f"❤️ **HP:** {stats['hp_atual']}/{hp_maximo(self.usuario_id)}\n"
-            f"<:JoyogenIcon:1534818944115015740> **Joyogens:** ``{self.joyogens_ganhas}``\n"
+            f"<:JoyogensIcon:1536254582362210334> **Joyogens:** ``{self.joyogens_ganhas}``\n"
             f"📊 **Progresso:** `{barra}` {pct}%"
         )
         if self.minerios_ganhos:
@@ -3792,7 +3792,7 @@ class ViewMineracao(ui.LayoutView):
         container.accent_color = discord.Colour.gold()
         container.add_item(ui.TextDisplay(
             f"### {titulo_map.get(motivo, '⛏️ Mineração Finalizada')}\n"
-            f"<:JoyogenIcon:1534818944115015740> **Joyogens conseguidas:** ``{self.joyogens_ganhas}``\n\n"
+            f"<:JoyogensIcon:1536254582362210334> **Joyogens conseguidas:** ``{self.joyogens_ganhas}``\n\n"
             f"**Minérios coletados:**\n{texto_minerios}"
         ))
         container.add_item(ui.Separator())
@@ -5039,7 +5039,7 @@ class LayoutEmpregos(ui.LayoutView):
             texto = (
                 f"{dados['emoji']} **{nome}**\n"
                 f"{dados['descricao']}\n"
-                f"<:JoyensIcon:1533279494784417902>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
+                f"<:JoyensIcon:1536254492797050880>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
 
             botao = ui.Button(
@@ -5090,7 +5090,7 @@ class LayoutConfirmacaoEmprego(ui.LayoutView):
             ui.TextDisplay(
                 f"{emprego_dados['emoji']} **Empregado como {emprego_nome}!**\n"
                 f"Você agora é um **{emprego_nome}**! Use `!trabalhar` para começar a ganhar Joyens.\n\n"
-                f"<:BolsaJoyensIcon:1525729605724405781> Salário: <:JoyensIcon:1533279494784417902>{emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
+                f"<:BolsaJoyensIcon:1525729605724405781> Salário: <:JoyensIcon:1536254492797050880>{emprego_dados['salario_min']}-{emprego_dados['salario_max']} Joyens\n"
                 f"📊 Level necessário: {emprego_dados['level_necessario']}"
             )
         )
@@ -5570,7 +5570,7 @@ async def perfil(ctx, membro: discord.Member = None):
     embed2 = discord.Embed(color=discord.Color.blurple())
     embed2.add_field(
         name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** <:JoyensIcon:1533279494784417902>``{joyens}``\n> **Joyogens:** <:JoyogenIcon:1534818944115015740>``{joyogens}``",
+        value=f"> **Joyens:** <:JoyensIcon:1536254492797050880>``{joyens}``\n> **Joyogens:** <:JoyogensIcon:1536254582362210334>``{joyogens}``",
         inline=False
     )
     embed2.add_field(
@@ -5681,8 +5681,8 @@ async def saldo(ctx, membro: discord.Member = None):
     joyens = buscar_joyens(membro.id)
     joyogens = buscar_stats(membro.id)["joyogens"]
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
-    embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1533279494784417902>``{joyens}``", inline=True)
-    embed.add_field(name="__Joyogens__", value=f"<:JoyogenIcon:1534818944115015740>``{joyogens}``", inline=True)
+    embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1536254492797050880>``{joyens}``", inline=True)
+    embed.add_field(name="__Joyogens__", value=f"<:JoyogensIcon:1536254582362210334>``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
 async def loja(ctx):
