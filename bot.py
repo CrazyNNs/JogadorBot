@@ -5685,6 +5685,7 @@ async def saldo(ctx, membro: discord.Member = None):
     embed.add_field(name="__Joyogens__", value=f"<:JoyogensIcon:1536254582362210334>``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
+@bot.command(name="loja")
 async def loja(ctx):
     view = ViewMenuLoja(ctx.author.id)
     arquivo = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
