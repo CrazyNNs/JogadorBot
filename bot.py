@@ -2490,10 +2490,11 @@ class ViewLoja(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
 
-class ViewMenuLoja(discord.ui.View):
+class ViewMenuLoja(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
+        self.montar()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
@@ -2503,9 +2504,59 @@ class ViewMenuLoja(discord.ui.View):
             )
             return False
         return True
-    
-    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.primary)
-    async def abrir_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+
+        cabecalho = ui.Section(
+            ui.TextDisplay(
+                "### 🏪 Loja do JogadorBot\n"
+                "Bem-vindo à loja! Use seus Joyens para comprar itens incríveis."
+            ),
+            accessory=ui.Thumbnail(media="attachment://lojaicon.png")
+        )
+        container.add_item(cabecalho)
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        categorias = [
+            ("🖼️ Banners", "Personalize o seu perfil com banners exclusivos!", "banners"),
+            ("🐾 Petshop", "Adote e cuide de um bichinho virtual!", "petshop"),
+            ("⛏️ Mineração", "Ferramentas, equipamentos e consumíveis!", "mineracao"),
+        ]
+
+        for i, (label, descricao, chave) in enumerate(categorias):
+            linha = ui.ActionRow()
+            botao = ui.Button(label=label, style=discord.ButtonStyle.primary)
+
+            async def callback(interaction, categoria=chave):
+                if categoria == "banners":
+                    await self.abrir_banners(interaction)
+                elif categoria == "petshop":
+                    await interaction.response.send_message("🐾 O Petshop ainda está em construção!", ephemeral=True)
+                elif categoria == "mineracao":
+                    view = ViewLojaMineracao(self.usuario_id)
+                    embed = discord.Embed(
+                        title="⛏️ Loja de Mineração",
+                        description="Escolha uma subcategoria:",
+                        color=discord.Color.dark_gold()
+                    )
+                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+            botao.callback = callback
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(descricao))
+            if i < len(categorias) - 1:
+                container.add_item(ui.Separator())
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.TextDisplay(f"-# Seu saldo: {buscar_joyens(self.usuario_id)} Joyens"))
+
+        self.add_item(container)
+
+    async def abrir_banners(self, interaction: discord.Interaction):
         banners, expira = buscar_banners_rotacao(self.usuario_id)
         if not banners:
             await interaction.response.send_message(
@@ -2517,25 +2568,9 @@ class ViewMenuLoja(discord.ui.View):
         _, _, _, _, arquivo, _ = banners[0]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename="preview.png")
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo_discord])
+            await interaction.response.send_message(embed=embed, view=view, file=arquivo_discord, ephemeral=True)
         else:
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
-
-    @discord.ui.button(label="🐾 Petshop", style=discord.ButtonStyle.primary)
-    async def abrir_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
-
-    @discord.ui.button(label="⛏️ Mineração", style=discord.ButtonStyle.primary)
-    async def abrir_mineracao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewLojaMineracao(self.usuario_id)
-        embed = discord.Embed(
-            title="⛏️ Loja de Mineração",
-            description="Escolha uma subcategoria:",
-            color=discord.Color.dark_gold()
-        )
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ============================================================
 # VIEW (BOTÕES) - Mineração
@@ -5650,19 +5685,13 @@ async def saldo(ctx, membro: discord.Member = None):
     embed.add_field(name="__Joyogens__", value=f"<:JoyogenIcon:1534818944115015740>``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
-@bot.command(name="loja")
 async def loja(ctx):
-    embed = discord.Embed(
-        title="🏪 Loja do JogadorBot",
-        description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\n> Escolha uma categoria:",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
-    embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
-    embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
-    embed.set_footer(text=f"Seu saldo: {buscar_joyens(ctx.author.id)} Joyens")
     view = ViewMenuLoja(ctx.author.id)
-    await ctx.send(embed=embed, view=view)
+    arquivo = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+    if arquivo:
+        await ctx.send(view=view, file=arquivo)
+    else:
+        await ctx.send(view=view)
 
 @bot.command(name="addjoyens")
 async def addjoyens(ctx, membro: discord.Member, quantidade: int):
