@@ -2581,25 +2581,26 @@ class ViewMenuLoja(ui.LayoutView):
                 "Nenhum banner disponível na sua rotação no momento! Tente novamente mais tarde.", ephemeral=True
             )
             return
-        view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira)
+        view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira, view_menu=self)
         banner_id, nome, descricao, preco, arquivo, raridade = banners[0]
         if os.path.exists(arquivo):
             arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
-            await interaction.response.send_message(view=view, file=arquivo_discord, ephemeral=True)
+            await interaction.response.edit_message(view=view, attachments=[arquivo_discord])
         else:
-            await interaction.response.send_message(view=view, ephemeral=False)
+            await interaction.response.edit_message(view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Mineração
 # ============================================================
 class ViewLoja(ui.LayoutView):
-    def __init__(self, usuario_id, banners, rotacao=False, expira=None):
+    def __init__(self, usuario_id, banners, rotacao=False, expira=None, view_menu=None):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.banners = banners
         self.rotacao = rotacao
         self.expira = expira
         self.index = 0
+        self.view_menu = view_menu
         self.montar()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -2623,8 +2624,12 @@ class ViewLoja(ui.LayoutView):
         btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
 
         async def voltar_cb(interaction):
-            await interaction.response.defer()
-            await interaction.delete_original_response()
+            self.view_menu.montar()
+            arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+            if arquivo_lojaicon:
+                await interaction.response.edit_message(view=self.view_menu, attachments=[arquivo_lojaicon])
+            else:
+                await interaction.response.edit_message(view=self.view_menu, attachments=[])
 
         btn_voltar.callback = voltar_cb
 
