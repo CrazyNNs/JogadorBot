@@ -2587,7 +2587,7 @@ class ViewMenuLoja(ui.LayoutView):
             arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
             await interaction.response.send_message(view=view, file=arquivo_discord, ephemeral=True)
         else:
-            await interaction.response.send_message(view=view, ephemeral=True)
+            await interaction.response.send_message(view=view, ephemeral=False)
 
 # ============================================================
 # VIEW (BOTÕES) - Mineração
