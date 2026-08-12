@@ -2526,7 +2526,7 @@ class ViewMenuLoja(ui.LayoutView):
     def montar(self):
         self.clear_items()
         container = ui.Container()
-        container.accent_color = discord.Colour.gold()
+        container.accent_color = discord.Colour.blurple()
 
         cabecalho = ui.Section(
             ui.TextDisplay(
