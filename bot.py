@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from PIL import Image, ImageDraw, ImageFont
 from zoneinfo import ZoneInfo
@@ -1434,8 +1434,6 @@ async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
             embed.add_field(name="🏆 Level máximo atingido!", value="Parabéns, você chegou ao topo!", inline=False)
         mensagem = await canal.send(embed=embed)
         await mensagem.delete(delay=60)
-
-from discord.ext import tasks
 
 # ============================================================
 # TASKS DE VERIFICAÇÃO POR TEMPO
