@@ -2834,7 +2834,7 @@ class ViewMenuLoja(ui.LayoutView):
             await interaction.response.edit_message(view=view, attachments=[])
 
 # ============================================================
-# VIEW (BOTÕES) - Mineração
+# VIEW (BOTÕES) - Loja de Banner
 # ============================================================
 class ViewLoja(ui.LayoutView):
     def __init__(self, usuario_id, banners, rotacao=False, expira=None, view_menu=None):
