@@ -2420,27 +2420,45 @@ class ViewLoja(discord.ui.View):
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        indice_anterior = self.index
         self.index -= 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
         _, _, _, _, arquivo, _ = self.banners[self.index]
-        if os.path.exists(arquivo):
-            arquivo_discord = discord.File(arquivo, filename="preview.png")
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        try:
+            if os.path.exists(arquivo):
+                arquivo_discord = discord.File(arquivo, filename="preview.png")
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        except discord.HTTPException:
+            self.index = indice_anterior
+            self.atualizar_botoes()
+            await interaction.followup.send(
+                "❌ A imagem desse banner é grande demais e o Discord recusou o envio. Avise um admin pra reduzir o tamanho do arquivo.",
+                ephemeral=True
+            )
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        indice_anterior = self.index
         self.index += 1
         self.atualizar_botoes()
         embed = self.gerar_embed()
         _, _, _, _, arquivo, _ = self.banners[self.index]
-        if os.path.exists(arquivo):
-            arquivo_discord = discord.File(arquivo, filename="preview.png")
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        try:
+            if os.path.exists(arquivo):
+                arquivo_discord = discord.File(arquivo, filename="preview.png")
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo_discord])
+            else:
+                await interaction.response.edit_message(embed=embed, view=self, attachments=[])
+        except discord.HTTPException:
+            self.index = indice_anterior
+            self.atualizar_botoes()
+            await interaction.followup.send(
+                "❌ A imagem desse banner é grande demais e o Discord recusou o envio. Avise um admin pra reduzir o tamanho do arquivo.",
+                ephemeral=True
+            )
 
     @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success, row=0)
     async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2564,92 +2582,153 @@ class ViewMenuLoja(ui.LayoutView):
             )
             return
         view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira)
-        embed = view.gerar_embed()
-        _, _, _, _, arquivo, _ = banners[0]
+        banner_id, nome, descricao, preco, arquivo, raridade = banners[0]
         if os.path.exists(arquivo):
-            arquivo_discord = discord.File(arquivo, filename="preview.png")
-            await interaction.response.send_message(embed=embed, view=view, file=arquivo_discord, ephemeral=True)
+            arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
+            await interaction.response.send_message(view=view, file=arquivo_discord, ephemeral=True)
         else:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 # ============================================================
 # VIEW (BOTÕES) - Mineração
 # ============================================================
-class ViewLojaMineracao(discord.ui.View):
-    def __init__(self, usuario_id):
+class ViewLoja(ui.LayoutView):
+    def __init__(self, usuario_id, banners, rotacao=False, expira=None):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        for sub in SUBCATEGORIAS_MINERACAO:
-            emoji = SUBCATEGORIAS_EMOJI[sub]
-            botao = discord.ui.Button(label=sub, emoji=emoji, style=discord.ButtonStyle.primary)
-            async def callback(interaction, subcategoria=sub):
-                view = ViewItensMineracao(self.usuario_id, subcategoria)
-                embed = view.gerar_embed()
-                await interaction.response.edit_message(embed=embed, view=view)
-            botao.callback = callback
-            self.add_item(botao)
+        self.banners = banners
+        self.rotacao = rotacao
+        self.expira = expira
+        self.index = 0
+        self.montar()
 
-        btn_voltar = discord.ui.Button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=1)
-        async def voltar_callback(interaction):
-            embed = discord.Embed(
-                title="🏪 Loja do JogadorBot",
-                description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
-                color=discord.Color.gold()
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                ephemeral=True
             )
-            embed.add_field(name="🖼️ Banners", value="Banners exclusivos por tempo limitado!", inline=False)
-            embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
-            embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
-            embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
-            view = ViewMenuLoja(self.usuario_id)
-            await interaction.response.edit_message(embed=embed, view=view, attachments=[])
-        btn_voltar.callback = voltar_callback
-        self.add_item(btn_voltar)
+            return False
+        return True
 
+    def montar(self):
+        self.clear_items()
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        joyens = buscar_joyens(self.usuario_id)
+        tem = usuario_tem_banner(self.usuario_id, banner_id)
 
-class ViewItensMineracao(discord.ui.View):
-    def __init__(self, usuario_id, subcategoria):
-        super().__init__(timeout=120)
-        self.usuario_id = usuario_id
-        self.subcategoria = subcategoria
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
 
-        itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == subcategoria}
-        for nome, dados in itens.items():
-            botao = discord.ui.Button(label=f"Comprar {nome}", emoji=dados["emoji"], style=discord.ButtonStyle.success)
-            async def callback(interaction, item_nome=nome):
-                sucesso, msg = comprar_item_mineracao(interaction.user.id, item_nome)
-                if sucesso:
-                    await interaction.response.send_message(f"✅ {msg}", ephemeral=True)
-                else:
-                    await interaction.response.send_message(f"<:Atencao:1534592266625093662> {msg}", ephemeral=True)
-            botao.callback = callback
-            self.add_item(botao)
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
 
-        btn_voltar = discord.ui.Button(label="Categorias", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=1)
-        async def voltar_callback(interaction):
-            view = ViewLojaMineracao(self.usuario_id)
-            embed = discord.Embed(
-                title="⛏️ Loja de Mineração",
-                description="Escolha uma subcategoria:",
-                color=discord.Color.dark_gold()
-            )
-            await interaction.response.edit_message(embed=embed, view=view)
-        btn_voltar.callback = voltar_callback
-        self.add_item(btn_voltar)
+        async def voltar_cb(interaction):
+            await interaction.response.defer()
+            await interaction.delete_original_response()
 
-    def gerar_embed(self):
-        emoji_sub = SUBCATEGORIAS_EMOJI[self.subcategoria]
-        embed = discord.Embed(
-            title=f"{emoji_sub} {self.subcategoria}",
-            color=discord.Color.dark_gold()
+        btn_voltar.callback = voltar_cb
+
+        cabecalho = ui.Section(
+            ui.TextDisplay(f"### 🖼️ {nome}\n{descricao}"),
+            accessory=btn_voltar
         )
-        itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == self.subcategoria}
-        for nome, dados in itens.items():
-            embed.add_field(
-                name=f"{dados['emoji']} {nome} — {dados['preco']} {dados['moeda']}",
-                value=dados["descricao"],
-                inline=False
+        container.add_item(cabecalho)
+        container.add_item(ui.Separator())
+
+        info_texto = (
+            f"**Raridade:** {raridade}\n"
+            f"**Preço:** <:JoyensIcon:1536254492797050880>{preco} Joyens\n"
+            f"**Seu saldo:** {joyens} Joyens"
+        )
+        if tem:
+            info_texto += "\n✅ Você já possui este banner"
+        elif joyens < preco:
+            info_texto += "\n<:Atencao:1534592266625093662> Joyens insuficientes"
+        container.add_item(ui.TextDisplay(info_texto))
+
+        if os.path.exists(arquivo):
+            container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{os.path.basename(arquivo)}")))
+
+        rodape = f"Banner {self.index + 1} de {len(self.banners)}"
+        if self.expira:
+            expira_dt = datetime.datetime.fromisoformat(self.expira)
+            rodape += f" • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}"
+        container.add_item(ui.TextDisplay(f"-# {rodape}"))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.index == 0)
+        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.index >= len(self.banners) - 1)
+        btn_comprar = ui.Button(
+            label="✅ Já possui" if tem else "🛒 Comprar",
+            style=discord.ButtonStyle.success,
+            disabled=tem
+        )
+
+        async def anterior_cb(interaction):
+            self.index -= 1
+            self.montar()
+            await self.atualizar(interaction)
+
+        async def proximo_cb(interaction):
+            self.index += 1
+            self.montar()
+            await self.atualizar(interaction)
+
+        async def comprar_cb(interaction):
+            comprador_id = interaction.user.id
+            banner_id_atual, nome_atual, descricao_atual, preco_atual, arquivo_atual, raridade_atual = self.banners[self.index]
+            joyens_atual = buscar_joyens(comprador_id)
+            if joyens_atual < preco_atual:
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1536254492797050880>{joyens_atual} e precisa de <:JoyensIcon:1536254492797050880>{preco_atual}.",
+                    ephemeral=True
+                )
+                return
+            if usuario_tem_banner(comprador_id, banner_id_atual):
+                await interaction.response.send_message(
+                    "<:Atencao:1534592266625093662> Você já possui este banner!",
+                    ephemeral=True
+                )
+                return
+            remover_joyens(comprador_id, preco_atual)
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                        (str(comprador_id), banner_id_atual))
+            cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                        (str(comprador_id), banner_id_atual))
+            con.commit()
+            con.close()
+
+            await interaction.response.send_message(
+                f"✅ Banner **{nome_atual}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
+                ephemeral=True
             )
-        return embed
+            self.montar()
+            arquivo_novo = discord.File(arquivo_atual, filename=os.path.basename(arquivo_atual)) if os.path.exists(arquivo_atual) else None
+            if arquivo_novo:
+                await interaction.message.edit(view=self, attachments=[arquivo_novo])
+            else:
+                await interaction.message.edit(view=self, attachments=[])
+
+        btn_anterior.callback = anterior_cb
+        btn_proximo.callback = proximo_cb
+        btn_comprar.callback = comprar_cb
+        linha.add_item(btn_anterior)
+        linha.add_item(btn_proximo)
+        linha.add_item(btn_comprar)
+        container.add_item(linha)
+
+        self.add_item(container)
+
+    async def atualizar(self, interaction: discord.Interaction):
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
+            await interaction.response.edit_message(view=self, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(view=self, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Inventário Geral
