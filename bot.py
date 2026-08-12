@@ -170,6 +170,43 @@ SABONETE_PRECO = 700
 
 LIMITE_PETS = 3
 # ============================================================
+# PETS — Negligência, HP e Doenças
+# ============================================================
+DIAS_NEGLIGENCIA_PARA_EVENTO = 5          # dias com TODOS os status zerados até rolar o evento
+DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 5       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
+
+DRENO_HP_NEGLIGENCIA_POR_DIA = 10         # HP perdido por dia com todos os status zerados
+DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente sem tratamento
+
+# Pesos relativos de cada evento (não precisam somar 100)
+EVENTOS_NEGLIGENCIA = {
+    "foge": 30,
+    "doente": 20,
+    "doente_e_foge": 20,
+    "resgatado": 29,
+    "morre": 1,
+}
+
+# Raças — puramente estéticas, não mudam preço/petisco/brinquedo (esses seguem a espécie)
+RACAS_POR_ESPECIE = {
+    "Cachorro": [
+        {"nome": "Pastor Alemão", "emoji": "🐕"},
+        {"nome": "Husky Siberiano", "emoji": "🐺"},
+        {"nome": "Caramelo (SRD)", "emoji": "🐶"},
+        {"nome": "Poodle", "emoji": "🐩"},
+    ],
+    "Gato": [
+        {"nome": "Siamês", "emoji": "🐈"},
+        {"nome": "Persa", "emoji": "🐱"},
+        {"nome": "Vira-lata Caramelo", "emoji": "🐈‍⬛"},
+    ],
+    "Papagaio": [
+        {"nome": "Papagaio-verdadeiro", "emoji": "🦜"},
+        {"nome": "Calopsita", "emoji": "🐦"},
+        {"nome": "Arara-azul", "emoji": "🦚"},
+    ],
+}
+# ============================================================
 # PETS — Dados sobre os pets
 # ============================================================
 # --- Decaimento (1 ponto a cada X minutos) ---
@@ -678,6 +715,88 @@ def iniciar_banco():
         )
     """)
 
+# Doenças possíveis para os pets
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS doencas_pets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emoji TEXT NOT NULL,
+            nome TEXT UNIQUE NOT NULL,
+            descricao TEXT NOT NULL,
+            causa TEXT NOT NULL,
+            cuidados TEXT NOT NULL
+        )
+    """)
+
+    # Catálogo de medicamentos + inventário por usuário
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS medicamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            emoji TEXT NOT NULL,
+            preco INTEGER NOT NULL,
+            especial INTEGER NOT NULL DEFAULT 0,
+            doenca_id INTEGER REFERENCES doencas_pets(id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS medicamentos_usuarios (
+            usuario_id TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            quantidade INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (usuario_id, nome)
+        )
+    """)
+
+    # Novas colunas na tabela pets: raça, HP, doença e controle de negligência
+    for coluna in [
+        "raca TEXT",
+        "hp INTEGER NOT NULL DEFAULT 100",
+        "doenca_id INTEGER REFERENCES doencas_pets(id)",
+        "negligencia_desde TEXT",
+        "ultimo_evento_negligencia TEXT",
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE pets ADD COLUMN {coluna}")
+        except sqlite3.OperationalError:
+            pass
+    con.commit()
+
+    # Seed inicial de doenças (só insere se ainda não existir)
+    doencas_iniciais = [
+        ("🤢", "Vermes", "Uma infestação de vermes intestinais, comum em pets mal cuidados.",
+         "Falta de higiene e alimentação irregular por muito tempo.", "Vermífugo e alimentação balanceada."),
+        ("🤧", "Gripe", "Uma infecção respiratória leve, mas incômoda.",
+         "Baixa imunidade causada por negligência prolongada.", "Repouso, hidratação e remédio veterinário."),
+        ("🦴", "Desnutrição", "O pet está fraco por falta de alimentação adequada.",
+         "Fome extrema por muito tempo.", "Alimentação regular e suplementos."),
+        ("🩹", "Infecção de Pele", "Feridas e coceira na pele causadas por falta de higiene.",
+         "Falta de banho por muito tempo.", "Banho regular e pomada cicatrizante."),
+    ]
+    for emoji, nome, descricao, causa, cuidados in doencas_iniciais:
+        cur.execute("""
+            INSERT OR IGNORE INTO doencas_pets (emoji, nome, descricao, causa, cuidados)
+            VALUES (?, ?, ?, ?, ?)
+        """, (emoji, nome, descricao, causa, cuidados))
+    con.commit()
+
+    # Seed inicial de medicamentos (normal = trata 1 doença específica / especial = trata qualquer uma)
+    cur.execute("SELECT id, nome FROM doencas_pets")
+    doencas_map = {nome: did for did, nome in cur.fetchall()}
+    medicamentos_iniciais = [
+        ("💊", "Vermífugo", 250, 0, "Vermes"),
+        ("💉", "Xarope Veterinário", 300, 0, "Gripe"),
+        ("🥫", "Ração Reforçada", 280, 0, "Desnutrição"),
+        ("🧴", "Pomada Cicatrizante", 260, 0, "Infecção de Pele"),
+        ("✨", "Remédio Especial", 900, 1, None),
+    ]
+    for emoji, nome, preco, especial, doenca_nome in medicamentos_iniciais:
+        doenca_id = doencas_map.get(doenca_nome)
+        cur.execute("""
+            INSERT OR IGNORE INTO medicamentos (nome, emoji, preco, especial, doenca_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (nome, emoji, preco, especial, doenca_id))
+    con.commit()
+    
     cur.execute("""
         CREATE TABLE IF NOT EXISTS usuario_stats (
             usuario_id TEXT PRIMARY KEY,
@@ -890,7 +1009,7 @@ def atualizar_stats_pet(pet_id):
     cur = con.cursor()
     cur.execute("""
         SELECT fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate,
-               energia_ao_dormir, ultima_atualizacao
+               energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde
         FROM pets WHERE id = ?
     """, (pet_id,))
     linha = cur.fetchone()
@@ -898,7 +1017,8 @@ def atualizar_stats_pet(pet_id):
         con.close()
         return
 
-    fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate, energia_ao_dormir, ultima_atualizacao = linha
+    (fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate,
+     energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde) = linha
 
     agora = datetime.datetime.now(FUSO_BR)
     ultima = datetime.datetime.fromisoformat(ultima_atualizacao)
@@ -940,18 +1060,39 @@ def atualizar_stats_pet(pet_id):
     nova_felicidade = max(0, min(100, round(nova_felicidade)))
     nova_energia = max(0, min(100, round(nova_energia)))
 
+    # --- Controle de negligência (todos os status zerados) ---
+    zerado_agora = (nova_fome == 0 and nova_energia == 0 and nova_higiene == 0 and nova_felicidade == 0)
+    if zerado_agora and negligencia_desde is None:
+        novo_negligencia_desde = agora.isoformat()
+    elif not zerado_agora:
+        novo_negligencia_desde = None
+    else:
+        novo_negligencia_desde = negligencia_desde
+
+    # --- Dreno de HP por negligência e por doença não tratada ---
+    dias_passados = minutos_passados / (60 * 24)
+    novo_hp = hp
+    if zerado_agora and negligencia_desde is not None:
+        novo_hp -= DRENO_HP_NEGLIGENCIA_POR_DIA * dias_passados
+    if doenca_id is not None:
+        novo_hp -= DRENO_HP_DOENCA_POR_DIA * dias_passados
+    novo_hp = max(0, min(100, round(novo_hp)))
+
     cur.execute("""
         UPDATE pets SET fome = ?, energia = ?, higiene = ?, felicidade = ?,
                         dormindo_desde = ?, dormindo_ate = ?, energia_ao_dormir = ?,
-                        ultima_atualizacao = ?
+                        ultima_atualizacao = ?, hp = ?, negligencia_desde = ?
         WHERE id = ?
     """, (
         nova_fome, nova_energia, nova_higiene, nova_felicidade,
         novo_dormindo_desde, novo_dormindo_ate, novo_energia_ao_dormir,
-        agora.isoformat(), pet_id
+        agora.isoformat(), novo_hp, novo_negligencia_desde, pet_id
     ))
     con.commit()
     con.close()
+
+    if novo_hp <= 0:
+        asyncio.create_task(processar_morte_pet(pet_id))
 
 def aplicar_efeito_pet(pet_id, fome=0, energia=0, higiene=0, felicidade=0):
     con = sqlite3.connect("jogadorbot.db")
@@ -975,6 +1116,111 @@ def aplicar_efeito_pet(pet_id, fome=0, energia=0, higiene=0, felicidade=0):
     """, (novo_fome, novo_energia, novo_higiene, novo_felicidade, agora, pet_id))
     con.commit()
     con.close()
+
+
+async def processar_morte_pet(pet_id):
+    """Remove um pet cujo HP chegou a 0 e avisa o dono por DM."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT usuario_id, nome FROM pets WHERE id = ?", (pet_id,))
+    linha = cur.fetchone()
+    if not linha:
+        con.close()
+        return
+    usuario_id, nome = linha
+    cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+    con.commit()
+    con.close()
+    try:
+        usuario = await bot.fetch_user(int(usuario_id))
+        await usuario.send(f"💔 Seu pet **{nome}** morreu — o HP dele chegou a zero por negligência ou doença não tratada.")
+    except:
+        pass
+
+
+async def processar_evento_negligencia(pet_id):
+    """Sorteia e aplica um evento para um pet negligenciado há muito tempo, e avisa o dono por DM."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT usuario_id, nome, doenca_id FROM pets WHERE id = ?", (pet_id,))
+    linha = cur.fetchone()
+    if not linha:
+        con.close()
+        return
+    usuario_id, nome, doenca_id_atual = linha
+
+    eventos = dict(EVENTOS_NEGLIGENCIA)
+    if doenca_id_atual is not None:
+        eventos.pop("doente", None)  # já está doente, essa opção não entra no sorteio
+
+    evento = random.choices(list(eventos.keys()), weights=list(eventos.values()), k=1)[0]
+    agora = datetime.datetime.now(FUSO_BR).isoformat()
+    mensagem = None
+
+    if evento == "foge":
+        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+        mensagem = f"😢 Seu pet **{nome}** fugiu de casa por causa da negligência. Ele não vai voltar."
+
+    elif evento == "doente":
+        cur.execute("SELECT id, emoji, nome, descricao FROM doencas_pets ORDER BY RANDOM() LIMIT 1")
+        doenca = cur.fetchone()
+        if doenca:
+            doenca_id, d_emoji, d_nome, d_desc = doenca
+            cur.execute(
+                "UPDATE pets SET doenca_id = ?, ultimo_evento_negligencia = ? WHERE id = ?",
+                (doenca_id, agora, pet_id)
+            )
+            mensagem = (
+                f"🤒 Seu pet **{nome}** ficou doente por negligência!\n"
+                f"{d_emoji} **{d_nome}** — {d_desc}\n"
+                f"Use `/pet ver` → **Medicar** antes que ele piore ou pior ainda aconteça."
+            )
+        else:
+            cur.execute("UPDATE pets SET ultimo_evento_negligencia = ? WHERE id = ?", (agora, pet_id))
+
+    elif evento == "doente_e_foge":
+        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+        mensagem = f"🤒😢 Seu pet **{nome}** ficou doente e fugiu por causa da negligência. Ele não vai voltar."
+
+    elif evento == "resgatado":
+        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+        mensagem = f"🏠 Vizinhos perceberam que **{nome}** estava sendo negligenciado e o resgataram. Ele agora tem um novo lar."
+
+    elif evento == "morre":
+        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+        mensagem = f"💔 Seu pet **{nome}** não resistiu à negligência e morreu."
+
+    con.commit()
+    con.close()
+
+    if mensagem:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            await usuario.send(mensagem)
+        except:
+            pass
+
+
+@tasks.loop(hours=1)
+async def verificar_negligencia_pets():
+    """Verifica pets com todos os status zerados há tempo demais e sorteia um evento."""
+    agora = datetime.datetime.now(FUSO_BR)
+    limite_inicial = (agora - datetime.timedelta(days=DIAS_NEGLIGENCIA_PARA_EVENTO)).isoformat()
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        SELECT id, ultimo_evento_negligencia FROM pets
+        WHERE negligencia_desde IS NOT NULL AND negligencia_desde <= ?
+    """, (limite_inicial,))
+    candidatos = cur.fetchall()
+    con.close()
+
+    limite_reroll = (agora - datetime.timedelta(days=DIAS_ENTRE_ROLAGENS_NEGLIGENCIA)).isoformat()
+    for pet_id, ultimo_evento in candidatos:
+        if ultimo_evento and ultimo_evento > limite_reroll:
+            continue  # já rolou um evento recentemente pra esse pet, espera o intervalo
+        await processar_evento_negligencia(pet_id)
 
 # ============================================================
 # SISTEMA DA MOCHILA
@@ -3903,6 +4149,7 @@ def gerar_embed_petshop(usuario_id):
     embed.add_field(name="🍖 Petiscos", value="Compre comida para alimentar seus pets.", inline=False)
     embed.add_field(name="🧸 Brinquedos", value="Compre brinquedos para brincar com seus pets.", inline=False)
     embed.add_field(name="🧼 Higiene", value="Compre sabonete para dar banho nos seus pets.", inline=False)
+    embed.add_field(name="💊 Medicamentos", value="Trate seus pets doentes.", inline=False)
     embed.set_footer(text=f"Seu saldo: {buscar_joyens(usuario_id)} Joyens")
     return embed
 
@@ -3936,6 +4183,12 @@ class ViewMenuPetshop(discord.ui.View):
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view)
 
+    @discord.ui.button(label="💊 Medicamentos", style=discord.ButtonStyle.primary)
+    async def abrir_medicamentos(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ViewComprarMedicamento(self.usuario_id)
+        embed = view.gerar_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
     @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
@@ -3959,10 +4212,11 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
         min_length=1
     )
 
-    def __init__(self, usuario_id, especie):
+    def __init__(self, usuario_id, especie, raca=None):
         super().__init__()
         self.usuario_id = usuario_id
         self.especie = especie
+        self.raca = raca
 
     async def on_submit(self, interaction: discord.Interaction):
         dados = PETS_DISPONIVEIS[self.especie]
@@ -3986,14 +4240,15 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
-            INSERT INTO pets (usuario_id, especie, nome, fome, energia, higiene, felicidade, criado_em, ultima_atualizacao)
-            VALUES (?, ?, ?, 100, 100, 100, 100, ?, ?)
-        """, (str(self.usuario_id), self.especie, self.nome_pet.value, agora, agora))
+            INSERT INTO pets (usuario_id, especie, raca, nome, fome, energia, higiene, felicidade, hp, criado_em, ultima_atualizacao)
+            VALUES (?, ?, ?, ?, 100, 100, 100, 100, 100, ?, ?)
+        """, (str(self.usuario_id), self.especie, self.raca, self.nome_pet.value, agora, agora))
         con.commit()
         con.close()
 
+        raca_texto = f" ({self.raca})" if self.raca else ""
         await interaction.response.send_message(
-            f"{dados['emoji']} **{self.nome_pet.value}** agora faz parte da família! Use `/pet ver` para cuidar dele.",
+            f"{dados['emoji']} **{self.nome_pet.value}**{raca_texto} agora faz parte da família! Use `/pet ver` para cuidar dele.",
             ephemeral=True
         )
 
@@ -4053,6 +4308,11 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
                 INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, ?)
                 ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + ?
             """, (str(self.usuario_id), qtd, qtd))
+        elif self.categoria == "medicamento":
+            cur.execute("""
+                INSERT INTO medicamentos_usuarios (usuario_id, nome, quantidade) VALUES (?, ?, ?)
+                ON CONFLICT(usuario_id, nome) DO UPDATE SET quantidade = quantidade + ?
+            """, (str(self.usuario_id), self.tipo, qtd, qtd))
 
         con.commit()
         con.close()
@@ -4060,6 +4320,48 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
         await interaction.response.send_message(
             f"✅ Você comprou {qtd}x **{self.tipo}** por {preco_total} Joyens!", ephemeral=True
         )
+
+class ViewEscolherRaca(discord.ui.View):
+    def __init__(self, usuario_id, especie):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.especie = especie
+
+        for raca in RACAS_POR_ESPECIE.get(especie, []):
+            botao = discord.ui.Button(label=f"{raca['emoji']} {raca['nome']}", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(raca["nome"])
+            self.add_item(botao)
+
+        botao_voltar = discord.ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar
+        self.add_item(botao_voltar)
+
+    def criar_callback(self, raca_nome):
+        async def callback(interaction: discord.Interaction):
+            if contar_pets(self.usuario_id) >= LIMITE_PETS:
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `/pet ver`.",
+                    ephemeral=True
+                )
+                return
+            await interaction.response.send_modal(ModalNomearPet(self.usuario_id, self.especie, raca_nome))
+        return callback
+
+    async def voltar(self, interaction: discord.Interaction):
+        view = ViewComprarPet(self.usuario_id)
+        embed = view.gerar_embed()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    def gerar_embed(self):
+        dados = PETS_DISPONIVEIS[self.especie]
+        embed = discord.Embed(
+            title=f"{dados['emoji']} Escolha a raça — {self.especie}",
+            description="Cada raça é só uma questão de estilo — o cuidado (petisco, brinquedo, preço) é o mesmo da espécie.",
+            color=discord.Color.gold()
+        )
+        for raca in RACAS_POR_ESPECIE.get(self.especie, []):
+            embed.add_field(name=f"{raca['emoji']} {raca['nome']}", value="\u200b", inline=True)
+        return embed
 
 class ViewComprarPet(discord.ui.View):
     def __init__(self, usuario_id):
@@ -4090,7 +4392,12 @@ class ViewComprarPet(discord.ui.View):
                     ephemeral=True
                 )
                 return
-            await interaction.response.send_modal(ModalNomearPet(self.usuario_id, especie))
+            if RACAS_POR_ESPECIE.get(especie):
+                view = ViewEscolherRaca(self.usuario_id, especie)
+                embed = view.gerar_embed()
+                await interaction.response.edit_message(embed=embed, view=view)
+            else:
+                await interaction.response.send_modal(ModalNomearPet(self.usuario_id, especie))
         return callback
 
     def gerar_embed(self):
@@ -4221,6 +4528,57 @@ class ViewComprarSabonete(discord.ui.View):
 # ============================================================
 # VIEW (BOTÕES) - !pets (Components V2)
 # ============================================================
+class ViewComprarMedicamento(discord.ui.View):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT nome, emoji, preco FROM medicamentos ORDER BY especial, nome")
+        medicamentos = cur.fetchall()
+        con.close()
+
+        for nome, emoji, preco in medicamentos:
+            botao = discord.ui.Button(label=f"{emoji} {nome} — {preco} Joyens", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(nome, preco)
+            self.add_item(botao)
+
+        botao_voltar = discord.ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        self.add_item(botao_voltar)
+
+    async def voltar_petshop(self, interaction: discord.Interaction):
+        view = ViewMenuPetshop(self.usuario_id)
+        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    def criar_callback(self, nome, preco):
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.send_modal(
+                ModalQuantidadeCompra(self.usuario_id, "medicamento", nome, preco)
+            )
+        return callback
+
+    def gerar_embed(self):
+        embed = discord.Embed(
+            title="💊 Petshop — Medicamentos",
+            description="Remédios normais tratam uma doença específica. Remédios especiais (✨) tratam qualquer doença.",
+            color=discord.Color.gold()
+        )
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT m.nome, m.emoji, m.preco, m.especial, d.nome
+            FROM medicamentos m LEFT JOIN doencas_pets d ON m.doenca_id = d.id
+            ORDER BY m.especial, m.nome
+        """)
+        medicamentos = cur.fetchall()
+        con.close()
+        for nome, emoji, preco, especial, doenca_nome in medicamentos:
+            valor = "Trata qualquer doença" if especial else f"Trata: {doenca_nome}"
+            embed.add_field(name=f"{emoji} {nome} — {preco} Joyens", value=valor, inline=False)
+        return embed
 
 class ViewEscolherPetisco(discord.ui.View):
     def __init__(self, usuario_id, pet_id, petiscos, view_pets=None, mensagem_pets=None):
@@ -4290,6 +4648,64 @@ class ViewEscolherPetisco(discord.ui.View):
                 content=f"✅ Você deu **{tipo}** para o seu pet! Restam {nova_quantidade}x — pode dar de novo se quiser.",
                 view=self
             )
+
+class ViewEscolherMedicamento(discord.ui.View):
+    def __init__(self, usuario_id, pet_id, medicamentos, view_pets=None, mensagem_pets=None):
+        super().__init__(timeout=60)
+        self.usuario_id = usuario_id
+        self.pet_id = pet_id
+        self.view_pets = view_pets
+        self.mensagem_pets = mensagem_pets
+        self.montar_select(medicamentos)
+
+    def montar_select(self, medicamentos):
+        for item in list(self.children):
+            self.remove_item(item)
+        opcoes = [
+            discord.SelectOption(label=f"{nome} (x{quantidade})", value=nome)
+            for nome, quantidade in medicamentos[:25]
+        ]
+        select = discord.ui.Select(placeholder="Escolha um remédio...", options=opcoes)
+        select.callback = self.escolher
+        self.add_item(select)
+
+    async def escolher(self, interaction: discord.Interaction):
+        nome_remedio = interaction.data["values"][0]
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "SELECT quantidade FROM medicamentos_usuarios WHERE usuario_id = ? AND nome = ?",
+            (str(self.usuario_id), nome_remedio)
+        )
+        resultado = cur.fetchone()
+        if not resultado or resultado[0] <= 0:
+            con.close()
+            await interaction.response.edit_message(content=f"<:Atencao:1534592266625093662> Você não tem mais **{nome_remedio}**!", view=None)
+            return
+
+        cur.execute(
+            "UPDATE medicamentos_usuarios SET quantidade = quantidade - 1 WHERE usuario_id = ? AND nome = ?",
+            (str(self.usuario_id), nome_remedio)
+        )
+        cur.execute("UPDATE pets SET doenca_id = NULL, ultimo_evento_negligencia = NULL WHERE id = ?", (self.pet_id,))
+        con.commit()
+        con.close()
+
+        atualizar_stats_pet(self.pet_id)
+        aplicar_efeito_pet(self.pet_id, felicidade=10)
+
+        if self.view_pets is not None and self.mensagem_pets is not None:
+            self.view_pets.montar()
+            try:
+                await self.mensagem_pets.edit(view=self.view_pets)
+            except discord.HTTPException:
+                pass
+
+        await interaction.response.edit_message(
+            content=f"✅ Você usou **{nome_remedio}** e curou seu pet!",
+            view=None
+        )
 
 class ViewConfirmarAdocao(discord.ui.View):
     def __init__(self, usuario_id, pet_id, nome_pet, view_pets=None, mensagem_pets=None):
@@ -4394,11 +4810,12 @@ class ViewPets(discord.ui.LayoutView):
             self.add_item(container)
             return
 
-        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+        (pet_id, especie, nome, fome, energia, higiene, felicidade,
+         dormindo_ate, hp, doenca_id, doenca_emoji, doenca_nome, raca) = pet
         dados = PETS_DISPONIVEIS.get(especie, {})
         dormindo = dormindo_ate is not None and datetime.datetime.fromisoformat(dormindo_ate) > datetime.datetime.now(FUSO_BR)
 
-        titulo = f"{dados.get('emoji', '🐾')} {nome}" + (" 💤" if dormindo else "")
+        titulo = f"{dados.get('emoji', '🐾')} {nome}" + (f" · {raca}" if raca else "") + (" 💤" if dormindo else "")
 
         botao_adocao = discord.ui.Button(label="Adoção", emoji="🏠", style=discord.ButtonStyle.danger)
         botao_adocao.callback = self.abrir_adocao
@@ -4412,10 +4829,14 @@ class ViewPets(discord.ui.LayoutView):
         container.accent_color = discord.Colour.blue()
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
+        container.add_item(discord.ui.TextDisplay(self.barra_status("HP", "❤️", hp)))
         container.add_item(discord.ui.TextDisplay(self.barra_status("Fome", "🍖", fome)))
         container.add_item(discord.ui.TextDisplay(self.barra_status("Energia", "⚡", energia)))
         container.add_item(discord.ui.TextDisplay(self.barra_status("Higiene", "🧼", higiene)))
         container.add_item(discord.ui.TextDisplay(self.barra_status("Felicidade", "😊", felicidade)))
+
+        saude_texto = "🩺 **Saúde:** Saudável ✅" if doenca_id is None else f"🩺 **Saúde:** Doente — {doenca_emoji} {doenca_nome} 🤒"
+        container.add_item(discord.ui.TextDisplay(saude_texto))
 
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
@@ -4436,7 +4857,13 @@ class ViewPets(discord.ui.LayoutView):
         )
         botao_dormir.callback = self.dormir
 
-        container.add_item(discord.ui.ActionRow(botao_alimentar, botao_brincar, botao_banho, botao_dormir))
+        botao_medicar = discord.ui.Button(
+            label="Medicar", emoji="💊", style=discord.ButtonStyle.danger,
+            disabled=(dormindo or doenca_id is None)
+        )
+        botao_medicar.callback = self.abrir_medicar
+
+        container.add_item(discord.ui.ActionRow(botao_alimentar, botao_brincar, botao_banho, botao_dormir, botao_medicar))
 
         self.add_item(container)
 
@@ -4466,12 +4893,49 @@ class ViewPets(discord.ui.LayoutView):
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
-            SELECT id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate
-            FROM pets WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0
+            SELECT p.id, p.especie, p.nome, p.fome, p.energia, p.higiene, p.felicidade,
+                   p.dormindo_ate, p.hp, p.doenca_id, d.emoji, d.nome, p.raca
+            FROM pets p
+            LEFT JOIN doencas_pets d ON p.doenca_id = d.id
+            WHERE p.id = ? AND p.usuario_id = ? AND p.disponivel_adocao = 0
         """, (self.pet_id_selecionado, str(self.usuario_id)))
         resultado = cur.fetchone()
         con.close()
         return resultado
+
+    async def abrir_medicar(self, interaction: discord.Interaction):
+        pet = self.buscar_pet_atualizado()
+        if pet is None:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
+            return
+        (pet_id, especie, nome, fome, energia, higiene, felicidade,
+         dormindo_ate, hp, doenca_id, doenca_emoji, doenca_nome, raca) = pet
+
+        if doenca_id is None:
+            await interaction.response.send_message(f"✅ {nome} está saudável, não precisa de remédio!", ephemeral=True)
+            return
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT mu.nome, mu.quantidade
+            FROM medicamentos_usuarios mu
+            JOIN medicamentos m ON mu.nome = m.nome
+            WHERE mu.usuario_id = ? AND mu.quantidade > 0 AND (m.doenca_id = ? OR m.especial = 1)
+        """, (str(self.usuario_id), doenca_id))
+        medicamentos = cur.fetchall()
+        con.close()
+
+        if not medicamentos:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você não tem nenhum remédio para tratar **{doenca_nome}**! "
+                f"Compre na `!loja` → Petshop → Medicamentos.",
+                ephemeral=True
+            )
+            return
+
+        view = ViewEscolherMedicamento(self.usuario_id, pet_id, medicamentos, view_pets=self, mensagem_pets=interaction.message)
+        await interaction.response.send_message("💊 Qual remédio você quer usar?", view=view, ephemeral=True)
 
     async def selecionar_pet(self, interaction: discord.Interaction):
         self.pet_id_selecionado = int(interaction.data["values"][0])
@@ -5550,6 +6014,7 @@ async def on_ready():
     verificar_rotacao.start()
     verificar_reset_semanal.start()
     verificar_missoes_temporarias.start()
+    verificar_negligencia_pets.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
