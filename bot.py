@@ -1719,7 +1719,7 @@ def usuario_favoritou_banner(usuario_id, banner_id):
 
 async def gerar_imagem_catalogo(banners_pagina):
     """Gera a imagem do catálogo com até 3 banners empilhados."""
-    card = Image.open("catalogo.png").convert("RGBA")
+    card = Image.open("https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/catalogo.png").convert("RGBA")
     largura, altura = card.size
     
     altura_por_banner = altura // 3
