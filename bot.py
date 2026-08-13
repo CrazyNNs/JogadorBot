@@ -2879,7 +2879,7 @@ class ViewLoja(ui.LayoutView):
 
         cabecalho = ui.Section(
             accessory=btn_voltar,
-            ui.TextDisplay(f"### 🖼️ {nome}")
+            ui.TextDisplay(f"### 🖼️ {nome}"),
         )
         container.add_item(cabecalho)
         container.add_item(ui.TextDisplay(descricao))
