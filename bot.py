@@ -5363,7 +5363,7 @@ class ViewCatalogoBanners(discord.ui.View):
         )
 
         for i, (banner_id, nome, descricao, preco, arquivo, raridade) in enumerate(pagina_banners):
-            em_rotacao = banner_em_rotacao(banner_id)
+            em_rotacao = banner_em_rotacao(self.usuario_id, banner_id)
             favoritado = usuario_favoritou_banner(self.usuario_id, banner_id)
             status = "🟢 Na loja agora!" if em_rotacao else "🔴 Fora de rotação"
             fav_texto = " ⭐ Favoritado" if favoritado else ""
