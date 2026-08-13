@@ -2877,11 +2877,12 @@ class ViewLoja(ui.LayoutView):
 
         btn_voltar.callback = voltar_cb
 
-        cabecalho = ui.Section(
-            ui.TextDisplay(f"### 🖼️ {nome}"),
+        linha_topo = ui.Section(
+            ui.TextDisplay("\u200b"),
             accessory=btn_voltar
         )
-        container.add_item(cabecalho)
+        container.add_item(linha_topo)
+        container.add_item(ui.TextDisplay(f"### 🖼️ {nome}"))
         container.add_item(ui.TextDisplay(descricao))
         container.add_item(ui.Separator())
 
