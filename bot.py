@@ -2764,9 +2764,9 @@ class ViewMenuLoja(ui.LayoutView):
 
             async def callback(interaction, categoria=chave):
                 if categoria == "banners":
-                    await interaction.response.send_message("🐾 O Petshop ainda está em construção!", ephemeral=True)
+                    await self.abrir_banners(interaction)
                 elif categoria == "petshop":
-                    await self.gerar_embed_petshop(interaction)
+                    await interaction.response.send_message("🐾 O Petshop ainda está em construção!", ephemeral=True)
                 elif categoria == "mineracao":
                     view = ViewLojaMineracao(self.usuario_id)
                     embed = discord.Embed(
