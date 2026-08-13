@@ -2668,12 +2668,6 @@ class ViewLoja(discord.ui.View):
         self.atualizar_botoes()
         await self.atualizar_mensagem(interaction)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
-    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.pagina += 1
-        self.atualizar_botoes()
-        await self.atualizar_mensagem(interaction)
-
     @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success, row=0)
     async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
         comprador_id = interaction.user.id
@@ -2706,6 +2700,12 @@ class ViewLoja(discord.ui.View):
             ephemeral=True
         )
         await interaction.message.edit(view=self)
+    
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        self.atualizar_botoes()
+        await self.atualizar_mensagem(interaction)
 
     @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
