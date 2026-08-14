@@ -5614,8 +5614,8 @@ class ViewAjuda(discord.ui.View):
             inline=True
         )
         embed.add_field(
-            name="🔧 Outros",
-            value="Comandos gerais e utilitários.",
+            name="🔧 Administrativo",
+            value="Comandos apenas para administradores.",
             inline=True
         )
         embed.add_field(
@@ -5674,16 +5674,14 @@ class ViewAjuda(discord.ui.View):
         embed.set_footer(text="🎮 Diversão • JogadorBot")
         return embed
 
-    def embed_outros(self):
+    def embed_adm(self):
         embed = discord.Embed(
-            title="🔧 Outros",
+            title="🔧 Administrativos",
             description="Comandos gerais e utilitários.",
             color=discord.Color.og_blurple()
         )
-        embed.add_field(name=f"`{PREFIX}oi`", value="Bot te cumprimenta", inline=False)
-        embed.add_field(name=f"`{PREFIX}hora`", value="Mostra a data e hora atual", inline=False)
         embed.add_field(name=f"`{PREFIX}limpar [quantidade]`", value="Apaga mensagens (requer permissão)", inline=False)
-        embed.set_footer(text="🔧 Outros • JogadorBot")
+        embed.set_footer(text="🔧 Administrativos • JogadorBot")
         return embed
 
     def embed_slash(self):
@@ -5721,7 +5719,7 @@ class ViewAjuda(discord.ui.View):
         await interaction.response.edit_message(embed=self.embed_diversao(), view=ViewAjudaCategoria())
 
     @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.primary, row=0)
-    async def btn_outros(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_adm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=self.embed_outros(), view=ViewAjudaCategoria())
 
     @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.primary, row=0)
@@ -5746,7 +5744,7 @@ class ViewAjudaCategoria(discord.ui.View):
         await interaction.response.edit_message(embed=ViewAjuda().embed_diversao(), view=self)
 
     @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.secondary, row=0)
-    async def btn_outros(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_adm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ViewAjuda().embed_outros(), view=self)
 
     @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.secondary, row=0)
