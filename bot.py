@@ -2766,7 +2766,8 @@ class ViewMenuLoja(ui.LayoutView):
                 if categoria == "banners":
                     await self.abrir_banners(interaction)
                 elif categoria == "petshop":
-                    await interaction.response.send_message("🐾 O Petshop ainda está em construção!", ephemeral=True)
+                    view = ViewMenuPetshop(self.usuario_id, view_loja=self)
+                    await interaction.response.edit_message(view=view, attachments=[])
                 elif categoria == "mineracao":
                     view = ViewLojaMineracao(self.usuario_id)
                     embed = discord.Embed(
@@ -4109,69 +4110,92 @@ class ViewMineracao(ui.LayoutView):
 # VIEW (BOTÕES) - Petshop
 # ============================================================
 
-def gerar_embed_petshop(usuario_id):
-    embed = discord.Embed(
-        title="🐾 Petshop",
-        description="Escolha uma subcategoria:",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="🐾 Pets", value="Adote um novo companheiro!", inline=False)
-    embed.add_field(name="🍖 Petiscos", value="Compre comida para alimentar seus pets.", inline=False)
-    embed.add_field(name="🧸 Brinquedos", value="Compre brinquedos para brincar com seus pets.", inline=False)
-    embed.add_field(name="🧼 Higiene", value="Compre sabonete para dar banho nos seus pets.", inline=False)
-    embed.add_field(name="💊 Medicamentos", value="Trate seus pets doentes.", inline=False)
-    embed.set_footer(text=f"Seu saldo: {buscar_joyens(usuario_id)} Joyens")
-    return embed
-
-
-class ViewMenuPetshop(discord.ui.View):
-    def __init__(self, usuario_id):
+class ViewMenuPetshop(ui.LayoutView):
+    def __init__(self, usuario_id, view_loja=None):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
+        self.view_loja = view_loja
+        self.montar()
 
-    @discord.ui.button(label="🐾 Pets", style=discord.ButtonStyle.primary)
-    async def abrir_pets(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewComprarPet(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                ephemeral=True
+            )
+            return False
+        return True
 
-    @discord.ui.button(label="🍖 Petiscos", style=discord.ButtonStyle.primary)
-    async def abrir_petiscos(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewComprarPetisco(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
 
-    @discord.ui.button(label="🧸 Brinquedos", style=discord.ButtonStyle.primary)
-    async def abrir_brinquedos(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewComprarBrinquedo(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
 
-    @discord.ui.button(label="🧼 Higiene", style=discord.ButtonStyle.primary)
-    async def abrir_higiene(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewComprarSabonete(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+        async def voltar_cb(interaction):
+            if self.view_loja:
+                self.view_loja.montar()
+                arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+                if arquivo_lojaicon:
+                    await interaction.response.edit_message(view=self.view_loja, attachments=[arquivo_lojaicon])
+                else:
+                    await interaction.response.edit_message(view=self.view_loja, attachments=[])
+            else:
+                view_menu = ViewMenuLoja(self.usuario_id)
+                arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+                if arquivo_lojaicon:
+                    await interaction.response.edit_message(view=view_menu, attachments=[arquivo_lojaicon])
+                else:
+                    await interaction.response.edit_message(view=view_menu, attachments=[])
 
-    @discord.ui.button(label="💊 Medicamentos", style=discord.ButtonStyle.primary)
-    async def abrir_medicamentos(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ViewComprarMedicamento(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+        btn_voltar.callback = voltar_cb
 
-    @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-    async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="🏪 Loja do JogadorBot",
-            description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
-            color=discord.Color.gold()
+        linha_topo = ui.Section(
+            ui.TextDisplay("\u200b"),
+            accessory=btn_voltar
         )
-        embed.add_field(name="🖼️ Banners", value="Personalize o seu perfil com banners exclusivos!", inline=False)
-        embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
-        embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
-        embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
-        view = ViewMenuLoja(self.usuario_id)
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        container.add_item(linha_topo)
+        container.add_item(ui.TextDisplay("### 🐾 Petshop\nEscolha uma subcategoria:"))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        subcategorias = [
+            ("🐾 Pets", "Adote um novo companheiro!", "pets"),
+            ("🍖 Petiscos", "Compre comida para alimentar seus pets.", "petiscos"),
+            ("🧸 Brinquedos", "Compre brinquedos para brincar com seus pets.", "brinquedos"),
+            ("🧼 Higiene", "Compre sabonete para dar banho nos seus pets.", "higiene"),
+            ("💊 Medicamentos", "Trate seus pets doentes.", "medicamentos"),
+        ]
+
+        for i, (label, descricao, chave) in enumerate(subcategorias):
+            linha = ui.ActionRow()
+            botao = ui.Button(label=label, style=discord.ButtonStyle.primary)
+
+            async def callback(interaction, subcategoria=chave):
+                if subcategoria == "pets":
+                    view = ViewComprarPet(self.usuario_id)
+                elif subcategoria == "petiscos":
+                    view = ViewComprarPetisco(self.usuario_id)
+                elif subcategoria == "brinquedos":
+                    view = ViewComprarBrinquedo(self.usuario_id)
+                elif subcategoria == "higiene":
+                    view = ViewComprarSabonete(self.usuario_id)
+                elif subcategoria == "medicamentos":
+                    view = ViewComprarMedicamento(self.usuario_id)
+                embed = view.gerar_embed()
+                await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+            botao.callback = callback
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(descricao))
+            if i < len(subcategorias) - 1:
+                container.add_item(ui.Separator())
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.TextDisplay(f"-# Seu saldo: {buscar_joyens(self.usuario_id)} Joyens"))
+
+        self.add_item(container)
 
 
 class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
@@ -4351,7 +4375,7 @@ class ViewComprarPet(discord.ui.View):
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=None, view=view, attachments=[])
         await interaction.response.edit_message(embed=embed, view=view)
 
     def criar_callback(self, especie):
@@ -4403,7 +4427,7 @@ class ViewComprarPetisco(discord.ui.View):
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=None, view=view, attachments=[])
         await interaction.response.edit_message(embed=embed, view=view)
 
     def criar_callback(self, tipo, preco):
@@ -4446,7 +4470,7 @@ class ViewComprarBrinquedo(discord.ui.View):
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=None, view=view, attachments=[])
         await interaction.response.edit_message(embed=embed, view=view)
 
     def criar_callback(self, tipo, preco, usos):
@@ -4520,7 +4544,7 @@ class ViewComprarMedicamento(discord.ui.View):
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
+        await interaction.response.edit_message(embed=None, view=view, attachments=[])
         await interaction.response.edit_message(embed=embed, view=view)
 
     def criar_callback(self, nome, preco):
