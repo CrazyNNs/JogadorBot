@@ -190,22 +190,40 @@ EVENTOS_NEGLIGENCIA = {
 # Raças — puramente estéticas, não mudam preço/petisco/brinquedo (esses seguem a espécie)
 RACAS_POR_ESPECIE = {
     "Cachorro": [
-        {"nome": "Pastor Alemão", "emoji": "🐕"},
-        {"nome": "Husky Siberiano", "emoji": "🐺"},
-        {"nome": "Caramelo (SRD)", "emoji": "🐶"},
-        {"nome": "Poodle", "emoji": "🐩"},
+        {"nome": "Caramelo (SRD)", "emoji": "🐶", "preco": 15000,
+         "descricao": "O mais brasileiro dos cães — vira-lata leal, resistente e brincalhão."},
+        {"nome": "Pastor Alemão", "emoji": "🐕", "preco": 22000,
+         "descricao": "Protetor e inteligente, um dos mais fáceis de adestrar."},
+        {"nome": "Poodle", "emoji": "🐩", "preco": 20000,
+         "descricao": "Elegante e esperto, adora atenção e carinho."},
+        {"nome": "Husky Siberiano", "emoji": "🐺", "preco": 26000,
+         "descricao": "Cheio de energia, ama aventuras e longas caminhadas."},
     ],
     "Gato": [
-        {"nome": "Siamês", "emoji": "🐈"},
-        {"nome": "Persa", "emoji": "🐱"},
-        {"nome": "Vira-lata Caramelo", "emoji": "🐈‍⬛"},
+        {"nome": "Vira-lata Caramelo", "emoji": "🐈‍⬛", "preco": 18000,
+         "descricao": "Independente e carismático, um clássico dos lares brasileiros."},
+        {"nome": "Siamês", "emoji": "🐈", "preco": 25000,
+         "descricao": "Falante e sociável, adora estar por perto do dono."},
+        {"nome": "Persa", "emoji": "🐱", "preco": 30000,
+         "descricao": "Tranquilo e elegante, prefere um cantinho quentinho pra dormir."},
     ],
     "Papagaio": [
-        {"nome": "Papagaio-verdadeiro", "emoji": "🦜"},
-        {"nome": "Calopsita", "emoji": "🐦"},
-        {"nome": "Arara-azul", "emoji": "🦚"},
+        {"nome": "Calopsita", "emoji": "🐦", "preco": 24000,
+         "descricao": "Companheira e curiosa, adora assobiar junto com você."},
+        {"nome": "Papagaio-verdadeiro", "emoji": "🦜", "preco": 30000,
+         "descricao": "Falante nato, repete tudo que ouve com facilidade."},
+        {"nome": "Arara-azul", "emoji": "🦚", "preco": 42000,
+         "descricao": "Rara e imponente, a joia mais cara do petshop."},
     ],
 }
+
+def buscar_preco_pet(especie, raca=None):
+    """Retorna o preço da raça específica, ou o preço padrão da espécie se não houver raça."""
+    if raca:
+        for r in RACAS_POR_ESPECIE.get(especie, []):
+            if r["nome"] == raca:
+                return r["preco"]
+    return PETS_DISPONIVEIS[especie]["preco"]
 # ============================================================
 # PETS — Dados sobre os pets
 # ============================================================
@@ -4213,6 +4231,7 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
 
     async def on_submit(self, interaction: discord.Interaction):
         dados = PETS_DISPONIVEIS[self.especie]
+        preco = buscar_preco_pet(self.especie, self.raca)
 
         if contar_pets(self.usuario_id) >= LIMITE_PETS:
             await interaction.response.send_message(
@@ -4221,13 +4240,13 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
             return
 
         saldo = buscar_joyens(self.usuario_id)
-        if saldo < dados["preco"]:
+        if saldo < preco:
             await interaction.response.send_message(
                 f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
             )
             return
 
-        remover_joyens(self.usuario_id, dados["preco"])
+        remover_joyens(self.usuario_id, preco)
 
         agora = datetime.datetime.now(FUSO_BR).isoformat()
         con = sqlite3.connect("jogadorbot.db")
@@ -4315,10 +4334,13 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
         )
 
 class ViewEscolherRaca(ui.LayoutView):
-    def __init__(self, usuario_id, especie):
+    RACAS_POR_PAGINA = 5
+
+    def __init__(self, usuario_id, especie, pagina=0):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.especie = especie
+        self.pagina = pagina
         self.montar()
 
     def criar_callback(self, raca_nome):
@@ -4332,6 +4354,16 @@ class ViewEscolherRaca(ui.LayoutView):
             await interaction.response.send_modal(ModalNomearPet(self.usuario_id, self.especie, raca_nome))
         return callback
 
+    async def pagina_anterior(self, interaction: discord.Interaction):
+        self.pagina -= 1
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def proxima_pagina(self, interaction: discord.Interaction):
+        self.pagina += 1
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
     async def voltar(self, interaction: discord.Interaction):
         view = ViewComprarPet(self.usuario_id)
         await interaction.response.edit_message(view=view)
@@ -4339,27 +4371,42 @@ class ViewEscolherRaca(ui.LayoutView):
     def montar(self):
         self.clear_items()
         dados = PETS_DISPONIVEIS[self.especie]
+        racas = RACAS_POR_ESPECIE.get(self.especie, [])
+        total_paginas = max(1, (len(racas) + self.RACAS_POR_PAGINA - 1) // self.RACAS_POR_PAGINA)
+        self.pagina = max(0, min(self.pagina, total_paginas - 1))
+
+        inicio = self.pagina * self.RACAS_POR_PAGINA
+        racas_pagina = racas[inicio:inicio + self.RACAS_POR_PAGINA]
+
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
         container.add_item(ui.TextDisplay(
             f"### {dados['emoji']} Escolha a raça — {self.especie}\n"
-            f"Cada raça é só uma questão de estilo — o cuidado (petisco, brinquedo, preço) é o mesmo da espécie."
+            f"-# Página {self.pagina + 1}/{total_paginas}"
         ))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        for raca in RACAS_POR_ESPECIE.get(self.especie, []):
+        for raca in racas_pagina:
             linha = ui.ActionRow()
-            botao = ui.Button(label=f"{raca['emoji']} {raca['nome']}", style=discord.ButtonStyle.success)
+            botao = ui.Button(label=raca["nome"], emoji=raca["emoji"], style=discord.ButtonStyle.success)
             botao.callback = self.criar_callback(raca["nome"])
             linha.add_item(botao)
             container.add_item(linha)
+            container.add_item(ui.TextDisplay(f"**{raca['preco']} Joyens**\n{raca['descricao']}"))
 
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
+
+        linha_nav = ui.ActionRow()
+        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=(self.pagina == 0))
+        btn_anterior.callback = self.pagina_anterior
+        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=(self.pagina >= total_paginas - 1))
+        btn_proximo.callback = self.proxima_pagina
+        btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar
+        linha_nav.add_item(btn_anterior)
+        linha_nav.add_item(btn_proximo)
+        linha_nav.add_item(btn_voltar)
+        container.add_item(linha_nav)
 
         self.add_item(container)
 
@@ -4399,7 +4446,7 @@ class ViewComprarPet(ui.LayoutView):
 
         for especie, dados in PETS_DISPONIVEIS.items():
             linha = ui.ActionRow()
-            botao = ui.Button(label=f"{dados['emoji']} {especie} — {dados['preco']} Joyens", style=discord.ButtonStyle.success)
+            botao = ui.Button(label=f"{dados['emoji']} {especie}", style=discord.ButtonStyle.success)
             botao.callback = self.criar_callback(especie)
             linha.add_item(botao)
             container.add_item(linha)
