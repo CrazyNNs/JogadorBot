@@ -5581,7 +5581,7 @@ class LayoutEmpregos(ui.LayoutView):
             )
 
             botao = ui.Button(
-                label="✅ Escolher" if pode else "<:Atencao:1534592266625093662> Escolher",
+                label="✅ Escolher" if pode else "❌ Escolher",
                 style=discord.ButtonStyle.success if pode else discord.ButtonStyle.danger
             )
             botao.callback = self.criar_callback(nome)
