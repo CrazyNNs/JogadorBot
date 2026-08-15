@@ -187,43 +187,64 @@ EVENTOS_NEGLIGENCIA = {
     "morre": 1,
 }
 
+# Moedas aceitas em qualquer preço do jogo (pets, itens futuros, etc.)
+MOEDAS = {
+    "joyens": {"nome": "Joyens", "icone": "<:JoyensIcon:1536254492797050880>"},
+    "joyogens": {"nome": "Joyogens", "icone": "<:JoyogensIcon:1536254582362210334>"},
+}
+
+# Raridades — hoje só exibem selo visual, mas ficam prontas pra um sistema futuro
+RARIDADES_PET = {
+    "Comum":    {"emoji": "⚪"},
+    "Raro":     {"emoji": "🔵"},
+    "Épico":    {"emoji": "🟣"},
+    "Lendário": {"emoji": "🟡"},
+    "Mítico":   {"emoji": "🔴"},
+}
 # Raças — puramente estéticas, não mudam preço/petisco/brinquedo (esses seguem a espécie)
 RACAS_POR_ESPECIE = {
     "Cachorro": [
-        {"nome": "Caramelo (SRD)", "emoji": "🐶", "preco": 15000,
+        {"nome": "Caramelo (SRD)", "emoji": "🐶", "preco": 15000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "O mais brasileiro dos cães — vira-lata leal, resistente e brincalhão."},
-        {"nome": "Pastor Alemão", "emoji": "🐕", "preco": 22000,
-         "descricao": "Protetor e inteligente, um dos mais fáceis de adestrar."},
-        {"nome": "Poodle", "emoji": "🐩", "preco": 20000,
+        {"nome": "Poodle", "emoji": "🐩", "preco": 20000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Elegante e esperto, adora atenção e carinho."},
-        {"nome": "Husky Siberiano", "emoji": "🐺", "preco": 26000,
+        {"nome": "Pastor Alemão", "emoji": "🐕", "preco": 22000, "moeda": "joyens", "raridade": "Raro",
+         "descricao": "Protetor e inteligente, um dos mais fáceis de adestrar."},
+        {"nome": "Husky Siberiano", "emoji": "🐺", "preco": 26000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Cheio de energia, ama aventuras e longas caminhadas."},
+        {"nome": "Cão-Fantasma", "emoji": "👻", "preco": 150, "moeda": "joyogens", "raridade": "Lendário",
+         "descricao": "Encontrado apenas nas profundezas da mineração. Diz a lenda que ele nunca late."},
     ],
     "Gato": [
-        {"nome": "Vira-lata Caramelo", "emoji": "🐈‍⬛", "preco": 18000,
+        {"nome": "Vira-lata Caramelo", "emoji": "🐈‍⬛", "preco": 18000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Independente e carismático, um clássico dos lares brasileiros."},
-        {"nome": "Siamês", "emoji": "🐈", "preco": 25000,
+        {"nome": "Siamês", "emoji": "🐈", "preco": 25000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Falante e sociável, adora estar por perto do dono."},
-        {"nome": "Persa", "emoji": "🐱", "preco": 30000,
+        {"nome": "Persa", "emoji": "🐱", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Tranquilo e elegante, prefere um cantinho quentinho pra dormir."},
+        {"nome": "Gato-de-Cristal", "emoji": "💎", "preco": 180, "moeda": "joyogens", "raridade": "Épico",
+         "descricao": "Seu pelo brilha como minério puro. Um achado raríssimo da mineração."},
     ],
     "Papagaio": [
-        {"nome": "Calopsita", "emoji": "🐦", "preco": 24000,
+        {"nome": "Calopsita", "emoji": "🐦", "preco": 24000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Companheira e curiosa, adora assobiar junto com você."},
-        {"nome": "Papagaio-verdadeiro", "emoji": "🦜", "preco": 30000,
+        {"nome": "Papagaio-verdadeiro", "emoji": "🦜", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Falante nato, repete tudo que ouve com facilidade."},
-        {"nome": "Arara-azul", "emoji": "🦚", "preco": 42000,
-         "descricao": "Rara e imponente, a joia mais cara do petshop."},
+        {"nome": "Arara-azul", "emoji": "🦚", "preco": 42000, "moeda": "joyens", "raridade": "Épico",
+         "descricao": "Rara e imponente, a joia mais cara do petshop em Joyens."},
+        {"nome": "Fênix Miniatura", "emoji": "🔥", "preco": 220, "moeda": "joyogens", "raridade": "Mítico",
+         "descricao": "Ninguém sabe explicar como ela sobrevive dentro das minas. A raridade suprema."},
     ],
 }
 
 def buscar_preco_pet(especie, raca=None):
-    """Retorna o preço da raça específica, ou o preço padrão da espécie se não houver raça."""
+    """Retorna (preco, moeda) da raça específica, ou o preço padrão da espécie em Joyens se não houver raça."""
     if raca:
         for r in RACAS_POR_ESPECIE.get(especie, []):
             if r["nome"] == raca:
-                return r["preco"]
-    return PETS_DISPONIVEIS[especie]["preco"]
+                return r["preco"], r.get("moeda", "joyens")
+    return PETS_DISPONIVEIS[especie]["preco"], "joyens"
+
 # ============================================================
 # PETS — Dados sobre os pets
 # ============================================================
@@ -4231,7 +4252,8 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
 
     async def on_submit(self, interaction: discord.Interaction):
         dados = PETS_DISPONIVEIS[self.especie]
-        preco = buscar_preco_pet(self.especie, self.raca)
+        preco, moeda = buscar_preco_pet(self.especie, self.raca)
+        moeda_info = MOEDAS.get(moeda, MOEDAS["joyens"])
 
         if contar_pets(self.usuario_id) >= LIMITE_PETS:
             await interaction.response.send_message(
@@ -4239,14 +4261,18 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
             )
             return
 
-        saldo = buscar_joyens(self.usuario_id)
+        saldo = buscar_joyens(self.usuario_id) if moeda == "joyens" else buscar_stats(self.usuario_id)["joyogens"]
         if saldo < preco:
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Saldo: {saldo} Joyens.", ephemeral=True
+                f"<:Atencao:1534592266625093662> Você não tem {moeda_info['nome']} suficientes! Saldo: {saldo} {moeda_info['nome']}.",
+                ephemeral=True
             )
             return
 
-        remover_joyens(self.usuario_id, preco)
+        if moeda == "joyens":
+            remover_joyens(self.usuario_id, preco)
+        else:
+            remover_joyogens(self.usuario_id, preco)
 
         agora = datetime.datetime.now(FUSO_BR).isoformat()
         con = sqlite3.connect("jogadorbot.db")
@@ -4392,7 +4418,13 @@ class ViewEscolherRaca(ui.LayoutView):
             botao.callback = self.criar_callback(raca["nome"])
             linha.add_item(botao)
             container.add_item(linha)
-            container.add_item(ui.TextDisplay(f"**{raca['preco']} Joyens**\n{raca['descricao']}"))
+
+            moeda_info = MOEDAS.get(raca.get("moeda", "joyens"), MOEDAS["joyens"])
+            raridade = raca.get("raridade", "Comum")
+            raridade_info = RARIDADES_PET.get(raridade, RARIDADES_PET["Comum"])
+            container.add_item(ui.TextDisplay(
+                f"{raridade_info['emoji']} **{raridade}** · {moeda_info['icone']} **{raca['preco']} {moeda_info['nome']}**\n{raca['descricao']}"
+            ))
 
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
