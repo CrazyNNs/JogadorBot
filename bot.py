@@ -5267,12 +5267,20 @@ class ViewMochilaBanners(discord.ui.View):
                 disabled=eh_ativo,
                 row=len(self.children) // 3
             )
-            async def voltar_callback(interaction):
-            view = ViewPerfil(self.usuario)
-            anexos = [view.arquivo_discord] if view.arquivo_discord else []
-            await interaction.response.edit_message(embed=None, view=view, attachments=anexos)
-            
-            botao.callback = callback
+
+            async def equipar_callback(interaction: discord.Interaction, banner_id=banner_id):
+                con = sqlite3.connect("jogadorbot.db")
+                cur = con.cursor()
+                cur.execute("""
+                    INSERT INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)
+                    ON CONFLICT(usuario_id) DO UPDATE SET banner_id = ?
+                """, (str(self.usuario.id), banner_id, banner_id))
+                con.commit()
+                con.close()
+                self.construir_botoes()
+                await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+
+            botao.callback = equipar_callback
             self.add_item(botao)
 
         # Linha de navegação
