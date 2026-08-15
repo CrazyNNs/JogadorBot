@@ -2604,8 +2604,7 @@ class ViewPerfil(discord.ui.LayoutView):
             await interaction.response.send_message("Este usuário ainda não tem conquistas!", ephemeral=True)
             return
         view = ViewConquistas(self.usuario, conquistas, pagina=0)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        await interaction.response.edit_message(view=view, attachments=[])
 
     async def ver_banners(self, interaction: discord.Interaction):
         con = sqlite3.connect("jogadorbot.db")
@@ -2621,13 +2620,12 @@ class ViewPerfil(discord.ui.LayoutView):
             await interaction.response.send_message("Este usuário não tem nenhum banner! Use `!loja` para comprar.", ephemeral=True)
             return
         view = ViewMochilaBanners(self.usuario)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+        await interaction.response.edit_message(view=view, attachments=[])
 
 # ============================================================
 # VIEW (BOTÕES) - Conquistas de usuário
 # ============================================================
-class ViewConquistas(discord.ui.View):
+class ViewConquistas(discord.ui.LayoutView):
     def __init__(self, usuario: discord.Member, conquistas: list, pagina: int):
         super().__init__(timeout=120)
         self.usuario = usuario
@@ -2635,47 +2633,57 @@ class ViewConquistas(discord.ui.View):
         self.pagina = pagina
         self.por_pagina = 10
         self.total_paginas = max(1, -(-len(conquistas) // self.por_pagina))
-        self.atualizar_botoes()
+        self.montar()
 
-    def atualizar_botoes(self):
-        self.anterior.disabled = self.pagina == 0
-        self.proximo.disabled = self.pagina >= self.total_paginas - 1
-
-    def gerar_embed(self):
+    def montar(self):
+        self.clear_items()
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         pagina_conquistas = self.conquistas[inicio:fim]
-        embed = discord.Embed(
-            title=f"🏆 Conquistas de {self.usuario.display_name}",
-            color=discord.Color.gold()
+
+        container = discord.ui.Container()
+        container.accent_color = discord.Colour.gold()
+
+        thumbnail = discord.ui.Thumbnail(self.usuario.display_avatar.url)
+        titulo = (
+            f"### 🏆 Conquistas de {self.usuario.display_name}\n"
+            f"-# Página {self.pagina + 1}/{self.total_paginas} • {len(self.conquistas)} conquista(s) no total"
         )
-        embed.set_thumbnail(url=self.usuario.display_avatar.url)
-        for nome, descricao, emoji, data in pagina_conquistas:
-            embed.add_field(
-                name=f"{emoji} {nome}",
-                value=f"{descricao}\n📅 {data}",
-                inline=False
-            )
-        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.conquistas)} conquista(s) no total")
-        return embed
+        container.add_item(discord.ui.Section(discord.ui.TextDisplay(titulo), accessory=thumbnail))
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if pagina_conquistas:
+            for nome, descricao, emoji, data in pagina_conquistas:
+                container.add_item(discord.ui.TextDisplay(f"{emoji} **{nome}**\n{descricao}\n📅 {data}"))
+        else:
+            container.add_item(discord.ui.TextDisplay("Nenhuma conquista nesta página."))
+
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=(self.pagina == 0))
+        btn_anterior.callback = self.anterior
+        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=(self.pagina >= self.total_paginas - 1))
+        btn_proximo.callback = self.proximo
+        btn_voltar = discord.ui.Button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar
+
+        container.add_item(discord.ui.ActionRow(btn_anterior, btn_proximo, btn_voltar))
+        self.add_item(container)
+
+    async def anterior(self, interaction: discord.Interaction):
         self.pagina -= 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+        self.montar()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def proximo(self, interaction: discord.Interaction):
         self.pagina += 1
-        self.atualizar_botoes()
-        await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+        self.montar()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-    async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def voltar(self, interaction: discord.Interaction):
         view = ViewPerfil(self.usuario)
         anexos = [view.arquivo_discord] if view.arquivo_discord else []
-        await interaction.response.edit_message(embed=None, view=view, attachments=anexos)
+        await interaction.response.edit_message(view=view, attachments=anexos)
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
@@ -5221,7 +5229,7 @@ class ViewPets(discord.ui.LayoutView):
 # VIEW (BOTÕES) - Inventário de banner
 # ============================================================
 
-class ViewMochilaBanners(discord.ui.View):
+class ViewMochilaBanners(discord.ui.LayoutView):
     def __init__(self, usuario: discord.Member, pagina: int = 0):
         super().__init__(timeout=120)
         self.usuario = usuario
@@ -5229,7 +5237,7 @@ class ViewMochilaBanners(discord.ui.View):
         self.por_pagina = 9
         self.banners = self.carregar_banners()
         self.total_paginas = max(1, -(-len(self.banners) // self.por_pagina))
-        self.construir_botoes()
+        self.montar()
 
     def carregar_banners(self):
         con = sqlite3.connect("jogadorbot.db")
@@ -5252,131 +5260,83 @@ class ViewMochilaBanners(discord.ui.View):
         con.close()
         return resultado[0] if resultado else None
 
-    def construir_botoes(self):
+    def criar_callback_equipar(self, banner_id):
+        async def callback(interaction: discord.Interaction):
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("""
+                INSERT INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)
+                ON CONFLICT(usuario_id) DO UPDATE SET banner_id = ?
+            """, (str(self.usuario.id), banner_id, banner_id))
+            con.commit()
+            con.close()
+            self.montar()
+            await interaction.response.edit_message(view=self)
+        return callback
+
+    async def anterior(self, interaction: discord.Interaction):
+        self.pagina -= 1
+        self.banners = self.carregar_banners()
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def proximo(self, interaction: discord.Interaction):
+        self.pagina += 1
+        self.banners = self.carregar_banners()
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def voltar(self, interaction: discord.Interaction):
+        view = ViewPerfil(self.usuario)
+        anexos = [view.arquivo_discord] if view.arquivo_discord else []
+        await interaction.response.edit_message(view=view, attachments=anexos)
+
+    def montar(self):
         self.clear_items()
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         pagina_banners = self.banners[inicio:fim]
         ativo_id = self.banner_ativo_id()
 
-        for banner_id, nome in pagina_banners:
-            eh_ativo = banner_id == ativo_id
-            botao = discord.ui.Button(
-                label=nome,
-                style=discord.ButtonStyle.success if eh_ativo else discord.ButtonStyle.primary,
-                disabled=eh_ativo,
-                row=len(self.children) // 3
-            )
+        container = discord.ui.Container()
+        container.accent_color = discord.Colour.blue()
 
-            async def equipar_callback(interaction: discord.Interaction, banner_id=banner_id):
-                con = sqlite3.connect("jogadorbot.db")
-                cur = con.cursor()
-                cur.execute("""
-                    INSERT INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)
-                    ON CONFLICT(usuario_id) DO UPDATE SET banner_id = ?
-                """, (str(self.usuario.id), banner_id, banner_id))
-                con.commit()
-                con.close()
-                self.construir_botoes()
-                await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
-
-            botao.callback = equipar_callback
-            self.add_item(botao)
-
-        # Linha de navegação
-        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary,
-                                          disabled=self.pagina == 0, row=3)
-        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary,
-                                         disabled=self.pagina >= self.total_paginas - 1, row=3)
-        btn_voltar = discord.ui.Button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>",style=discord.ButtonStyle.danger, row=3)
-
-        async def anterior_callback(interaction):
-            self.pagina -= 1
-            self.banners = self.carregar_banners()
-            self.construir_botoes()
-            await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
-
-        async def proximo_callback(interaction):
-            self.pagina += 1
-            self.banners = self.carregar_banners()
-            self.construir_botoes()
-            await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
-
-        async def voltar_callback(interaction):
-            membro = self.usuario
-            level, xp = buscar_level(membro.id)
-            xp_prox = xp_necessario(level)
-            joyens = buscar_joyens(membro.id)
-            conquistas = buscar_conquistas_usuario(membro.id)
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-            qtd_banners = cur.fetchone()[0]
-            con.close()
-
-            embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
-            embed1.set_thumbnail(url=membro.display_avatar.url)
-            embed1.description = (
-                f"**{membro.display_name}**\n"
-                f"> {membro.name}\n"
-                f"**ID:** ``{membro.id}``"
-            )
-            if xp_prox:
-                porcentagem = int((xp / xp_prox) * 100)
-                blocos_cheios = porcentagem // 10
-                barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-                embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
-            else:
-                embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-
-            embed2 = discord.Embed(color=discord.Color.blurple())
-            embed2.add_field(name="<:BolsaJoyensIcon:1525729605724405781> Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
-            embed2.add_field(
-                name="📊 Outros",
-                value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{qtd_banners}``",
-                inline=False
-            )
-
-            emprego_dados = buscar_emprego(membro.id)
-            if emprego_dados:
-                emprego_nome, vezes_trabalhadas, _ = emprego_dados
-                emprego_info = EMPREGOS.get(emprego_nome)
-                emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
-                embed2.add_field(
-                    name="<:EmpregosIcon:1525710982364532890> Emprego",
-                    value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
-                    inline=False
-                )
-            else:
-                embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
-
-            banner_arquivo = buscar_banner_ativo(membro.id)
-            if banner_arquivo and os.path.exists(banner_arquivo):
-                nome_arquivo = os.path.basename(banner_arquivo)
-                arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
-                embed2.set_image(url=f"attachment://{nome_arquivo}")
-                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[arquivo_discord])
-            else:
-                await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[])
-
-        btn_anterior.callback = anterior_callback
-        btn_proximo.callback = proximo_callback
-        btn_voltar.callback = voltar_callback
-
-        self.add_item(btn_anterior)
-        self.add_item(btn_proximo)
-        self.add_item(btn_voltar)
-
-    def gerar_embed(self):
-        ativo_id = self.banner_ativo_id()
-        embed = discord.Embed(
-            title=f"🖼️ Banners de {self.usuario.display_name}",
-            description="Selecione um banner para equipar no seu perfil.\n> O banner ativo aparece em verde.",
-            color=discord.Color.blue()
+        thumbnail = discord.ui.Thumbnail(self.usuario.display_avatar.url)
+        titulo = (
+            f"### 🖼️ Banners de {self.usuario.display_name}\n"
+            f"Selecione um banner para equipar no seu perfil.\n> O banner ativo aparece em verde.\n"
+            f"-# Página {self.pagina + 1}/{self.total_paginas} • {len(self.banners)} banner(s) no total"
         )
-        embed.set_thumbnail(url=self.usuario.display_avatar.url)
-        embed.set_footer(text=f"Página {self.pagina + 1} de {self.total_paginas} • {len(self.banners)} banner(s) no total")
-        return embed
+        container.add_item(discord.ui.Section(discord.ui.TextDisplay(titulo), accessory=thumbnail))
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        if pagina_banners:
+            for i in range(0, len(pagina_banners), 3):
+                linha = discord.ui.ActionRow()
+                for banner_id, nome in pagina_banners[i:i + 3]:
+                    eh_ativo = banner_id == ativo_id
+                    botao = discord.ui.Button(
+                        label=nome,
+                        style=discord.ButtonStyle.success if eh_ativo else discord.ButtonStyle.primary,
+                        disabled=eh_ativo,
+                    )
+                    botao.callback = self.criar_callback_equipar(banner_id)
+                    linha.add_item(botao)
+                container.add_item(linha)
+        else:
+            container.add_item(discord.ui.TextDisplay("Você ainda não tem nenhum banner."))
+
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        btn_anterior = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=(self.pagina == 0))
+        btn_anterior.callback = self.anterior
+        btn_proximo = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=(self.pagina >= self.total_paginas - 1))
+        btn_proximo.callback = self.proximo
+        btn_voltar = discord.ui.Button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar
+
+        container.add_item(discord.ui.ActionRow(btn_anterior, btn_proximo, btn_voltar))
+        self.add_item(container)
 
 class SelectCategoriaCatalogo(discord.ui.Select):
     def __init__(self, usuario_id):
