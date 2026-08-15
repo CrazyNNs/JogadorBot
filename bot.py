@@ -5078,7 +5078,8 @@ class ViewPets(discord.ui.LayoutView):
         if pet is None:
             await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
-        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+        (pet_id, especie, nome, fome, energia, higiene, felicidade,
+         dormindo_ate, hp, doenca_id, doenca_emoji, doenca_nome, raca) = pet
 
         if energia < BRINCAR_ENERGIA_MINIMA:
             await interaction.response.send_message(
@@ -5159,10 +5160,19 @@ class ViewPets(discord.ui.LayoutView):
         if pet is None:
             await interaction.response.send_message("<:Atencao:1534592266625093662> Pet não encontrado.", ephemeral=True)
             return
-        pet_id, especie, nome, fome, energia, higiene, felicidade, dormindo_ate = pet
+        (pet_id, especie, nome, fome, energia, higiene, felicidade,
+         dormindo_ate, hp, doenca_id, doenca_emoji, doenca_nome, raca) = pet
+
+        if energia >= 100:
+            await interaction.response.send_message(
+                f"😊 {nome} já está com a energia cheia! Não precisa dormir agora.", ephemeral=True
+            )
+            return
 
         agora = datetime.datetime.now(FUSO_BR)
-        ate = agora + datetime.timedelta(hours=DORMIR_DURACAO_HORAS)
+        energia_faltante = 100 - energia
+        duracao_horas = (energia_faltante / 100) * DORMIR_DURACAO_HORAS
+        ate = agora + datetime.timedelta(hours=duracao_horas)
 
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
