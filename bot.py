@@ -2508,13 +2508,97 @@ async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompen
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
 # ============================================================
-class ViewPerfil(discord.ui.View):
+class ViewPerfil(discord.ui.LayoutView):
     def __init__(self, usuario: discord.Member):
         super().__init__(timeout=120)
         self.usuario = usuario
+        self.arquivo_discord = None
+        self.montar()
 
-    @discord.ui.button(label="🏆 Conquistas", style=discord.ButtonStyle.primary)
-    async def ver_conquistas(self, interaction: discord.Interaction, button: discord.ui.Button):
+    def montar(self):
+        self.clear_items()
+        membro = self.usuario
+
+        level, xp = buscar_level(membro.id)
+        xp_prox = xp_necessario(level)
+        joyens = buscar_joyens(membro.id)
+        joyogens = buscar_stats(membro.id)["joyogens"]
+        conquistas = buscar_conquistas_usuario(membro.id)
+        banner_arquivo = buscar_banner_ativo(membro.id)
+
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+        total_banners = cur.fetchone()[0]
+        con.close()
+
+        container = discord.ui.Container()
+        container.accent_color = discord.Colour.blurple()
+
+        if xp_prox:
+            porcentagem = int((xp / xp_prox) * 100)
+            blocos_cheios = porcentagem // 10
+            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
+            xp_texto = f"**XP**\n`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP"
+        else:
+            xp_texto = "**XP**\n🏆 Level máximo atingido!"
+
+        info_discord = (
+            f"# Perfil — Lvl.``{level}``\n"
+            f"**{membro.display_name}**\n"
+            f"> {membro.name}\n"
+            f"**ID:** ``{membro.id}``\n\n"
+            f"{xp_texto}"
+        )
+
+        thumbnail = discord.ui.Thumbnail(membro.display_avatar.url)
+        container.add_item(discord.ui.Section(discord.ui.TextDisplay(info_discord), accessory=thumbnail))
+
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        container.add_item(discord.ui.TextDisplay(
+            f"<:BolsaJoyensIcon:1525729605724405781> **Economia**\n"
+            f"> **Joyens:** <:JoyensIcon:1536254492797050880>``{joyens}``\n"
+            f"> **Joyogens:** <:JoyogensIcon:1536254582362210334>``{joyogens}``"
+        ))
+
+        container.add_item(discord.ui.TextDisplay(
+            f"📊 **Outros**\n"
+            f"> **Conquistas:** ``{len(conquistas)}``\n"
+            f"> **Banners:** ``{total_banners}``"
+        ))
+
+        emprego_dados = buscar_emprego(membro.id)
+        if emprego_dados:
+            emprego_nome, vezes_trabalhadas, _ = emprego_dados
+            emprego_info = EMPREGOS.get(emprego_nome)
+            emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
+            emprego_texto = f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas"
+        else:
+            emprego_texto = "Desempregado — use `!empregos`"
+        container.add_item(discord.ui.TextDisplay(
+            f"<:EmpregosIcon:1525710982364532890> **Emprego**\n{emprego_texto}"
+        ))
+
+        self.arquivo_discord = None
+        if banner_arquivo and os.path.exists(banner_arquivo):
+            nome_arquivo = os.path.basename(banner_arquivo)
+            self.arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
+            container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{nome_arquivo}")))
+
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        botao_conquistas = discord.ui.Button(label="Conquistas", emoji="🏆", style=discord.ButtonStyle.primary)
+        botao_conquistas.callback = self.ver_conquistas
+
+        botao_banners = discord.ui.Button(label="Banners", emoji="🖼️", style=discord.ButtonStyle.secondary)
+        botao_banners.callback = self.ver_banners
+
+        container.add_item(discord.ui.ActionRow(botao_conquistas, botao_banners))
+
+        self.add_item(container)
+
+    async def ver_conquistas(self, interaction: discord.Interaction):
         conquistas = buscar_conquistas_usuario(self.usuario.id)
         if not conquistas:
             await interaction.response.send_message("Este usuário ainda não tem conquistas!", ephemeral=True)
@@ -2523,8 +2607,7 @@ class ViewPerfil(discord.ui.View):
         embed = view.gerar_embed()
         await interaction.response.edit_message(embed=embed, view=view, attachments=[])
 
-    @discord.ui.button(label="🖼️ Banners", style=discord.ButtonStyle.secondary)
-    async def ver_banners(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def ver_banners(self, interaction: discord.Interaction):
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
@@ -2590,61 +2673,9 @@ class ViewConquistas(discord.ui.View):
 
     @discord.ui.button(label="Perfil", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        membro = self.usuario
-        level, xp = buscar_level(membro.id)
-        xp_prox = xp_necessario(level)
-        joyens = buscar_joyens(membro.id)
-        conquistas = buscar_conquistas_usuario(membro.id)
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-        total_banners = cur.fetchone()[0]
-        con.close()
-        banner_arquivo = buscar_banner_ativo(membro.id)
-
-        embed1 = discord.Embed(title=f"Perfil — Lvl.``{level}``", color=discord.Color.blurple())
-        embed1.set_thumbnail(url=membro.display_avatar.url)
-        embed1.description = (
-            f"**{membro.display_name}**\n"
-            f"> {membro.name}\n"
-            f"**ID:** ``{membro.id}``"
-        )
-        if xp_prox:
-            porcentagem = int((xp / xp_prox) * 100)
-            blocos_cheios = porcentagem // 10
-            barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-            embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
-        else:
-            embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-
-        embed2 = discord.Embed(color=discord.Color.blurple())
-        embed2.add_field(name="<:BolsaJoyensIcon:1525729605724405781> Economia", value=f"> **Joyens:** ``{joyens}``", inline=False)
-        embed2.add_field(
-            name="📊 Outros",
-            value=f"> **Conquistas:** ``{len(conquistas)}``\n> **Banners:** ``{total_banners}``",
-            inline=False
-        )
-
-        emprego_dados = buscar_emprego(membro.id)
-        if emprego_dados:
-            emprego_nome, vezes_trabalhadas, _ = emprego_dados
-            emprego_info = EMPREGOS.get(emprego_nome)
-            emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
-            embed2.add_field(
-                name="<:EmpregosIcon:1525710982364532890> Emprego",
-                value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
-                inline=False
-            )
-        else:
-            embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
-
-        if banner_arquivo and os.path.exists(banner_arquivo):
-            nome_arquivo = os.path.basename(banner_arquivo)
-            arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
-            embed2.set_image(url=f"attachment://{nome_arquivo}")
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(embeds=[embed1, embed2], view=ViewPerfil(membro), attachments=[])
+        view = ViewPerfil(self.usuario)
+        anexos = [view.arquivo_discord] if view.arquivo_discord else []
+        await interaction.response.edit_message(embed=None, view=view, attachments=anexos)
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
@@ -5236,17 +5267,11 @@ class ViewMochilaBanners(discord.ui.View):
                 disabled=eh_ativo,
                 row=len(self.children) // 3
             )
-            async def callback(interaction, bid=banner_id, bnome=nome):
-                con2 = sqlite3.connect("jogadorbot.db")
-                cur2 = con2.cursor()
-                cur2.execute("INSERT OR REPLACE INTO banner_ativo (usuario_id, banner_id) VALUES (?, ?)",
-                             (str(interaction.user.id), bid))
-                con2.commit()
-                con2.close()
-                # Reconstrói os botões para atualizar qual está ativo
-                self.banners = self.carregar_banners()
-                self.construir_botoes()
-                await interaction.response.edit_message(embed=self.gerar_embed(), view=self)
+            async def voltar_callback(interaction):
+            view = ViewPerfil(self.usuario)
+            anexos = [view.arquivo_discord] if view.arquivo_discord else []
+            await interaction.response.edit_message(embed=None, view=view, attachments=anexos)
+            
             botao.callback = callback
             self.add_item(botao)
 
@@ -6159,78 +6184,11 @@ async def perfil(ctx, membro: discord.Member = None):
     if membro is None:
         membro = ctx.author
 
-    level, xp = buscar_level(membro.id)
-    xp_prox = xp_necessario(level)
-    joyens = buscar_joyens(membro.id)
-    conquistas = buscar_conquistas_usuario(membro.id)
-    banner_arquivo = buscar_banner_ativo(membro.id)
-
-# Quantidade de banners do usuário
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
-    total_banners = cur.fetchone()[0]
-    con.close()
-    
-# Primeira embed — Informações gerais
-    embed1 = discord.Embed(
-        title=f"Perfil — Lvl.``{level}``",
-        color=discord.Color.blurple()
-    )
-    embed1.set_thumbnail(url=membro.display_avatar.url)
-    embed1.description = (
-        f"**{membro.display_name}**\n"
-        f"> {membro.name}\n"
-        f"**ID:** ``{membro.id}``"
-    )
-    if xp_prox:
-        porcentagem = int((xp / xp_prox) * 100)
-        blocos_cheios = porcentagem // 10
-        barra = "█" * blocos_cheios + "░" * (10 - blocos_cheios)
-        embed1.add_field(name="XP", value=f"`{barra}` {porcentagem}%\n{xp}/{xp_prox} XP", inline=False)
+    view = ViewPerfil(membro)
+    if view.arquivo_discord:
+        await ctx.send(view=view, file=view.arquivo_discord)
     else:
-        embed1.add_field(name="XP", value="🏆 Level máximo atingido!", inline=False)
-
-# Segunda embed — Economia e outros
-    joyogens = buscar_stats(membro.id)["joyogens"]
-    embed2 = discord.Embed(color=discord.Color.blurple())
-    embed2.add_field(
-        name="<:BolsaJoyensIcon:1525729605724405781> Economia",
-        value=f"> **Joyens:** <:JoyensIcon:1536254492797050880>``{joyens}``\n> **Joyogens:** <:JoyogensIcon:1536254582362210334>``{joyogens}``",
-        inline=False
-    )
-    embed2.add_field(
-        name="📊 Outros",
-        value=(
-            f"> **Conquistas:** ``{len(conquistas)}``\n"
-            f"> **Banners:** ``{total_banners}``"
-        ),
-        inline=False
-    )
-
-    emprego_dados = buscar_emprego(membro.id)
-    if emprego_dados:
-        emprego_nome, vezes_trabalhadas, _ = emprego_dados
-        emprego_info = EMPREGOS.get(emprego_nome)
-        emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
-        embed2.add_field(
-            name="<:EmpregosIcon:1525710982364532890> Emprego",
-            value=f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas",
-            inline=False
-        )
-    else:
-        embed2.add_field(name="<:EmpregosIcon:1525710982364532890> Emprego", value="Desempregado — use `!empregos`", inline=False)
-
-# Banner ativo como imagem
-    if banner_arquivo and os.path.exists(banner_arquivo):
-        nome_arquivo = os.path.basename(banner_arquivo)
-        arquivo_discord = discord.File(banner_arquivo, filename=nome_arquivo)
-        embed2.set_image(url=f"attachment://{nome_arquivo}")
-        view = ViewPerfil(membro)
-        await ctx.send(embeds=[embed1, embed2], file=arquivo_discord, view=view)
-    else:
-        view = ViewPerfil(membro)
-        await ctx.send(embeds=[embed1, embed2], view=view)
+        await ctx.send(view=view)
             
 @bot.command(name="diario")
 async def diario(ctx):
