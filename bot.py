@@ -4182,8 +4182,7 @@ class ViewMenuPetshop(ui.LayoutView):
                     view = ViewComprarSabonete(self.usuario_id)
                 elif subcategoria == "medicamentos":
                     view = ViewComprarMedicamento(self.usuario_id)
-                embed = view.gerar_embed()
-                await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+                await interaction.response.edit_message(view=view, attachments=[])
 
             botao.callback = callback
             linha.add_item(botao)
@@ -4315,20 +4314,12 @@ class ModalQuantidadeCompra(discord.ui.Modal, title="Quantos você quer comprar?
             f"✅ Você comprou {qtd}x **{self.tipo}** por {preco_total} Joyens!", ephemeral=True
         )
 
-class ViewEscolherRaca(discord.ui.View):
+class ViewEscolherRaca(ui.LayoutView):
     def __init__(self, usuario_id, especie):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
         self.especie = especie
-
-        for raca in RACAS_POR_ESPECIE.get(especie, []):
-            botao = discord.ui.Button(label=f"{raca['emoji']} {raca['nome']}", style=discord.ButtonStyle.success)
-            botao.callback = self.criar_callback(raca["nome"])
-            self.add_item(botao)
-
-        botao_voltar = discord.ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar
-        self.add_item(botao_voltar)
+        self.montar()
 
     def criar_callback(self, raca_nome):
         async def callback(interaction: discord.Interaction):
@@ -4343,40 +4334,44 @@ class ViewEscolherRaca(discord.ui.View):
 
     async def voltar(self, interaction: discord.Interaction):
         view = ViewComprarPet(self.usuario_id)
-        embed = view.gerar_embed()
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view)
 
-    def gerar_embed(self):
+    def montar(self):
+        self.clear_items()
         dados = PETS_DISPONIVEIS[self.especie]
-        embed = discord.Embed(
-            title=f"{dados['emoji']} Escolha a raça — {self.especie}",
-            description="Cada raça é só uma questão de estilo — o cuidado (petisco, brinquedo, preço) é o mesmo da espécie.",
-            color=discord.Color.gold()
-        )
-        for raca in RACAS_POR_ESPECIE.get(self.especie, []):
-            embed.add_field(name=f"{raca['emoji']} {raca['nome']}", value="\u200b", inline=True)
-        return embed
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            f"### {dados['emoji']} Escolha a raça — {self.especie}\n"
+            f"Cada raça é só uma questão de estilo — o cuidado (petisco, brinquedo, preço) é o mesmo da espécie."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-class ViewComprarPet(discord.ui.View):
+        for raca in RACAS_POR_ESPECIE.get(self.especie, []):
+            linha = ui.ActionRow()
+            botao = ui.Button(label=f"{raca['emoji']} {raca['nome']}", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(raca["nome"])
+            linha.add_item(botao)
+            container.add_item(linha)
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
+
+class ViewComprarPet(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        for especie, dados in PETS_DISPONIVEIS.items():
-            botao = discord.ui.Button(
-                label=f"{dados['emoji']} {especie} — {dados['preco']} Joyens",
-                style=discord.ButtonStyle.success
-            )
-            botao.callback = self.criar_callback(especie)
-            self.add_item(botao)
-
-        botao_voltar = discord.ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        self.add_item(botao_voltar)
+        self.montar()
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        await interaction.response.edit_message(embed=None, view=view, attachments=[])
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     def criar_callback(self, especie):
         async def callback(interaction: discord.Interaction):
@@ -4388,47 +4383,47 @@ class ViewComprarPet(discord.ui.View):
                 return
             if RACAS_POR_ESPECIE.get(especie):
                 view = ViewEscolherRaca(self.usuario_id, especie)
-                embed = view.gerar_embed()
-                await interaction.response.edit_message(embed=embed, view=view)
+                await interaction.response.edit_message(view=view)
             else:
                 await interaction.response.send_modal(ModalNomearPet(self.usuario_id, especie))
         return callback
 
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="🐾 Petshop — Pets",
-            description=f"Adote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário.",
-            color=discord.Color.gold()
-        )
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            f"### 🐾 Petshop — Pets\nAdote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         for especie, dados in PETS_DISPONIVEIS.items():
-            embed.add_field(
-                name=f"{dados['emoji']} {especie} — {dados['preco']} Joyens",
-                value=dados["descricao"],
-                inline=False
-            )
-        return embed
+            linha = ui.ActionRow()
+            botao = ui.Button(label=f"{dados['emoji']} {especie} — {dados['preco']} Joyens", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(especie)
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(dados["descricao"]))
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 
 
-class ViewComprarPetisco(discord.ui.View):
+class ViewComprarPetisco(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        for especie, dados in PETS_DISPONIVEIS.items():
-            botao = discord.ui.Button(
-                label=f"{dados['petisco_nome']} — {dados['petisco_preco']} Joyens",
-                style=discord.ButtonStyle.success
-            )
-            botao.callback = self.criar_callback(dados["petisco_nome"], dados["petisco_preco"])
-            self.add_item(botao)
-
-        botao_voltar = discord.ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        self.add_item(botao_voltar)
+        self.montar()
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        await interaction.response.edit_message(embed=None, view=view, attachments=[])
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     def criar_callback(self, tipo, preco):
         async def callback(interaction: discord.Interaction):
@@ -4437,41 +4432,42 @@ class ViewComprarPetisco(discord.ui.View):
             )
         return callback
 
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="🍖 Petshop — Petiscos",
-            description="Compre petiscos para alimentar seus pets. Escolha o petisco e informe a quantidade.",
-            color=discord.Color.gold()
-        )
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            "### 🍖 Petshop — Petiscos\nCompre petiscos para alimentar seus pets. Escolha o petisco e informe a quantidade."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         for especie, dados in PETS_DISPONIVEIS.items():
-            embed.add_field(
-                name=f"{dados['petisco_nome']} — {dados['petisco_preco']} Joyens",
-                value=f"Petisco favorito do {dados['emoji']} {especie}",
-                inline=False
-            )
-        return embed
+            linha = ui.ActionRow()
+            botao = ui.Button(label=f"{dados['petisco_nome']} — {dados['petisco_preco']} Joyens", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(dados["petisco_nome"], dados["petisco_preco"])
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(f"Petisco favorito do {dados['emoji']} {especie}"))
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 
 
-class ViewComprarBrinquedo(discord.ui.View):
+class ViewComprarBrinquedo(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        for especie, dados in PETS_DISPONIVEIS.items():
-            botao = discord.ui.Button(
-                label=f"{dados['brinquedo_nome']} — {dados['brinquedo_preco']} Joyens",
-                style=discord.ButtonStyle.success
-            )
-            botao.callback = self.criar_callback(dados["brinquedo_nome"], dados["brinquedo_preco"], dados["brinquedo_usos"])
-            self.add_item(botao)
-
-        botao_voltar = discord.ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        self.add_item(botao_voltar)
+        self.montar()
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        await interaction.response.edit_message(embed=None, view=view, attachments=[])
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     def criar_callback(self, tipo, preco, usos):
         async def callback(interaction: discord.Interaction):
@@ -4480,72 +4476,85 @@ class ViewComprarBrinquedo(discord.ui.View):
             )
         return callback
 
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="🧸 Petshop — Brinquedos",
-            description="Compre brinquedos para brincar com seus pets. Escolha o brinquedo e informe a quantidade.",
-            color=discord.Color.gold()
-        )
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            "### 🧸 Petshop — Brinquedos\nCompre brinquedos para brincar com seus pets. Escolha o brinquedo e informe a quantidade."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         for especie, dados in PETS_DISPONIVEIS.items():
-            embed.add_field(
-                name=f"{dados['brinquedo_nome']} — {dados['brinquedo_preco']} Joyens",
-                value=f"Brinquedo favorito do {dados['emoji']} {especie} · {dados['brinquedo_usos']} usos cada",
-                inline=False
-            )
-        return embed
+            linha = ui.ActionRow()
+            botao = ui.Button(label=f"{dados['brinquedo_nome']} — {dados['brinquedo_preco']} Joyens", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(dados["brinquedo_nome"], dados["brinquedo_preco"], dados["brinquedo_usos"])
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(
+                f"Brinquedo favorito do {dados['emoji']} {especie} · {dados['brinquedo_usos']} usos cada"
+            ))
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 
 
-class ViewComprarSabonete(discord.ui.View):
+class ViewComprarSabonete(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
+        self.montar()
 
-    @discord.ui.button(label=f"🧼 Sabonete — {SABONETE_PRECO} Joyens", style=discord.ButtonStyle.success)
-    async def comprar_sabonete(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def comprar_sabonete(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
             ModalQuantidadeCompra(self.usuario_id, "sabonete", SABONETE_NOME, SABONETE_PRECO)
         )
 
-    @discord.ui.button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-    async def voltar_petshop(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        embed = gerar_embed_petshop(self.usuario_id)
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view, attachments=[])
 
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="🧼 Petshop — Higiene",
-            description=f"O Sabonete é universal e serve para dar banho em qualquer pet.\n\n**Sabonete** — {SABONETE_PRECO} Joyens",
-            color=discord.Color.gold()
-        )
-        return embed
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            f"### 🧼 Petshop — Higiene\nO Sabonete é universal e serve para dar banho em qualquer pet.\n\n"
+            f"**Sabonete** — {SABONETE_PRECO} Joyens"
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        linha = ui.ActionRow()
+        botao_comprar = ui.Button(label=f"🧼 Sabonete — {SABONETE_PRECO} Joyens", style=discord.ButtonStyle.success)
+        botao_comprar.callback = self.comprar_sabonete
+        linha.add_item(botao_comprar)
+        container.add_item(linha)
+
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 # ============================================================
 # VIEW (BOTÕES) - !pets (Components V2)
 # ============================================================
-class ViewComprarMedicamento(discord.ui.View):
+class ViewComprarMedicamento(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("SELECT nome, emoji, preco FROM medicamentos ORDER BY especial, nome")
-        medicamentos = cur.fetchall()
-        con.close()
-
-        for nome, emoji, preco in medicamentos:
-            botao = discord.ui.Button(label=f"{emoji} {nome} — {preco} Joyens", style=discord.ButtonStyle.success)
-            botao.callback = self.criar_callback(nome, preco)
-            self.add_item(botao)
-
-        botao_voltar = discord.ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        self.add_item(botao_voltar)
+        self.montar()
 
     async def voltar_petshop(self, interaction: discord.Interaction):
         view = ViewMenuPetshop(self.usuario_id)
-        await interaction.response.edit_message(embed=None, view=view, attachments=[])
-        await interaction.response.edit_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=view, attachments=[])
 
     def criar_callback(self, nome, preco):
         async def callback(interaction: discord.Interaction):
@@ -4554,12 +4563,8 @@ class ViewComprarMedicamento(discord.ui.View):
             )
         return callback
 
-    def gerar_embed(self):
-        embed = discord.Embed(
-            title="💊 Petshop — Medicamentos",
-            description="Remédios normais tratam uma doença específica. Remédios especiais (✨) tratam qualquer doença.",
-            color=discord.Color.gold()
-        )
+    def montar(self):
+        self.clear_items()
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         cur.execute("""
@@ -4569,10 +4574,31 @@ class ViewComprarMedicamento(discord.ui.View):
         """)
         medicamentos = cur.fetchall()
         con.close()
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+        container.add_item(ui.TextDisplay(
+            "### 💊 Petshop — Medicamentos\nRemédios normais tratam uma doença específica. Remédios especiais (✨) tratam qualquer doença."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
         for nome, emoji, preco, especial, doenca_nome in medicamentos:
+            linha = ui.ActionRow()
+            botao = ui.Button(label=f"{emoji} {nome} — {preco} Joyens", style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(nome, preco)
+            linha.add_item(botao)
+            container.add_item(linha)
             valor = "Trata qualquer doença" if especial else f"Trata: {doenca_nome}"
-            embed.add_field(name=f"{emoji} {nome} — {preco} Joyens", value=valor, inline=False)
-        return embed
+            container.add_item(ui.TextDisplay(valor))
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_petshop
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 
 class ViewEscolherPetisco(discord.ui.View):
     def __init__(self, usuario_id, pet_id, petiscos, view_pets=None, mensagem_pets=None):
