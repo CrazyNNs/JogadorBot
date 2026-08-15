@@ -3607,7 +3607,7 @@ class ViewMineracao(ui.LayoutView):
         self.btn_dinamite = discord.ui.Button(label="🧨 Dinamite", style=discord.ButtonStyle.secondary,
                                                disabled=not (buscar_qtd_item_mineracao(usuario_id, "Dinamite") > 0))
         self.btn_dinamite.callback = self.dinamite_callback
-        self.btn_parar = discord.ui.Button(label="Parar", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.secondary)
+        self.btn_parar = discord.ui.Button(label="Parar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.secondary)
         self.btn_parar.callback = self.parar_callback
 
         self.btn_consumir = discord.ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
