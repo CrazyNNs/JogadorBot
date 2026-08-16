@@ -11,6 +11,7 @@ import os
 import aiohttp
 import io
 import asyncio
+import traceback
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -7799,6 +7800,9 @@ async def on_command_error(ctx, error):
         await ctx.send("<:Atencao:1534592266625093662> Argumento inválido. Verifique se digitou corretamente.")
     elif isinstance(error, commands.CommandNotFound):
         pass
+    else:
+        print(f"❌ Erro não tratado no comando '{ctx.command}' (usuário {ctx.author.id}):")
+        traceback.print_exception(type(error), error, error.__traceback__)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
