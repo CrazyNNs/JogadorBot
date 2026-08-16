@@ -5763,7 +5763,7 @@ class ViewPagamento(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="<:Atencao:1534592266625093662> Recusar", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Recusar", emoji="<:Atencao:1534592266625093662>", style=discord.ButtonStyle.danger)
     async def recusar(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
         for item in self.children:
