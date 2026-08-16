@@ -2680,7 +2680,7 @@ class ViewPerfil(discord.ui.LayoutView):
         thumbnail = discord.ui.Thumbnail(avatar_url)
         container.add_item(discord.ui.Section(discord.ui.TextDisplay(info_discord), accessory=thumbnail))
 
-        botao_editar = discord.ui.Button(label="Editar", emoji="✏️", style=discord.ButtonStyle.secondary)
+        botao_editar = discord.ui.Button(label="Editar", emoji="<:EditarIcon:1538606194070134834>", style=discord.ButtonStyle.secondary)
         botao_editar.callback = self.editar_perfil
         container.add_item(discord.ui.Section(discord.ui.TextDisplay(xp_texto), accessory=botao_editar))
 
