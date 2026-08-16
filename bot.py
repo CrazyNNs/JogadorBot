@@ -530,6 +530,16 @@ def iniciar_banco():
             banner_id INTEGER
         )
     """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS perfil_personalizado (
+            usuario_id TEXT PRIMARY KEY,
+            nome_personalizado TEXT,
+            descricao TEXT,
+            avatar_url TEXT,
+            cor_hex TEXT
+        )
+    """)
     
     cur.execute("""
         CREATE TABLE IF NOT EXISTS admins (
@@ -1361,6 +1371,43 @@ def buscar_banner_ativo(usuario_id):
     if resultado and os.path.exists(resultado[0]):
         return resultado[0]
     return "bannerbot.png"
+
+def buscar_perfil_personalizado(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute(
+        "SELECT nome_personalizado, descricao, avatar_url, cor_hex FROM perfil_personalizado WHERE usuario_id = ?",
+        (str(usuario_id),)
+    )
+    resultado = cur.fetchone()
+    con.close()
+    if not resultado:
+        return {"nome_personalizado": None, "descricao": None, "avatar_url": None, "cor_hex": None}
+    return {
+        "nome_personalizado": resultado[0], "descricao": resultado[1],
+        "avatar_url": resultado[2], "cor_hex": resultado[3]
+    }
+
+def salvar_perfil_personalizado(usuario_id, nome_personalizado, descricao, avatar_url, cor_hex):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO perfil_personalizado (usuario_id, nome_personalizado, descricao, avatar_url, cor_hex)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(usuario_id) DO UPDATE SET
+            nome_personalizado = excluded.nome_personalizado,
+            descricao = excluded.descricao,
+            avatar_url = excluded.avatar_url,
+            cor_hex = excluded.cor_hex
+    """, (str(usuario_id), nome_personalizado, descricao, avatar_url, cor_hex))
+    con.commit()
+    con.close()
+
+def cor_hex_valida(valor):
+    v = valor.lstrip("#")
+    if len(v) != 6:
+        return False
+    return all(c in "0123456789abcdefABCDEF" for c in v)
 
 def parsear_tempo(tempo_str):
     """Converte string como 1d5h30m para segundos. Retorna None se for 'infinito'."""
@@ -2508,6 +2555,76 @@ async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompen
 # ============================================================
 # VIEWS (BOTÕES) - Perfil
 # ============================================================
+class ModalEditarPerfil(discord.ui.Modal, title="Editar Perfil"):
+    def __init__(self, usuario: discord.Member):
+        super().__init__()
+        self.usuario = usuario
+        atual = buscar_perfil_personalizado(usuario.id)
+
+        self.campo_nome = discord.ui.TextInput(
+            label="Nome personalizado",
+            placeholder="Deixe em branco para usar seu apelido do Discord",
+            required=False,
+            max_length=32,
+            default=atual.get("nome_personalizado") or ""
+        )
+        self.campo_descricao = discord.ui.TextInput(
+            label="Descrição",
+            style=discord.TextStyle.paragraph,
+            placeholder="Escreva algo sobre você...",
+            required=False,
+            max_length=200,
+            default=atual.get("descricao") or ""
+        )
+        self.campo_avatar = discord.ui.TextInput(
+            label="URL da foto de perfil personalizada",
+            placeholder="Cole um link de imagem, ou deixe em branco para voltar à foto do Discord",
+            required=False,
+            max_length=300,
+            default=atual.get("avatar_url") or ""
+        )
+        self.campo_cor = discord.ui.TextInput(
+            label="Cor da barra lateral (hex)",
+            placeholder="Ex: #5865F2 — deixe em branco para a cor padrão",
+            required=False,
+            max_length=7,
+            default=atual.get("cor_hex") or ""
+        )
+
+        self.add_item(self.campo_nome)
+        self.add_item(self.campo_descricao)
+        self.add_item(self.campo_avatar)
+        self.add_item(self.campo_cor)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        cor_valor = self.campo_cor.value.strip()
+        if cor_valor and not cor_hex_valida(cor_valor):
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Cor inválida! Use um código hexadecimal, ex: `#5865F2`.",
+                ephemeral=True
+            )
+            return
+
+        avatar_valor = self.campo_avatar.value.strip()
+        if avatar_valor and not avatar_valor.startswith(("http://", "https://")):
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> O link da imagem precisa começar com http:// ou https://.",
+                ephemeral=True
+            )
+            return
+
+        salvar_perfil_personalizado(
+            self.usuario.id,
+            nome_personalizado=self.campo_nome.value.strip() or None,
+            descricao=self.campo_descricao.value.strip() or None,
+            avatar_url=avatar_valor or None,
+            cor_hex=cor_valor or None
+        )
+
+        view = ViewPerfil(self.usuario)
+        anexos = [view.arquivo_discord] if view.arquivo_discord else []
+        await interaction.response.edit_message(view=view, attachments=anexos)
+
 class ViewPerfil(discord.ui.LayoutView):
     def __init__(self, usuario: discord.Member):
         super().__init__(timeout=120)
@@ -2525,6 +2642,7 @@ class ViewPerfil(discord.ui.LayoutView):
         joyogens = buscar_stats(membro.id)["joyogens"]
         conquistas = buscar_conquistas_usuario(membro.id)
         banner_arquivo = buscar_banner_ativo(membro.id)
+        perfil_custom = buscar_perfil_personalizado(membro.id)
 
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
@@ -2533,7 +2651,11 @@ class ViewPerfil(discord.ui.LayoutView):
         con.close()
 
         container = discord.ui.Container()
-        container.accent_color = discord.Colour.blurple()
+        cor_custom = perfil_custom.get("cor_hex")
+        if cor_custom and cor_hex_valida(cor_custom):
+            container.accent_color = discord.Colour(int(cor_custom.lstrip("#"), 16))
+        else:
+            container.accent_color = discord.Colour.blurple()
 
         if xp_prox:
             porcentagem = int((xp / xp_prox) * 100)
@@ -2543,16 +2665,24 @@ class ViewPerfil(discord.ui.LayoutView):
         else:
             xp_texto = "**XP**\n🏆 Level máximo atingido!"
 
+        nome_exibido = perfil_custom.get("nome_personalizado") or membro.display_name
+        descricao_texto = f"\n> {perfil_custom['descricao']}" if perfil_custom.get("descricao") else ""
+
         info_discord = (
             f"# Perfil — Lvl.``{level}``\n"
-            f"**{membro.display_name}**\n"
+            f"**{nome_exibido}**\n"
             f"> {membro.name}\n"
-            f"**ID:** ``{membro.id}``\n\n"
-            f"{xp_texto}"
+            f"**ID:** ``{membro.id}``"
+            f"{descricao_texto}"
         )
 
-        thumbnail = discord.ui.Thumbnail(membro.display_avatar.url)
+        avatar_url = perfil_custom.get("avatar_url") or membro.display_avatar.url
+        thumbnail = discord.ui.Thumbnail(avatar_url)
         container.add_item(discord.ui.Section(discord.ui.TextDisplay(info_discord), accessory=thumbnail))
+
+        botao_editar = discord.ui.Button(label="Editar", emoji="✏️", style=discord.ButtonStyle.secondary)
+        botao_editar.callback = self.editar_perfil
+        container.add_item(discord.ui.Section(discord.ui.TextDisplay(xp_texto), accessory=botao_editar))
 
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
@@ -2598,6 +2728,15 @@ class ViewPerfil(discord.ui.LayoutView):
 
         self.add_item(container)
 
+    async def editar_perfil(self, interaction: discord.Interaction):
+        if interaction.user.id != self.usuario.id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Você só pode editar o seu próprio perfil!",
+                ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(ModalEditarPerfil(self.usuario))
+    
     async def ver_conquistas(self, interaction: discord.Interaction):
         conquistas = buscar_conquistas_usuario(self.usuario.id)
         if not conquistas:
