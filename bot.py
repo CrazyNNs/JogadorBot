@@ -4591,6 +4591,11 @@ class ViewEscolherRaca(ui.LayoutView):
 
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar_topo = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar_topo.callback = self.voltar
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar_topo))
+
         container.add_item(ui.TextDisplay(
             f"### {dados['emoji']} Escolha a raça — {self.especie}\n"
             f"-# Página {self.pagina + 1}/{total_paginas}"
@@ -4618,11 +4623,8 @@ class ViewEscolherRaca(ui.LayoutView):
         btn_anterior.callback = self.pagina_anterior
         btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=(self.pagina >= total_paginas - 1))
         btn_proximo.callback = self.proxima_pagina
-        btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        btn_voltar.callback = self.voltar
         linha_nav.add_item(btn_anterior)
         linha_nav.add_item(btn_proximo)
-        linha_nav.add_item(btn_voltar)
         container.add_item(linha_nav)
 
         self.add_item(container)
@@ -4656,6 +4658,11 @@ class ViewComprarPet(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_petshop
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
+
         container.add_item(ui.TextDisplay(
             f"### 🐾 Petshop — Pets\nAdote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário."
         ))
@@ -4668,13 +4675,6 @@ class ViewComprarPet(ui.LayoutView):
             linha.add_item(botao)
             container.add_item(linha)
             container.add_item(ui.TextDisplay(dados["descricao"]))
-
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
 
         self.add_item(container)
 
@@ -4700,6 +4700,11 @@ class ViewComprarPetisco(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_petshop
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
+
         container.add_item(ui.TextDisplay(
             "### 🍖 Petshop — Petiscos\nCompre petiscos para alimentar seus pets. Escolha o petisco e informe a quantidade."
         ))
@@ -4713,15 +4718,7 @@ class ViewComprarPetisco(ui.LayoutView):
             container.add_item(linha)
             container.add_item(ui.TextDisplay(f"Petisco favorito do {dados['emoji']} {especie}"))
 
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
-
         self.add_item(container)
-
 
 class ViewComprarBrinquedo(ui.LayoutView):
     def __init__(self, usuario_id):
@@ -4744,6 +4741,11 @@ class ViewComprarBrinquedo(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_petshop
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
+
         container.add_item(ui.TextDisplay(
             "### 🧸 Petshop — Brinquedos\nCompre brinquedos para brincar com seus pets. Escolha o brinquedo e informe a quantidade."
         ))
@@ -4759,15 +4761,7 @@ class ViewComprarBrinquedo(ui.LayoutView):
                 f"Brinquedo favorito do {dados['emoji']} {especie} · {dados['brinquedo_usos']} usos cada"
             ))
 
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
-
         self.add_item(container)
-
 
 class ViewComprarSabonete(ui.LayoutView):
     def __init__(self, usuario_id):
@@ -4788,6 +4782,11 @@ class ViewComprarSabonete(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_petshop
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
+
         container.add_item(ui.TextDisplay(
             f"### 🧼 Petshop — Higiene\nO Sabonete é universal e serve para dar banho em qualquer pet.\n\n"
             f"**Sabonete** — {SABONETE_PRECO} Joyens"
@@ -4799,12 +4798,6 @@ class ViewComprarSabonete(ui.LayoutView):
         botao_comprar.callback = self.comprar_sabonete
         linha.add_item(botao_comprar)
         container.add_item(linha)
-
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
 
         self.add_item(container)
 # ============================================================
@@ -4841,6 +4834,11 @@ class ViewComprarMedicamento(ui.LayoutView):
 
         container = ui.Container()
         container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_petshop
+        container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
+
         container.add_item(ui.TextDisplay(
             "### 💊 Petshop — Medicamentos\nRemédios normais tratam uma doença específica. Remédios especiais (✨) tratam qualquer doença."
         ))
@@ -4854,13 +4852,6 @@ class ViewComprarMedicamento(ui.LayoutView):
             container.add_item(linha)
             valor = "Trata qualquer doença" if especial else f"Trata: {doenca_nome}"
             container.add_item(ui.TextDisplay(valor))
-
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Petshop", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_petshop
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
 
         self.add_item(container)
 
