@@ -2666,12 +2666,12 @@ class ViewPerfil(discord.ui.LayoutView):
             xp_texto = "**XP**\n🏆 Level máximo atingido!"
 
         nome_exibido = perfil_custom.get("nome_personalizado") or membro.display_name
-        descricao_texto = f"\n> {perfil_custom['descricao']}" if perfil_custom.get("descricao") else ""
+        descricao_texto = f"\n> **{perfil_custom['descricao']}**" if perfil_custom.get("descricao") else ""
 
         info_discord = (
             f"# Perfil — Lvl.``{level}``\n"
-            f"**{nome_exibido}**\n"
-            f"{membro.name}\n"
+            f"## {nome_exibido}\n"
+            f"> {membro.name}\n"
             f"**ID:** ``{membro.id}``"
             f"{descricao_texto}"
         )
