@@ -2718,7 +2718,7 @@ class ViewPerfil(discord.ui.LayoutView):
 
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        botao_conquistas = discord.ui.Button(label="Conquistas", emoji="🏆", style=discord.ButtonStyle.primary)
+        botao_conquistas = discord.ui.Button(label="Conquistas", emoji="<:ConquistasIcon:1538613267109519512>", style=discord.ButtonStyle.primary)
         botao_conquistas.callback = self.ver_conquistas
 
         botao_banners = discord.ui.Button(label="Banners", emoji="🖼️", style=discord.ButtonStyle.secondary)
