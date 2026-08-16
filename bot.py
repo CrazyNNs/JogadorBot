@@ -2671,7 +2671,7 @@ class ViewPerfil(discord.ui.LayoutView):
         info_discord = (
             f"# Perfil — Lvl.``{level}``\n"
             f"**{nome_exibido}**\n"
-            f"> {membro.name}\n"
+            f"{membro.name}\n"
             f"**ID:** ``{membro.id}``"
             f"{descricao_texto}"
         )
