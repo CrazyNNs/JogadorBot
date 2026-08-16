@@ -2493,7 +2493,10 @@ async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None
             if ":" not in cond:
                 continue
             campo, valor_meta = cond.split(":", 1)
-            valor_meta = int(valor_meta)
+            try:
+                valor_meta = int(valor_meta.strip())
+            except ValueError:
+                continue
             valor_atual = dados.get(campo, 0) or 0
             progresso_percentual = min(valor_atual, valor_meta)
             progresso_min = min(progresso_min, progresso_percentual / valor_meta * (meta or valor_meta))
@@ -2534,7 +2537,10 @@ async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompen
     elif tipo_recompensa == "xp":
         canal_ctx = ctx_ou_channel or canal
         if canal_ctx:
-            await adicionar_xp(str(usuario_id), qtd_recompensa, canal_ctx)
+            try:
+                await adicionar_xp(str(usuario_id), qtd_recompensa, canal_ctx)
+            except Exception as e:
+                print(f"Erro ao dar XP de missão personalizada: {e}")
         recompensa_texto = f"**+{qtd_recompensa} XP**"
     else:
         recompensa_texto = tipo_recompensa
