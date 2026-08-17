@@ -3044,14 +3044,11 @@ class ViewLojaMineracao(ui.LayoutView):
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
 
-        linha_voltar = ui.ActionRow()
         botao_voltar = ui.Button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_loja
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
-
-        container.add_item(ui.TextDisplay(
-            "### ⛏️ Loja de Mineração\nEscolha uma subcategoria para comprar itens."
+        container.add_item(ui.Section(
+            ui.TextDisplay("### ⛏️ Loja de Mineração\nEscolha uma subcategoria para comprar itens."),
+            accessory=botao_voltar
         ))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
@@ -3098,15 +3095,14 @@ class ViewComprarItemMineracao(ui.LayoutView):
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
 
-        linha_voltar = ui.ActionRow()
         botao_voltar = ui.Button(label="Mineração", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
         botao_voltar.callback = self.voltar_mineracao
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
-
-        container.add_item(ui.TextDisplay(
-            f"### {emoji_sub} Loja de Mineração — {self.subcategoria}\n"
-            f"-# Seu saldo: {saldo_joyens} Joyens · {saldo_joyogens} Joyogens"
+        container.add_item(ui.Section(
+            ui.TextDisplay(
+                f"### {emoji_sub} Loja de Mineração — {self.subcategoria}\n"
+                f"-# Seu saldo: {saldo_joyens} Joyens · {saldo_joyogens} Joyogens"
+            ),
+            accessory=botao_voltar
         ))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
