@@ -2994,12 +2994,7 @@ class ViewMenuLoja(ui.LayoutView):
                     await interaction.response.edit_message(view=view, attachments=[])
                 elif categoria == "mineracao":
                     view = ViewLojaMineracao(self.usuario_id)
-                    embed = discord.Embed(
-                        title="⛏️ Loja de Mineração",
-                        description="Escolha uma subcategoria:",
-                        color=discord.Color.dark_gold()
-                    )
-                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                    await interaction.response.edit_message(view=view, attachments=[])
 
             botao.callback = callback
             linha.add_item(botao)
@@ -3028,6 +3023,112 @@ class ViewMenuLoja(ui.LayoutView):
         else:
             await interaction.response.edit_message(view=view, attachments=[])
 
+class ViewLojaMineracao(ui.LayoutView):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.montar()
+
+    async def voltar_loja(self, interaction: discord.Interaction):
+        view = ViewMenuLoja(self.usuario_id)
+        await interaction.response.edit_message(view=view, attachments=[])
+
+    def criar_callback(self, subcategoria):
+        async def callback(interaction: discord.Interaction):
+            view = ViewComprarItemMineracao(self.usuario_id, subcategoria)
+            await interaction.response.edit_message(view=view, attachments=[])
+        return callback
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.dark_gold()
+        container.add_item(ui.TextDisplay(
+            "### ⛏️ Loja de Mineração\nEscolha uma subcategoria para comprar itens."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        for subcategoria in SUBCATEGORIAS_MINERACAO:
+            emoji = SUBCATEGORIAS_EMOJI.get(subcategoria, "")
+            linha = ui.ActionRow()
+            botao = ui.Button(label=subcategoria, emoji=emoji, style=discord.ButtonStyle.success)
+            botao.callback = self.criar_callback(subcategoria)
+            linha.add_item(botao)
+            container.add_item(linha)
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_loja
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
+
+
+class ViewComprarItemMineracao(ui.LayoutView):
+    def __init__(self, usuario_id, subcategoria):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.subcategoria = subcategoria
+        self.montar()
+
+    async def voltar_mineracao(self, interaction: discord.Interaction):
+        view = ViewLojaMineracao(self.usuario_id)
+        await interaction.response.edit_message(view=view, attachments=[])
+
+    def criar_callback(self, item_nome):
+        async def callback(interaction: discord.Interaction):
+            sucesso, mensagem = comprar_item_mineracao(self.usuario_id, item_nome)
+            if sucesso:
+                self.montar()
+                await interaction.response.edit_message(view=self)
+                await interaction.followup.send(f"✅ {mensagem}", ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> {mensagem}", ephemeral=True
+                )
+        return callback
+
+    def montar(self):
+        self.clear_items()
+        emoji_sub = SUBCATEGORIAS_EMOJI.get(self.subcategoria, "")
+        saldo_joyens = buscar_joyens(self.usuario_id)
+        saldo_joyogens = buscar_stats(self.usuario_id)["joyogens"]
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.dark_gold()
+        container.add_item(ui.TextDisplay(
+            f"### {emoji_sub} Loja de Mineração — {self.subcategoria}\n"
+            f"-# Seu saldo: {saldo_joyens} Joyens · {saldo_joyogens} Joyogens"
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        itens = {nome: dados for nome, dados in ITENS_MINERACAO.items() if dados["subcategoria"] == self.subcategoria}
+
+        for nome, dados in itens.items():
+            moeda_nome = "Joyens" if dados.get("moeda", "joyens") == "joyens" else "Joyogens"
+            linha = ui.ActionRow()
+            botao = ui.Button(
+                label=f"{nome} — {dados['preco']} {moeda_nome}",
+                style=discord.ButtonStyle.success
+            )
+            botao.callback = self.criar_callback(nome)
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(dados["descricao"]))
+
+        if not itens:
+            container.add_item(ui.TextDisplay("Nenhum item disponível nessa subcategoria ainda."))
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Mineração", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_mineracao
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
 # ============================================================
 # VIEW (BOTÕES) - Loja de Banner
 # ============================================================
