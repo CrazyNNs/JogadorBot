@@ -3111,6 +3111,7 @@ class ViewComprarItemMineracao(ui.LayoutView):
             linha = ui.ActionRow()
             botao = ui.Button(
                 label=f"{nome} — {dados['preco']} {moeda_nome}",
+                emoji=dados["emoji"],
                 style=discord.ButtonStyle.success
             )
             botao.callback = self.criar_callback(nome)
