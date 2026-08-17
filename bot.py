@@ -3031,7 +3031,11 @@ class ViewLojaMineracao(ui.LayoutView):
 
     async def voltar_loja(self, interaction: discord.Interaction):
         view = ViewMenuLoja(self.usuario_id)
-        await interaction.response.edit_message(view=view, attachments=[])
+        arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+        if arquivo_lojaicon:
+            await interaction.response.edit_message(view=view, attachments=[arquivo_lojaicon])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
 
     def criar_callback(self, subcategoria):
         async def callback(interaction: discord.Interaction):
