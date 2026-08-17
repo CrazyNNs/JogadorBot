@@ -3043,6 +3043,13 @@ class ViewLojaMineracao(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
+
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_loja
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
         container.add_item(ui.TextDisplay(
             "### ⛏️ Loja de Mineração\nEscolha uma subcategoria para comprar itens."
         ))
@@ -3056,15 +3063,7 @@ class ViewLojaMineracao(ui.LayoutView):
             linha.add_item(botao)
             container.add_item(linha)
 
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_loja
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
-
         self.add_item(container)
-
 
 class ViewComprarItemMineracao(ui.LayoutView):
     def __init__(self, usuario_id, subcategoria):
@@ -3098,6 +3097,13 @@ class ViewComprarItemMineracao(ui.LayoutView):
 
         container = ui.Container()
         container.accent_color = discord.Colour.dark_gold()
+
+        linha_voltar = ui.ActionRow()
+        botao_voltar = ui.Button(label="Mineração", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        botao_voltar.callback = self.voltar_mineracao
+        linha_voltar.add_item(botao_voltar)
+        container.add_item(linha_voltar)
+
         container.add_item(ui.TextDisplay(
             f"### {emoji_sub} Loja de Mineração — {self.subcategoria}\n"
             f"-# Seu saldo: {saldo_joyens} Joyens · {saldo_joyogens} Joyogens"
@@ -3121,13 +3127,6 @@ class ViewComprarItemMineracao(ui.LayoutView):
 
         if not itens:
             container.add_item(ui.TextDisplay("Nenhum item disponível nessa subcategoria ainda."))
-
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        linha_voltar = ui.ActionRow()
-        botao_voltar = ui.Button(label="Mineração", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-        botao_voltar.callback = self.voltar_mineracao
-        linha_voltar.add_item(botao_voltar)
-        container.add_item(linha_voltar)
 
         self.add_item(container)
 # ============================================================
