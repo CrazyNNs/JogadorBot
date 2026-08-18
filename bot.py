@@ -429,10 +429,12 @@ MINERIOS = {
     "Diamante": {"min": 1,  "max": 3,  "chance": 0.05, "preco": 10},
 }
 
+XP_DESMORONAMENTO_SOBREVIVENCIA = 1600
+
 MONSTROS = {
-    "Morcego": {"hp": 30, "dano": 5, "emoji": "🦇", "imagem": "atkmorcego1.png", "mensagem": "🦇 Um morcego surge das sombras e ataca!"},
-    "Slime":   {"hp": 50, "dano": 9, "emoji": "🟢", "imagem": "atkslime1.png", "mensagem": "🟢 Um slime pulou em sua direção!"},
-    "Cobra":   {"hp": 60, "dano": 13, "emoji": "🐍", "imagem": "atkcobra1.png", "mensagem": "🐍 Uma cobra venenosa ataca do nada!"},
+    "Morcego": {"hp": 30, "dano": 5, "xp": 150, "emoji": "🦇", "imagem": "atkmorcego1.png", "mensagem": "🦇 Um morcego surge das sombras e ataca!"},
+    "Slime":   {"hp": 50, "dano": 9, "xp": 450, "emoji": "🟢", "imagem": "atkslime1.png", "mensagem": "🟢 Um slime pulou em sua direção!"},
+    "Cobra":   {"hp": 60, "dano": 13, "xp": 780, "emoji": "🐍", "imagem": "atkcobra1.png", "mensagem": "🐍 Uma cobra venenosa ataca do nada!"},
 }
 
 MINERACAO_ATIVAS = set()  # IDs de usuários minerando no momento
@@ -2971,7 +2973,7 @@ class ViewMenuLoja(ui.LayoutView):
                 "### 🏪 Loja do JogadorBot\n"
                 "Bem-vindo à loja! Use seus Joyens para comprar itens incríveis."
             ),
-            accessory=ui.Thumbnail(media="attachment://lojaicon.png")
+            accessory=ui.Thumbnail(media="attachment://https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
         )
         container.add_item(cabecalho)
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
@@ -4077,7 +4079,12 @@ class ViewMineracao(ui.LayoutView):
         if tipo == "Desmoronamento":
             self.imagem_atual = "desmoronamento1.png"
             if random.random() < 0.70:
-                self.texto_status = "> 💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso!"
+                self.texto_status = f"> 💥 Um desmoronamento aconteceu, mas você conseguiu escapar ileso! (+{XP_DESMORONAMENTO_SOBREVIVENCIA} XP)"
+                await self.atualizar_mensagem()
+                await adicionar_xp(str(self.usuario_id), XP_DESMORONAMENTO_SOBREVIVENCIA, self.ctx)
+                await asyncio.sleep(3)
+                self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
+                self.imagem_atual = "minerar1.png"
                 await self.atualizar_mensagem()
                 await asyncio.sleep(3)
                 self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
@@ -4153,10 +4160,13 @@ class ViewMineracao(ui.LayoutView):
                 await self.atualizar_mensagem()
 
                 if self.monstro_hp <= 0:
-                    self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉"
+                    xp_ganho = MONSTROS[self.monstro_atual].get("xp", 0)
+                    self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉 (+{xp_ganho} XP)"
                     self.em_combate = False
                     atualizar_contador(self.usuario_id, "mineracao_monstro", 1)
                     await verificar_missoes_customizadas_usuario(str(self.usuario_id), self.ctx)
+                    if xp_ganho:
+                        await adicionar_xp(str(self.usuario_id), xp_ganho, self.ctx)
                     await self.atualizar_mensagem()
                     await asyncio.sleep(2)
                     self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
