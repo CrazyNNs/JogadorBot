@@ -2973,7 +2973,7 @@ class ViewMenuLoja(ui.LayoutView):
                 "### 🏪 Loja do JogadorBot\n"
                 "Bem-vindo à loja! Use seus Joyens para comprar itens incríveis."
             ),
-            accessory=ui.Thumbnail(media="attachment://https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
+            accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
         )
         container.add_item(cabecalho)
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
