@@ -422,11 +422,11 @@ SUBCATEGORIAS_MINERACAO = ["Ferramentas", "Equipamento", "Consumíveis"]
 SUBCATEGORIAS_EMOJI = {"Ferramentas": "⚒️", "Equipamento": "🛡️", "Consumíveis": "☕"}
 
 MINERIOS = {
-    "Carvão":   {"min": 20, "max": 30, "chance": 0.50, "preco": 10},
-    "Cobre":    {"min": 10, "max": 25, "chance": 0.40, "preco": 10},
-    "Ferro":    {"min": 5,  "max": 10, "chance": 0.35, "preco": 10},
-    "Ouro":     {"min": 3,  "max": 5,  "chance": 0.20, "preco": 10},
-    "Diamante": {"min": 1,  "max": 3,  "chance": 0.05, "preco": 10},
+    "Carvão":   {"min": 3, "max": 8, "chance": 0.15,  "preco": 8},
+    "Cobre":    {"min": 2, "max": 5, "chance": 0.10,  "preco": 18},
+    "Ferro":    {"min": 2, "max": 4, "chance": 0.07,  "preco": 14},
+    "Ouro":     {"min": 1, "max": 2, "chance": 0.02,  "preco": 100},
+    "Diamante": {"min": 1, "max": 1, "chance": 0.003, "preco": 750},
 }
 
 XP_DESMORONAMENTO_SOBREVIVENCIA = 1600
