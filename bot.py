@@ -352,6 +352,17 @@ MISSOES_SEMANAIS = [
 ]
 
 # ============================================================
+# KURUULANDIA — Locais do mapa
+# ============================================================
+LOCAIS_KURUULANDIA = [
+    {"chave": "loja", "emoji": "🏪", "nome": "Loja", "local": "Armazém 404", "disponivel": True},
+    {"chave": "petshop", "emoji": "🐾", "nome": "Petshop", "local": "Petshop", "disponivel": False},
+    {"chave": "cassino", "emoji": "🎰", "nome": "Cassino", "local": "_(em breve)_", "disponivel": False},
+    {"chave": "mineracao", "emoji": "⛏️", "nome": "Mineração", "local": "Abismo Terrível", "disponivel": False},
+    {"chave": "banco", "emoji": "🏦", "nome": "Banco", "local": "_(em breve)_", "disponivel": False},
+]
+
+# ============================================================
 # ITENS DE MINERAÇÃO — Loja e sistema de mineração
 # ============================================================
 ITENS_MINERACAO = {
@@ -392,7 +403,7 @@ ITENS_MINERACAO = {
         "preco": 2500,
         "moeda": "joyens",
         "descricao": "Absorve até 80 de dano antes de quebrar.",
-        "durabilidade": 80,
+        "durabilidade": 30,
     },
     "Capacete": {
         "emoji": "<:CapaceteMedioIcon:1533279479353446480>",
@@ -400,7 +411,7 @@ ITENS_MINERACAO = {
         "preco": 4500,
         "moeda": "joyens",
         "descricao": "Absorve até 150 de dano antes de quebrar.",
-        "durabilidade": 150,
+        "durabilidade": 80,
     },
     "Marmita": {
         "emoji": "🍱",
@@ -2832,11 +2843,52 @@ class ViewConquistas(discord.ui.LayoutView):
         view = ViewPerfil(self.usuario)
         anexos = [view.arquivo_discord] if view.arquivo_discord else []
         await interaction.response.edit_message(view=view, attachments=anexos)
+        
+# ============================================================
+# VIEW (BOTÕES) — Kuruulandia
+# ============================================================
+class ViewKuruulandia(ui.LayoutView):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.montar()
+
+    async def abrir_loja(self, interaction: discord.Interaction):
+        view = ViewMenuLoja(self.usuario_id)
+        arquivo = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.blurple()
+
+        texto_locais = "\n".join(
+            f"{local['emoji']} **{local['nome']}** — {local['local']}" for local in LOCAIS_KURUULANDIA
+        )
+        container.add_item(ui.TextDisplay(f"### 🗺️ Kuruulândia\n{texto_locais}"))
+        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="attachment://kuruulandia.png")))
+
+        linha = ui.ActionRow()
+        for local in LOCAIS_KURUULANDIA:
+            botao = ui.Button(
+                emoji=local["emoji"],
+                style=discord.ButtonStyle.secondary,
+                disabled=not local["disponivel"]
+            )
+            if local["chave"] == "loja":
+                botao.callback = self.abrir_loja
+            linha.add_item(botao)
+        container.add_item(linha)
+
+        self.add_item(container)
 
 # ============================================================
 # VIEW (BOTÕES) - Loja de banners
 # ============================================================
-
 class ViewLoja(discord.ui.View):
     def __init__(self, usuario_id, banners, rotacao=False, expira=None):
         super().__init__(timeout=120)
@@ -3025,6 +3077,7 @@ class ViewMenuLoja(ui.LayoutView):
         else:
             await interaction.response.edit_message(view=view, attachments=[])
 
+# LOJA DE MINERAÇÃO ===============================================
 class ViewLojaMineracao(ui.LayoutView):
     def __init__(self, usuario_id):
         super().__init__(timeout=120)
@@ -6920,6 +6973,15 @@ async def mochila(ctx, membro: discord.Member = None):
     garantir_stats(membro.id)
     view = ViewMochilaMenu(membro)
     await ctx.send(view=view)
+
+@bot.command(name="kuruu")
+async def kuruu(ctx):
+    view = ViewKuruulandia(ctx.author.id)
+    arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+    if arquivo:
+        await ctx.send(view=view, file=arquivo)
+    else:
+        await ctx.send(view=view)
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
 # ============================================================
