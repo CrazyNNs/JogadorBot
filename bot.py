@@ -2870,7 +2870,7 @@ class ViewKuruulandia(ui.LayoutView):
             f"{local['emoji']} **{local['nome']}** — {local['local']}" for local in LOCAIS_KURUULANDIA
         )
         container.add_item(ui.TextDisplay(f"### 🗺️ Kuruulândia\n{texto_locais}"))
-        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="attachment://kuruulandia.png")))
+        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/kuruulandia.png")))
 
         linha = ui.ActionRow()
         for local in LOCAIS_KURUULANDIA:
