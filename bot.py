@@ -6034,19 +6034,23 @@ class LayoutEmpregos(ui.LayoutView):
         atual = cur.fetchone()
         
         if atual and atual[0] == emprego_nome:
-            cur.execute("""
-            INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
-            VALUES (?, ?, 0)
-            ON CONFLICT(usuario_id) DO NOTHING
-            """, (str(self.usuario_id), emprego_nome))
-        else:
-            cur.execute("""
-            INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
-            VALUES (?, ?, 0)
-            ON CONFLICT(usuario_id) DO UPDATE SET emprego = ?, vezes_trabalhadas = 0, ultimo_trabalho = NULL
-            """, (str(self.usuario_id), emprego_nome, emprego_nome))
-            con.commit()
-            con.close()
+            cur.execute("SELECT emprego FROM empregos_usuarios WHERE usuario_id = ?", (str(self.usuario_id),))
+            atual = cur.fetchone()
+            
+            if atual and atual[0] == emprego_nome:
+                cur.execute("""
+                INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
+                VALUES (?, ?, 0)
+                ON CONFLICT(usuario_id) DO NOTHING
+                """, (str(self.usuario_id), emprego_nome))
+            else:
+                cur.execute("""
+                INSERT INTO empregos_usuarios (usuario_id, emprego, vezes_trabalhadas)
+                VALUES (?, ?, 0)
+                ON CONFLICT(usuario_id) DO UPDATE SET emprego = ?, vezes_trabalhadas = 0
+                """, (str(self.usuario_id), emprego_nome, emprego_nome))
+                con.commit()
+                con.close()
 
         confirmacao = LayoutConfirmacaoEmprego(emprego_nome, emprego)
         await interaction.response.edit_message(view=confirmacao)
