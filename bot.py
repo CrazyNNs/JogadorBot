@@ -356,7 +356,7 @@ MISSOES_SEMANAIS = [
 # ============================================================
 LOCAIS_KURUULANDIA = [
     {"chave": "loja", "emoji": "🏪", "nome": "Loja", "local": "Armazém 404", "disponivel": True},
-    {"chave": "petshop", "emoji": "🐾", "nome": "Petshop", "local": "Petshop", "disponivel": False},
+    {"chave": "petshop", "emoji": "🐾", "nome": "Petshop", "local": "Animalia", "disponivel": True},
     {"chave": "cassino", "emoji": "🎰", "nome": "Cassino", "local": "_(em breve)_", "disponivel": False},
     {"chave": "mineracao", "emoji": "⛏️", "nome": "Mineração", "local": "Abismo Terrível", "disponivel": False},
     {"chave": "banco", "emoji": "🏦", "nome": "Banco", "local": "_(em breve)_", "disponivel": False},
@@ -2141,10 +2141,10 @@ def equipar_ferramenta(usuario_id, ferramenta_id):
 
 def mensagem_sem_picareta(usuario_id):
     """Texto explicando o que fazer: se o usuário já tem picareta(s) na mochila (só não
-    equipou nenhuma), manda pro !mochila. Se não tem nenhuma comprada, manda pro !loja."""
+    equipou nenhuma), manda pro !mochila. Se não tem nenhuma comprada, manda pro !mapa."""
     if buscar_ferramentas_usuario(usuario_id):
         return "Você tem picareta(s) na mochila, mas nenhuma equipada! Use `!mochila` → ⛏️ Minerar → 🔧 Ferramentas para equipar."
-    return "Você não tem nenhuma picareta! Compre uma em `!loja` → ⛏️ Mineração → 🔧 Ferramentas."
+    return "Você não tem nenhuma picareta! Compre uma em `!mapa` → 🏪 Armazém 404 → ⛏️ Mineração → 🔧 Ferramentas."
 
 def sofrer_dano_mineracao(usuario_id, dano):
     """
@@ -2776,7 +2776,7 @@ class ViewPerfil(discord.ui.LayoutView):
         resultado = cur.fetchall()
         con.close()
         if not resultado:
-            await interaction.response.send_message("Este usuário não tem nenhum banner! Use `!loja` para comprar.", ephemeral=True)
+            await interaction.response.send_message("Este usuário não tem nenhum banner! Vá para o **Armazém 404** para comprar.", ephemeral=True)
             return
         view = ViewMochilaBanners(self.usuario)
         await interaction.response.edit_message(view=view, attachments=[])
@@ -2861,6 +2861,10 @@ class ViewKuruulandia(ui.LayoutView):
         else:
             await interaction.response.edit_message(view=view, attachments=[])
 
+    async def abrir_petshop(self, interaction: discord.Interaction):
+        view = ViewMenuPetshop(self.usuario_id)
+        await interaction.response.edit_message(view=view, attachments=[])
+
     def montar(self):
         self.clear_items()
         container = ui.Container()
@@ -2881,6 +2885,8 @@ class ViewKuruulandia(ui.LayoutView):
             )
             if local["chave"] == "loja":
                 botao.callback = self.abrir_loja
+            elif local["chave"] == "petshop":
+                botao.callback = self.abrir_petshop
             linha.add_item(botao)
         container.add_item(linha)
 
@@ -2902,7 +2908,7 @@ class ViewLoja(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
                 ephemeral=True
             )
             return False
@@ -3009,30 +3015,50 @@ class ViewMenuLoja(ui.LayoutView):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
                 ephemeral=True
             )
             return False
         return True
+
+    async def voltar_mapa(self, interaction: discord.Interaction):
+        view = ViewKuruulandia(self.usuario_id)
+        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
+
+    async def voltar_mapa(self, interaction: discord.Interaction):
+        view = ViewKuruulandia(self.usuario_id)
+        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
 
     def montar(self):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.blurple()
 
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_mapa
+        linha_topo = ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar)
+        container.add_item(linha_topo)
+
         cabecalho = ui.Section(
             ui.TextDisplay(
                 "### 🏪 Loja do JogadorBot\n"
                 "Bem-vindo à loja! Use seus Joyens para comprar itens incríveis."
             ),
-            accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
+            accessory=ui.Thumbnail(media="attachment://lojaicon.png")
         )
         container.add_item(cabecalho)
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
         categorias = [
             ("🖼️ Banners", "Personalize o seu perfil com banners exclusivos!", "banners"),
-            ("🐾 Petshop", "Adote e cuide de um bichinho virtual!", "petshop"),
             ("⛏️ Mineração", "Ferramentas, equipamentos e consumíveis!", "mineracao"),
         ]
 
@@ -3043,9 +3069,6 @@ class ViewMenuLoja(ui.LayoutView):
             async def callback(interaction, categoria=chave):
                 if categoria == "banners":
                     await self.abrir_banners(interaction)
-                elif categoria == "petshop":
-                    view = ViewMenuPetshop(self.usuario_id, view_loja=self)
-                    await interaction.response.edit_message(view=view, attachments=[])
                 elif categoria == "mineracao":
                     view = ViewLojaMineracao(self.usuario_id)
                     await interaction.response.edit_message(view=view, attachments=[])
@@ -3201,7 +3224,7 @@ class ViewLoja(ui.LayoutView):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
                 ephemeral=True
             )
             return False
@@ -3452,7 +3475,7 @@ class ViewMochilaItens(ui.LayoutView):
             equipamentos = buscar_equipamentos_usuario(self.usuario.id)
             if not equipamentos:
                 container.add_item(ui.TextDisplay(
-                    "Você não possui nenhum equipamento.\nCompre um em `!loja` → ⛏️ Mineração → 🛡️ Equipamento."
+                    "Você não possui nenhum equipamento.\nCompre um em `!mapa` → 🏪 Armazém 404 → ⛏️ Mineração → 🛡️ Equipamento."
                 ))
             else:
                 if em_mineracao:
@@ -3497,7 +3520,7 @@ class ViewMochilaItens(ui.LayoutView):
 
             if not ferramentas and dinamite_qtd <= 0:
                 container.add_item(ui.TextDisplay(
-                    "Você não possui nenhuma ferramenta.\nCompre uma em `!loja` → ⛏️ Mineração → 🔧 Ferramentas."
+                    "Você não possui nenhuma ferramenta.\nCompre uma em `!mapa`→ 🏪 Armazém 404 → ⛏️ Mineração → 🔧 Ferramentas."
                 ))
             else:
                 if em_mineracao and ferramentas:
@@ -4499,20 +4522,27 @@ class ViewMineracao(ui.LayoutView):
 # ============================================================
 
 class ViewMenuPetshop(ui.LayoutView):
-    def __init__(self, usuario_id, view_loja=None):
+    def __init__(self, usuario_id):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        self.view_loja = view_loja
         self.montar()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Essa loja não é sua! Use `!loja` para abrir a sua própria.",
+                "<:Atencao:1534592266625093662> Esse Petshop não é seu! Use `!kuruu` para abrir o seu próprio.",
                 ephemeral=True
             )
             return False
         return True
+
+    async def voltar_mapa(self, interaction: discord.Interaction):
+        view = ViewKuruulandia(self.usuario_id)
+        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
 
     def montar(self):
         self.clear_items()
@@ -4520,24 +4550,7 @@ class ViewMenuPetshop(ui.LayoutView):
         container.accent_color = discord.Colour.gold()
 
         btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-
-        async def voltar_cb(interaction):
-            if self.view_loja:
-                self.view_loja.montar()
-                arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
-                if arquivo_lojaicon:
-                    await interaction.response.edit_message(view=self.view_loja, attachments=[arquivo_lojaicon])
-                else:
-                    await interaction.response.edit_message(view=self.view_loja, attachments=[])
-            else:
-                view_menu = ViewMenuLoja(self.usuario_id)
-                arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
-                if arquivo_lojaicon:
-                    await interaction.response.edit_message(view=view_menu, attachments=[arquivo_lojaicon])
-                else:
-                    await interaction.response.edit_message(view=view_menu, attachments=[])
-
-        btn_voltar.callback = voltar_cb
+        btn_voltar.callback = self.voltar_mapa
 
         linha_topo = ui.Section(
             ui.TextDisplay("\u200b"),
@@ -5209,7 +5222,7 @@ class ViewPets(discord.ui.LayoutView):
         if not pets_usuario:
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!loja` → Petshop → Pets para adotar um."
+                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!mapa` → 🐾 Petshop → 🐾 Pets para adotar um."
                 )
             )
             container.accent_color = discord.Colour.red()
@@ -5368,7 +5381,7 @@ class ViewPets(discord.ui.LayoutView):
         if not medicamentos:
             await interaction.response.send_message(
                 f"<:Atencao:1534592266625093662> Você não tem nenhum remédio para tratar **{doenca_nome}**! "
-                f"Compre na `!loja` → Petshop → Medicamentos.",
+                f"Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Petshop → 💊 Medicamentos.",
                 ephemeral=True
             )
             return
@@ -5402,7 +5415,7 @@ class ViewPets(discord.ui.LayoutView):
 
         if not resultado or resultado[0] <= 0:
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!loja` → PetShop → Petiscos.",
+                f"<:Atencao:1534592266625093662> Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!mapa` → 🏪 Armazém 404 → 🐾 PetShop → 🍖 Petiscos.",
                 ephemeral=True
             )
             return
@@ -5441,7 +5454,7 @@ class ViewPets(discord.ui.LayoutView):
         if not resultado or resultado[0] <= 0:
             con.close()
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem um **{brinquedo_nome}**! Compre na `!loja` → Petshop → Brinquedos.",
+                f"<:Atencao:1534592266625093662> Você não tem um **{brinquedo_nome}**! Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Petshop → 🧸 Brinquedos.",
                 ephemeral=True
             )
             return
@@ -5476,7 +5489,7 @@ class ViewPets(discord.ui.LayoutView):
         sabonetes = buscar_sabonetes_usuario(self.usuario_id)
         if sabonetes <= 0:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Você não tem Sabonete! Compre na `!loja` → Petshop → Higiene.",
+                "<:Atencao:1534592266625093662> Você não tem Sabonete! Compre na `!mapa` →🏪 Armazém 404 → 🐾 Petshop → 🧼 Higiene.",
                 ephemeral=True
             )
             return
@@ -6538,15 +6551,6 @@ async def saldo(ctx, membro: discord.Member = None):
     embed.add_field(name="__Joyogens__", value=f"<:JoyogensIcon:1536254582362210334>``{joyogens}``", inline=True)
     await ctx.send(embed=embed)
 
-@bot.command(name="loja")
-async def loja(ctx):
-    view = ViewMenuLoja(ctx.author.id)
-    arquivo = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
-    if arquivo:
-        await ctx.send(view=view, file=arquivo)
-    else:
-        await ctx.send(view=view)
-
 @bot.command(name="addjoyens")
 async def addjoyens(ctx, membro: discord.Member, quantidade: int):
     if not eh_admin(ctx.author.id):
@@ -6974,7 +6978,7 @@ async def mochila(ctx, membro: discord.Member = None):
     view = ViewMochilaMenu(membro)
     await ctx.send(view=view)
 
-@bot.command(name="kuruu")
+@bot.command(name="mapa")
 async def kuruu(ctx):
     view = ViewKuruulandia(ctx.author.id)
     arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
