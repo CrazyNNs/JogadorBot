@@ -3002,7 +3002,7 @@ class ViewLoja(discord.ui.View):
     @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🏪 Armazém do Axl",
+            title="🏪 Armazém 404",
             description="**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:",
             color=discord.Color.gold()
         )
@@ -3056,7 +3056,7 @@ class ViewMenuLoja(ui.LayoutView):
 
         cabecalho = ui.Section(
             ui.TextDisplay(
-                "### 🏪 Armazém do Axl\n"
+                "### 🏪 Armazém 404\n"
                 "**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:"
             ),
             accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
@@ -4537,7 +4537,7 @@ class ViewMenuPetshop(ui.LayoutView):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.usuario_id:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Esse Petshop não é seu! Use `!kuruu` para abrir o seu próprio.",
+                "<:Atencao:1534592266625093662> Esse Petshop não é seu! Use `!mapa` para abrir o seu próprio.",
                 ephemeral=True
             )
             return False
@@ -4564,7 +4564,7 @@ class ViewMenuPetshop(ui.LayoutView):
             accessory=btn_voltar
         )
         container.add_item(linha_topo)
-        container.add_item(ui.TextDisplay("### 🐾 Petshop\nEscolha uma subcategoria:"))
+        container.add_item(ui.TextDisplay("### 🐾 Animalia\n**Silvia** - Amante de animais? Eu também! :"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
         subcategorias = [
@@ -4848,7 +4848,7 @@ class ViewComprarPet(ui.LayoutView):
         container.add_item(ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar))
 
         container.add_item(ui.TextDisplay(
-            f"### 🐾 Petshop — Pets\nAdote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário."
+            f"### 🐾 Animalia — Pets\nAdote um novo companheiro! Limite de {LIMITE_PETS} pets por usuário."
         ))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
@@ -5229,7 +5229,7 @@ class ViewPets(discord.ui.LayoutView):
         if not pets_usuario:
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!mapa` → 🐾 Petshop → 🐾 Pets para adotar um."
+                    "🐾 **Você ainda não tem nenhum pet!**\nUse `!mapa` → 🐾 Animalia → 🐾 Pets para adotar um."
                 )
             )
             container.accent_color = discord.Colour.red()
@@ -5388,7 +5388,7 @@ class ViewPets(discord.ui.LayoutView):
         if not medicamentos:
             await interaction.response.send_message(
                 f"<:Atencao:1534592266625093662> Você não tem nenhum remédio para tratar **{doenca_nome}**! "
-                f"Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Petshop → 💊 Medicamentos.",
+                f"Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Animalia → 💊 Medicamentos.",
                 ephemeral=True
             )
             return
@@ -5422,7 +5422,7 @@ class ViewPets(discord.ui.LayoutView):
 
         if not resultado or resultado[0] <= 0:
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!mapa` → 🏪 Armazém 404 → 🐾 PetShop → 🍖 Petiscos.",
+                f"<:Atencao:1534592266625093662> Você não tem **{petisco_nome}**, o petisco favorito do {nome}! Compre na `!mapa` → 🏪 Armazém 404 → 🐾 Animalia → 🍖 Petiscos.",
                 ephemeral=True
             )
             return
@@ -5461,7 +5461,7 @@ class ViewPets(discord.ui.LayoutView):
         if not resultado or resultado[0] <= 0:
             con.close()
             await interaction.response.send_message(
-                f"<:Atencao:1534592266625093662> Você não tem um **{brinquedo_nome}**! Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Petshop → 🧸 Brinquedos.",
+                f"<:Atencao:1534592266625093662> Você não tem um **{brinquedo_nome}**! Compre na `!mapa`→ 🏪 Armazém 404 → 🐾 Animalia → 🧸 Brinquedos.",
                 ephemeral=True
             )
             return
@@ -5496,7 +5496,7 @@ class ViewPets(discord.ui.LayoutView):
         sabonetes = buscar_sabonetes_usuario(self.usuario_id)
         if sabonetes <= 0:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Você não tem Sabonete! Compre na `!mapa` →🏪 Armazém 404 → 🐾 Petshop → 🧼 Higiene.",
+                "<:Atencao:1534592266625093662> Você não tem Sabonete! Compre na `!mapa` →🏪 Armazém 404 → 🐾 Animalia → 🧼 Higiene.",
                 ephemeral=True
             )
             return
