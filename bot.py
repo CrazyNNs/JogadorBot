@@ -3145,7 +3145,7 @@ class ViewLojaMineracao(ui.LayoutView):
         for subcategoria in SUBCATEGORIAS_MINERACAO:
             emoji = SUBCATEGORIAS_EMOJI.get(subcategoria, "")
             linha = ui.ActionRow()
-            botao = ui.Button(label=subcategoria, emoji=emoji, style=discord.ButtonStyle.success)
+            botao = ui.Button(label=subcategoria, emoji=emoji, style=discord.ButtonStyle.primary)
             botao.callback = self.criar_callback(subcategoria)
             linha.add_item(botao)
             container.add_item(linha)
