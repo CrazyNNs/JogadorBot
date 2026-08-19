@@ -3002,12 +3002,11 @@ class ViewLoja(discord.ui.View):
     @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
     async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🏪 Loja do JogadorBot",
-            description="Bem-vindo à loja! Use seus Joyens para comprar itens incríveis.\nEscolha uma categoria:",
+            title="🏪 Armazém do Axl",
+            description="**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:",
             color=discord.Color.gold()
         )
         embed.add_field(name="🖼️ Banners", value="Banners exclusivos por tempo limitado!", inline=False)
-        embed.add_field(name="🐾 Petshop", value="Adote e cuide de um bichinho virtual!", inline=False)
         embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
         embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
         view = ViewMenuLoja(self.usuario_id)
@@ -3057,8 +3056,8 @@ class ViewMenuLoja(ui.LayoutView):
 
         cabecalho = ui.Section(
             ui.TextDisplay(
-                "### 🏪 Loja do JogadorBot\n"
-                "Bem-vindo à loja! Use seus Joyens para comprar itens incríveis."
+                "### 🏪 Armazém do Axl\n"
+                "**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:"
             ),
             accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
         )
