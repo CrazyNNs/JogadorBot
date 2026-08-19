@@ -14,6 +14,23 @@ import asyncio
 import traceback
 
 # ============================================================
+# CONFIGURAÇÃO DE CONCORRÊNCIA DO SQLITE — evita "database is locked"
+# Intercepta todas as chamadas sqlite3.connect() do arquivo para que
+# toda conexão já abra em modo WAL (leitura/escrita concorrente) e
+# espere até 30s antes de falhar, em vez de travar na hora.
+# ============================================================
+_sqlite3_connect_original = sqlite3.connect
+
+def _conectar_com_timeout(*args, **kwargs):
+    kwargs.setdefault("timeout", 30)
+    con = _sqlite3_connect_original(*args, **kwargs)
+    con.execute("PRAGMA journal_mode=WAL;")
+    con.execute("PRAGMA busy_timeout=30000;")
+    return con
+
+sqlite3.connect = _conectar_com_timeout
+
+# ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 TOKEN = os.environ.get("TOKEN")
