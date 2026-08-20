@@ -16,11 +16,56 @@ import threading
 
 _sqlite3_connect_original = sqlite3.connect
 
+# Limita quantas conexões SQLite podem estar abertas ao mesmo tempo em todo o
+# bot — não importa se vêm de um comando, de uma task, ou de um evento. Como o
+# SQLite só aceita um escritor por vez de qualquer forma, deixar dezenas de
+# threads abrirem conexão simultaneamente só faz elas brigarem pelo lock até
+# estourar o busy_timeout. Aqui elas esperam numa fila em memória (barata)
+# antes mesmo de tentar abrir a conexão.
+_db_conexoes_semaforo = threading.BoundedSemaphore(8)
+
+
+class _ConexaoComSemaforo:
+    """Encapsula a conexão real e libera a vaga no semáforo quando fechada.
+    Se algum código esquecer de chamar close() (bug/exceção não tratada), o
+    __del__ libera a vaga de qualquer forma quando o GC recolher o objeto —
+    assim um vazamento nunca trava o bot inteiro, só atrasa um pouco."""
+
+    def __init__(self, con, semaforo):
+        self._con = con
+        self._semaforo = semaforo
+        self._liberado = False
+
+    def close(self):
+        if not self._liberado:
+            self._liberado = True
+            try:
+                self._con.close()
+            finally:
+                self._semaforo.release()
+
+    def __getattr__(self, nome):
+        return getattr(self._con, nome)
+
+    def __del__(self):
+        self.close()
+
+
 def _conectar_com_timeout(*args, **kwargs):
     kwargs.setdefault("timeout", 15)
-    con = _sqlite3_connect_original(*args, **kwargs)
-    con.execute("PRAGMA busy_timeout=15000;")
-    return con
+    adquirido = _db_conexoes_semaforo.acquire(timeout=15)
+    if not adquirido:
+        raise sqlite3.OperationalError(
+            "database is locked (fila interna de conexões do bot cheia — "
+            "muita concorrência de escrita no banco ao mesmo tempo)"
+        )
+    try:
+        con = _sqlite3_connect_original(*args, **kwargs)
+        con.execute("PRAGMA busy_timeout=15000;")
+    except Exception:
+        _db_conexoes_semaforo.release()
+        raise
+    return _ConexaoComSemaforo(con, _db_conexoes_semaforo)
 
 sqlite3.connect = _conectar_com_timeout
 
