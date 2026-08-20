@@ -16,9 +16,9 @@ import traceback
 _sqlite3_connect_original = sqlite3.connect
 
 def _conectar_com_timeout(*args, **kwargs):
-    kwargs.setdefault("timeout", 30)
+    kwargs.setdefault("timeout", 5)
     con = _sqlite3_connect_original(*args, **kwargs)
-    con.execute("PRAGMA busy_timeout=30000;")
+    con.execute("PRAGMA busy_timeout=5000;")
     return con
 
 sqlite3.connect = _conectar_com_timeout
@@ -7987,12 +7987,9 @@ async def on_voice_state_update(member, before, after):
 
     con.close()
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        await bot.process_commands(message)
-        return
-    garantir_contador(message.author.id)
+def _registrar_mensagem_sync(usuario_id):
+    """Roda em thread separada — nunca trava o loop principal do bot."""
+    garantir_contador(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("""
@@ -8000,9 +7997,19 @@ async def on_message(message):
             msg_semana = msg_semana + 1,
             msg_total = msg_total + 1
         WHERE usuario_id = ?
-    """, (str(message.author.id),))
+    """, (str(usuario_id),))
     con.commit()
     con.close()
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        await bot.process_commands(message)
+        return
+    # Executa o trabalho no banco em uma thread separada, para que uma
+    # eventual espera por lock no SQLite nunca trave o loop principal
+    # do bot (o que derrubaria a conexão com o Discord/heartbeat).
+    await asyncio.to_thread(_registrar_mensagem_sync, message.author.id)
     await verificar_missoes_usuario(str(message.author.id))
     await bot.process_commands(message)
 
