@@ -18,11 +18,19 @@ _sqlite3_connect_original = sqlite3.connect
 def _conectar_com_timeout(*args, **kwargs):
     kwargs.setdefault("timeout", 30)
     con = _sqlite3_connect_original(*args, **kwargs)
-    con.execute("PRAGMA journal_mode=WAL;")
     con.execute("PRAGMA busy_timeout=30000;")
     return con
 
 sqlite3.connect = _conectar_com_timeout
+
+# Configura o modo WAL uma única vez, no arquivo do banco.
+_con_setup = _sqlite3_connect_original("jogadorbot.db", timeout=30)
+_modo = _con_setup.execute("PRAGMA journal_mode=WAL;").fetchone()[0]
+_con_setup.close()
+if _modo.lower() != "wal":
+    print(f"[AVISO] Não foi possível ativar o modo WAL no banco (modo atual: {_modo}). "
+          f"O bot vai continuar funcionando com o busy_timeout, mas pode ficar mais lento "
+          f"sob uso concorrente. Verifique se o sistema de arquivos do host permite WAL.")
 
 # ============================================================
 # CONFIGURAÇÃO
