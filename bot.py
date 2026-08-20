@@ -6138,7 +6138,7 @@ class LayoutEmpregos(ui.LayoutView):
         level_usuario, _ = buscar_level(usuario_id)
 
         container = ui.Container(
-            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com <:Atencao:1534592266625093662> precisam de level maior.")
+            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
