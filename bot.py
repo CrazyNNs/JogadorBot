@@ -33,6 +33,17 @@ if _modo.lower() != "wal":
           f"O bot vai continuar funcionando com o busy_timeout, mas pode ficar mais lento "
           f"sob uso concorrente. Verifique se o sistema de arquivos do host permite WAL.")
 
+# O SQLite só permite UM escritor por vez de qualquer forma — deixar dezenas
+# de threads brigando pelo lock ao mesmo tempo só aumenta a chance de estourar
+# o busy_timeout. Este semáforo enfileira o acesso de forma barata (em memória,
+# sem tocar o SQLite) antes mesmo de abrir a conexão.
+_db_semaforo = asyncio.Semaphore(4)
+
+async def executar_db(func, *args, **kwargs):
+    """Executa uma função de banco síncrona em thread, limitando a concorrência."""
+    async with _db_semaforo:
+        return await asyncio.to_thread(func, *args, **kwargs)
+
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
@@ -2465,17 +2476,17 @@ def buscar_progresso_missao(usuario_id, missao_id):
     return resultado if resultado else (0, 0)
 
 def _buscar_contador_usuario_sync(usuario_id):
-    garantir_contador(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)", (str(usuario_id),))
         cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
         cols = [desc[0] for desc in cur.description]
         row = cur.fetchone()
+        con.commit()
         return dict(zip(cols, row)) if row else None
     finally:
         con.close()
-
 
 def _atualizar_progresso_missao_sync(usuario_id, missao_id, valor_atual, semana):
     con = sqlite3.connect("jogadorbot.db")
@@ -2503,18 +2514,17 @@ def _marcar_missao_completada_sync(usuario_id, missao_id, semana):
     finally:
         con.close()
 
-
 async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
     """Verifica e atualiza o progresso de todas as missões do usuário."""
     semana = semana_atual()
-    dados = await asyncio.to_thread(_buscar_contador_usuario_sync, usuario_id)
+    dados = await executar_db(_buscar_contador_usuario_sync, usuario_id)
     if not dados:
         return
 
     canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
 
     for missao in MISSOES_SEMANAIS:
-        progresso_atual, completada = await asyncio.to_thread(buscar_progresso_missao, usuario_id, missao["id"])
+        progresso_atual, completada = await executar_db(buscar_progresso_missao, usuario_id, missao["id"])
         if completada:
             continue
 
@@ -2522,15 +2532,15 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
         valor_atual = dados.get(condicao, 0) or 0
         meta = missao["meta"]
 
-        await asyncio.to_thread(_atualizar_progresso_missao_sync, usuario_id, missao["id"], valor_atual, semana)
+        await executar_db(_atualizar_progresso_missao_sync, usuario_id, missao["id"], valor_atual, semana)
 
         if valor_atual >= meta:
-            await asyncio.to_thread(_marcar_missao_completada_sync, usuario_id, missao["id"], semana)
+            await executar_db(_marcar_missao_completada_sync, usuario_id, missao["id"], semana)
 
             tipo = missao["tipo_recompensa"]
             qtd = missao["quantidade_recompensa"]
             if tipo == "joyens":
-                await asyncio.to_thread(adicionar_joyens, usuario_id, qtd)
+                await executar_db(adicionar_joyens, usuario_id, qtd)
                 recompensa_texto = f"**+{qtd} Joyens**"
             elif tipo == "xp":
                 canal_ctx = ctx_ou_channel or canal
@@ -8071,27 +8081,26 @@ async def on_voice_state_update(member, before, after):
 
 def _registrar_mensagem_sync(usuario_id):
     """Roda em thread separada — nunca trava o loop principal do bot."""
-    garantir_contador(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        UPDATE contadores_usuarios SET
-            msg_semana = msg_semana + 1,
-            msg_total = msg_total + 1
-        WHERE usuario_id = ?
-    """, (str(usuario_id),))
-    con.commit()
-    con.close()
+    try:
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)", (str(usuario_id),))
+        cur.execute("""
+            UPDATE contadores_usuarios SET
+                msg_semana = msg_semana + 1,
+                msg_total = msg_total + 1
+            WHERE usuario_id = ?
+        """, (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         await bot.process_commands(message)
         return
-    # Executa o trabalho no banco em uma thread separada, para que uma
-    # eventual espera por lock no SQLite nunca trave o loop principal
-    # do bot (o que derrubaria a conexão com o Discord/heartbeat).
-    await asyncio.to_thread(_registrar_mensagem_sync, message.author.id)
+    await executar_db(_registrar_mensagem_sync, message.author.id)
     await verificar_missoes_usuario(str(message.author.id))
     await bot.process_commands(message)
 
