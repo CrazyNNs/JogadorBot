@@ -1305,6 +1305,17 @@ async def processar_evento_negligencia(pet_id):
         except:
             pass
 
+def _buscar_pets_negligenciados_sync(limite_inicial):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, ultimo_evento_negligencia FROM pets
+            WHERE negligencia_desde IS NOT NULL AND negligencia_desde <= ?
+        """, (limite_inicial,))
+        return cur.fetchall()
+    finally:
+        con.close()
 
 @tasks.loop(hours=1)
 async def verificar_negligencia_pets():
@@ -1312,14 +1323,7 @@ async def verificar_negligencia_pets():
     agora = datetime.datetime.now(FUSO_BR)
     limite_inicial = (agora - datetime.timedelta(days=DIAS_NEGLIGENCIA_PARA_EVENTO)).isoformat()
 
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        SELECT id, ultimo_evento_negligencia FROM pets
-        WHERE negligencia_desde IS NOT NULL AND negligencia_desde <= ?
-    """, (limite_inicial,))
-    candidatos = cur.fetchall()
-    con.close()
+    candidatos = await asyncio.to_thread(_buscar_pets_negligenciados_sync, limite_inicial)
 
     limite_reroll = (agora - datetime.timedelta(days=DIAS_ENTRE_ROLAGENS_NEGLIGENCIA)).isoformat()
     for pet_id, ultimo_evento in candidatos:
@@ -1579,19 +1583,37 @@ async def adicionar_xp(usuario_id, quantidade, ctx_ou_channel):
 
 # ============================================================
 # TASKS DE VERIFICAÇÃO POR TEMPO
+def _expirar_admins_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        agora = datetime.datetime.now().isoformat()
+        cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
+        expirados = cur.fetchall()
+        for (usuario_id,) in expirados:
+            cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
+        con.commit()
+        return expirados
+    finally:
+        con.close()
+
+def _expirar_admins_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        agora = datetime.datetime.now().isoformat()
+        cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
+        expirados = cur.fetchall()
+        for (usuario_id,) in expirados:
+            cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
+        con.commit()
+        return expirados
+    finally:
+        con.close()
+
 @tasks.loop(minutes=5)
 async def verificar_admins_expirados():
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    agora = datetime.datetime.now().isoformat()
-    cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
-    expirados = cur.fetchall()
-    for (usuario_id,) in expirados:
-        cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
-    # Commita e fecha a conexão ANTES de qualquer chamada à API do Discord,
-    # para não segurar o lock de escrita do banco durante a espera de rede.
-    con.commit()
-    con.close()
+    expirados = await asyncio.to_thread(_expirar_admins_sync)
 
     for (usuario_id,) in expirados:
         try:
@@ -1599,7 +1621,6 @@ async def verificar_admins_expirados():
             await usuario.send("⏰ Seu acesso de admin no **JogadorBot** expirou.")
         except:
             pass
-
 @tasks.loop(minutes=1)
 async def verificar_rotacao():
     expira = await asyncio.to_thread(buscar_expira_global)
@@ -1634,21 +1655,26 @@ async def verificar_rotacao():
         await canal.send(embed=embed)
         verificar_favoritos_rotacao.start()
 
+def _buscar_favoritos_disponiveis_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT bf.usuario_id, b.id, b.nome
+            FROM banners_favoritos bf
+            JOIN banners b ON bf.banner_id = b.id
+            JOIN rotacao_individual ri ON b.id = ri.banner_id AND ri.usuario_id = bf.usuario_id
+        """)
+        return cur.fetchall()
+    finally:
+        con.close()
+
 @tasks.loop(seconds=1)
 async def verificar_favoritos_rotacao():
     await asyncio.sleep(5)
     verificar_favoritos_rotacao.stop()
 
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        SELECT bf.usuario_id, b.id, b.nome
-        FROM banners_favoritos bf
-        JOIN banners b ON bf.banner_id = b.id
-        JOIN rotacao_individual ri ON b.id = ri.banner_id AND ri.usuario_id = bf.usuario_id
-    """)
-    resultados = cur.fetchall()
-    con.close()
+    resultados = await asyncio.to_thread(_buscar_favoritos_disponiveis_sync)
 
     for usuario_id, banner_id, banner_nome in resultados:
         try:
@@ -1664,12 +1690,9 @@ async def verificar_favoritos_rotacao():
 # FUNÇÕES AUXILIARES - Verificar Reset Semanal e Tempo em Call
 # ============================================================
 
-@tasks.loop(hours=1)
-async def verificar_reset_semanal():
-    """Reseta os contadores semanais toda segunda-feira às 00h."""
-    agora = datetime.datetime.now()
-    if agora.weekday() == 0 and agora.hour == 0:
-        con = sqlite3.connect("jogadorbot.db")
+def _resetar_contadores_semanais_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
         cur = con.cursor()
         cur.execute("""
             UPDATE contadores_usuarios SET
@@ -1682,7 +1705,15 @@ async def verificar_reset_semanal():
                 joyens_acumulados = 0
         """)
         con.commit()
+    finally:
         con.close()
+
+@tasks.loop(hours=1)
+async def verificar_reset_semanal():
+    """Reseta os contadores semanais toda segunda-feira às 00h."""
+    agora = datetime.datetime.now()
+    if agora.weekday() == 0 and agora.hour == 0:
+        await asyncio.to_thread(_resetar_contadores_semanais_sync)
 
         canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
         if canal:
@@ -1693,44 +1724,90 @@ async def verificar_reset_semanal():
             )
             await canal.send(embed=embed)
 
+def _atualizar_call_sync(member_id, entrou, agora_iso):
+    """Atualiza os dados de call do usuário. Retorna os minutos de call ao sair, ou None."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)", (str(member_id),))
+
+        if entrou:
+            cur.execute("UPDATE contadores_usuarios SET call_inicio = ? WHERE usuario_id = ?",
+                        (agora_iso, str(member_id)))
+            con.commit()
+            return None
+
+        cur.execute("SELECT call_inicio FROM contadores_usuarios WHERE usuario_id = ?", (str(member_id),))
+        resultado = cur.fetchone()
+        if not resultado or not resultado[0]:
+            con.commit()
+            return None
+
+        inicio = datetime.datetime.fromisoformat(resultado[0])
+        minutos = int((datetime.datetime.now() - inicio).total_seconds() // 60)
+        if minutos > 0:
+            cur.execute("""
+                UPDATE contadores_usuarios SET
+                    call_semana = call_semana + ?,
+                    call_total = call_total + ?,
+                    call_inicio = NULL
+                WHERE usuario_id = ?
+            """, (minutos, minutos, str(member_id)))
+        con.commit()
+        return minutos if minutos > 0 else None
+    finally:
+        con.close()
+
+
 @bot.event
 async def on_voice_state_update(member, before, after):
     """Monitora entrada e saída de calls para contar o tempo."""
-    garantir_contador(member.id)
     agora = datetime.datetime.now().isoformat()
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
 
-    # Entrou em call
     if before.channel is None and after.channel is not None:
-        cur.execute("UPDATE contadores_usuarios SET call_inicio = ? WHERE usuario_id = ?",
-                    (agora, str(member.id)))
-        con.commit()
+        await asyncio.to_thread(_atualizar_call_sync, member.id, True, agora)
 
-    # Saiu de call
     elif before.channel is not None and after.channel is None:
-        cur.execute("SELECT call_inicio FROM contadores_usuarios WHERE usuario_id = ?",
-                    (str(member.id),))
-        resultado = cur.fetchone()
-        if resultado and resultado[0]:
-            inicio = datetime.datetime.fromisoformat(resultado[0])
-            minutos = int((datetime.datetime.now() - inicio).total_seconds() // 60)
-            if minutos > 0:
-                cur.execute("""
-                    UPDATE contadores_usuarios SET
-                        call_semana = call_semana + ?,
-                        call_total = call_total + ?,
-                        call_inicio = NULL
-                    WHERE usuario_id = ?
-                """, (minutos, minutos, str(member.id)))
-                con.commit()
-                await verificar_missoes_usuario(str(member.id))
-
-    con.close()
+        minutos = await asyncio.to_thread(_atualizar_call_sync, member.id, False, agora)
+        if minutos:
+            await verificar_missoes_usuario(str(member.id))
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Missões Customizadas Temporárias
 # ============================================================
+def _processar_missoes_temporarias_sync(aviso_limite, agora_iso):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, nome, data_fim FROM missoes_customizadas
+            WHERE tipo = 'temporaria'
+            AND data_fim <= ?
+            AND data_fim > ?
+            AND aviso_enviado = 0
+        """, (aviso_limite, agora_iso))
+        para_avisar = cur.fetchall()
+
+        for mid, nome, data_fim in para_avisar:
+            cur.execute("UPDATE missoes_customizadas SET aviso_enviado = 1 WHERE id = ?", (mid,))
+
+        cur.execute("""
+            DELETE FROM missoes_customizadas_progresso
+            WHERE missao_id IN (
+                SELECT id FROM missoes_customizadas
+                WHERE tipo = 'temporaria' AND data_fim <= ?
+            )
+        """, (agora_iso,))
+        cur.execute("""
+            DELETE FROM missoes_customizadas WHERE tipo = 'temporaria' AND data_fim <= ?
+        """, (agora_iso,))
+
+        con.commit()
+        return para_avisar
+    finally:
+        con.close()
+
+
 @tasks.loop(hours=1)
 async def verificar_missoes_temporarias():
     """Avisa 6 horas antes do fim e remove missões expiradas."""
@@ -1738,38 +1815,7 @@ async def verificar_missoes_temporarias():
     aviso_limite = (agora + datetime.timedelta(hours=6)).isoformat()
     agora_iso = agora.isoformat()
 
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-
-    # Avisa missões que expiram em 6 horas
-    cur.execute("""
-        SELECT id, nome, data_fim FROM missoes_customizadas
-        WHERE tipo = 'temporaria'
-        AND data_fim <= ?
-        AND data_fim > ?
-        AND aviso_enviado = 0
-    """, (aviso_limite, agora_iso))
-    para_avisar = cur.fetchall()
-
-    for mid, nome, data_fim in para_avisar:
-        cur.execute("UPDATE missoes_customizadas SET aviso_enviado = 1 WHERE id = ?", (mid,))
-
-    # Remove missões expiradas
-    cur.execute("""
-        DELETE FROM missoes_customizadas_progresso
-        WHERE missao_id IN (
-            SELECT id FROM missoes_customizadas
-            WHERE tipo = 'temporaria' AND data_fim <= ?
-        )
-    """, (agora_iso,))
-    cur.execute("""
-        DELETE FROM missoes_customizadas WHERE tipo = 'temporaria' AND data_fim <= ?
-    """, (agora_iso,))
-
-    # Commita e fecha ANTES de qualquer await, para não segurar o lock
-    # de escrita do banco durante o envio das mensagens no Discord.
-    con.commit()
-    con.close()
+    para_avisar = await asyncio.to_thread(_processar_missoes_temporarias_sync, aviso_limite, agora_iso)
 
     canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
     for mid, nome, data_fim in para_avisar:
@@ -2418,25 +2464,57 @@ def buscar_progresso_missao(usuario_id, missao_id):
     con.close()
     return resultado if resultado else (0, 0)
 
+def _buscar_contador_usuario_sync(usuario_id):
+    garantir_contador(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+        cols = [desc[0] for desc in cur.description]
+        row = cur.fetchone()
+        return dict(zip(cols, row)) if row else None
+    finally:
+        con.close()
+
+
+def _atualizar_progresso_missao_sync(usuario_id, missao_id, valor_atual, semana):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO missoes_progresso (usuario_id, missao_id, progresso, completada, semana)
+            VALUES (?, ?, ?, 0, ?)
+            ON CONFLICT(usuario_id, missao_id, semana) DO UPDATE SET progresso = ?
+        """, (str(usuario_id), missao_id, valor_atual, semana, valor_atual))
+        con.commit()
+    finally:
+        con.close()
+
+
+def _marcar_missao_completada_sync(usuario_id, missao_id, semana):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            UPDATE missoes_progresso SET completada = 1
+            WHERE usuario_id = ? AND missao_id = ? AND semana = ?
+        """, (str(usuario_id), missao_id, semana))
+        con.commit()
+    finally:
+        con.close()
+
+
 async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
     """Verifica e atualiza o progresso de todas as missões do usuário."""
-    garantir_contador(usuario_id)
     semana = semana_atual()
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
-    cols = [desc[0] for desc in cur.description]
-    row = cur.fetchone()
-    con.close()
-
-    if not row:
+    dados = await asyncio.to_thread(_buscar_contador_usuario_sync, usuario_id)
+    if not dados:
         return
 
-    dados = dict(zip(cols, row))
     canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
 
     for missao in MISSOES_SEMANAIS:
-        progresso_atual, completada = buscar_progresso_missao(usuario_id, missao["id"])
+        progresso_atual, completada = await asyncio.to_thread(buscar_progresso_missao, usuario_id, missao["id"])
         if completada:
             continue
 
@@ -2444,32 +2522,15 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
         valor_atual = dados.get(condicao, 0) or 0
         meta = missao["meta"]
 
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-        cur.execute("""
-            INSERT INTO missoes_progresso (usuario_id, missao_id, progresso, completada, semana)
-            VALUES (?, ?, ?, 0, ?)
-            ON CONFLICT(usuario_id, missao_id, semana) DO UPDATE SET progresso = ?
-        """, (str(usuario_id), missao["id"], valor_atual, semana, valor_atual))
-        con.commit()
-        con.close()
+        await asyncio.to_thread(_atualizar_progresso_missao_sync, usuario_id, missao["id"], valor_atual, semana)
 
         if valor_atual >= meta:
-            # Marca como completada
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("""
-                UPDATE missoes_progresso SET completada = 1
-                WHERE usuario_id = ? AND missao_id = ? AND semana = ?
-            """, (str(usuario_id), missao["id"], semana))
-            con.commit()
-            con.close()
+            await asyncio.to_thread(_marcar_missao_completada_sync, usuario_id, missao["id"], semana)
 
-            # Dá a recompensa
             tipo = missao["tipo_recompensa"]
             qtd = missao["quantidade_recompensa"]
             if tipo == "joyens":
-                adicionar_joyens(usuario_id, qtd)
+                await asyncio.to_thread(adicionar_joyens, usuario_id, qtd)
                 recompensa_texto = f"**+{qtd} Joyens**"
             elif tipo == "xp":
                 canal_ctx = ctx_ou_channel or canal
@@ -2479,7 +2540,6 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
                     print(f"Erro ao dar XP de missão: {e}")
                 recompensa_texto = f"**+{qtd} XP**"
 
-            # Notifica no canal
             if canal:
                 try:
                     usuario = await bot.fetch_user(int(usuario_id))
