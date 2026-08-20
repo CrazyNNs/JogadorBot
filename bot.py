@@ -1587,13 +1587,17 @@ async def verificar_admins_expirados():
     expirados = cur.fetchall()
     for (usuario_id,) in expirados:
         cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
+    # Commita e fecha a conexão ANTES de qualquer chamada à API do Discord,
+    # para não segurar o lock de escrita do banco durante a espera de rede.
+    con.commit()
+    con.close()
+
+    for (usuario_id,) in expirados:
         try:
             usuario = await bot.fetch_user(int(usuario_id))
             await usuario.send("⏰ Seu acesso de admin no **JogadorBot** expirou.")
         except:
             pass
-    con.commit()
-    con.close()
 
 @tasks.loop(minutes=1)
 async def verificar_rotacao():
@@ -1746,18 +1750,8 @@ async def verificar_missoes_temporarias():
     """, (aviso_limite, agora_iso))
     para_avisar = cur.fetchall()
 
-    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
     for mid, nome, data_fim in para_avisar:
         cur.execute("UPDATE missoes_customizadas SET aviso_enviado = 1 WHERE id = ?", (mid,))
-        if canal:
-            expira_dt = datetime.datetime.fromisoformat(data_fim)
-            embed = discord.Embed(
-                title="⚠️ Missão Expirando em Breve!",
-                description=f"A missão **{nome}** expira em menos de 6 horas!",
-                color=discord.Color.orange()
-            )
-            embed.add_field(name="Expira em", value=expira_dt.strftime("%d/%m/%Y às %H:%M"), inline=False)
-            await canal.send(embed=embed)
 
     # Remove missões expiradas
     cur.execute("""
@@ -1771,9 +1765,22 @@ async def verificar_missoes_temporarias():
         DELETE FROM missoes_customizadas WHERE tipo = 'temporaria' AND data_fim <= ?
     """, (agora_iso,))
 
+    # Commita e fecha ANTES de qualquer await, para não segurar o lock
+    # de escrita do banco durante o envio das mensagens no Discord.
     con.commit()
     con.close()
 
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    for mid, nome, data_fim in para_avisar:
+        if canal:
+            expira_dt = datetime.datetime.fromisoformat(data_fim)
+            embed = discord.Embed(
+                title="⚠️ Missão Expirando em Breve!",
+                description=f"A missão **{nome}** expira em menos de 6 horas!",
+                color=discord.Color.orange()
+            )
+            embed.add_field(name="Expira em", value=expira_dt.strftime("%d/%m/%Y às %H:%M"), inline=False)
+            await canal.send(embed=embed)
 # ============================================================
 # FUNÇÕES AUXILIARES - Categorias banner
 # ============================================================
