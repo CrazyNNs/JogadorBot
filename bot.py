@@ -2848,6 +2848,24 @@ class ViewPerfil(discord.ui.LayoutView):
         total_banners = cur.fetchone()[0]
         con.close()
 
+        con = sqlite3.connect("jogadorbot.db")
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT COUNT(*) FROM banners_usuarios WHERE usuario_id = ?", (str(membro.id),))
+            total_banners = cur.fetchone()[0]
+
+            cur.execute("SELECT call_total FROM contadores_usuarios WHERE usuario_id = ?", (str(membro.id),))
+            resultado_call = cur.fetchone()
+            minutos_call = resultado_call[0] if resultado_call and resultado_call[0] else 0
+        finally:
+            con.close()
+
+        if minutos_call >= 60:
+            horas, minutos = divmod(minutos_call, 60)
+            tempo_call_texto = f"{horas}h {minutos}min"
+        else:
+            tempo_call_texto = f"{minutos_call}min"
+        
         container = discord.ui.Container()
         cor_custom = perfil_custom.get("cor_hex")
         if cor_custom and cor_hex_valida(cor_custom):
@@ -2894,6 +2912,7 @@ class ViewPerfil(discord.ui.LayoutView):
             f"📊 **Outros**\n"
             f"> **Conquistas:** ``{len(conquistas)}``\n"
             f"> **Banners:** ``{total_banners}``"
+            f"> **Tempo em call:** ``{tempo_call_texto}``"
         ))
 
         emprego_dados = buscar_emprego(membro.id)
