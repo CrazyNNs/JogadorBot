@@ -12,50 +12,20 @@ import aiohttp
 import io
 import asyncio
 import traceback
-
 import threading
 
 _sqlite3_connect_original = sqlite3.connect
-_db_lock = threading.Lock()
-_conexao_real = None
-
-class _ConexaoCompartilhada:
-    """Proxy em volta da única conexão SQLite persistente do bot.
-    Serializa o acesso entre threads (elimina 'database is locked' por
-    disputa entre múltiplas conexões) e trata close() como liberação
-    do lock, sem fechar a conexão de verdade."""
-
-    def __init__(self, con):
-        self._con = con
-
-    def close(self):
-        # Conexão é compartilhada/persistente: não fecha de verdade,
-        # apenas libera o lock para a próxima chamada em espera.
-        _db_lock.release()
-
-    def __getattr__(self, nome):
-        return getattr(self._con, nome)
-
 
 def _conectar_com_timeout(*args, **kwargs):
-    global _conexao_real
-    adquirido = _db_lock.acquire(timeout=30)
-    if not adquirido:
-        raise sqlite3.OperationalError(
-            "database is locked (timeout de 30s aguardando a conexão compartilhada — "
-            "provável close() faltando em algum lugar)"
-        )
-    if _conexao_real is None:
-        _conexao_real = _sqlite3_connect_original(
-            "jogadorbot.db", timeout=30, check_same_thread=False
-        )
-        _conexao_real.execute("PRAGMA busy_timeout=30000;")
-    return _ConexaoCompartilhada(_conexao_real)
+    kwargs.setdefault("timeout", 15)
+    con = _sqlite3_connect_original(*args, **kwargs)
+    con.execute("PRAGMA busy_timeout=15000;")
+    return con
 
 sqlite3.connect = _conectar_com_timeout
 
 # Configura o modo WAL uma única vez, no arquivo do banco.
-_con_setup = _sqlite3_connect_original("jogadorbot.db", timeout=30)
+_con_setup = _sqlite3_connect_original("jogadorbot.db", timeout=15)
 _modo = _con_setup.execute("PRAGMA journal_mode=WAL;").fetchone()[0]
 _con_setup.close()
 if _modo.lower() != "wal":
@@ -1632,7 +1602,7 @@ async def verificar_admins_expirados():
 
 @tasks.loop(minutes=1)
 async def verificar_rotacao():
-    expira = buscar_expira_global()
+    expira = await asyncio.to_thread(buscar_expira_global)
     fuso_brasilia = datetime.timezone(datetime.timedelta(hours=-3))
 
     precisa_rotacionar = False
