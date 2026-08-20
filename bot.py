@@ -2911,7 +2911,7 @@ class ViewPerfil(discord.ui.LayoutView):
         container.add_item(discord.ui.TextDisplay(
             f"📊 **Outros**\n"
             f"> **Conquistas:** ``{len(conquistas)}``\n"
-            f"> **Banners:** ``{total_banners}``"
+            f"> **Banners:** ``{total_banners}``\n"
             f"> **Tempo em call:** ``{tempo_call_texto}``"
         ))
 
