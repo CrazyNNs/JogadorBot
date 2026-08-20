@@ -16,9 +16,9 @@ import traceback
 _sqlite3_connect_original = sqlite3.connect
 
 def _conectar_com_timeout(*args, **kwargs):
-    kwargs.setdefault("timeout", 5)
+    kwargs.setdefault("timeout", 30)
     con = _sqlite3_connect_original(*args, **kwargs)
-    con.execute("PRAGMA busy_timeout=5000;")
+    con.execute("PRAGMA busy_timeout=30000;")
     return con
 
 sqlite3.connect = _conectar_com_timeout
@@ -1615,7 +1615,7 @@ async def verificar_rotacao():
             precisa_rotacionar = True
 
     if precisa_rotacionar:
-        sucesso, resultado = sortear_nova_rodada_global()
+        sucesso, resultado = await asyncio.to_thread(sortear_nova_rodada_global)
         canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
         if canal is None:
             return
@@ -2006,14 +2006,26 @@ def sortear_nova_rodada_global():
     expira = (datetime.datetime.now(fuso_brasilia) + datetime.timedelta(minutes=DURACAO_ROTACAO_HORAS)).isoformat()
 
     con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-
-    cur.execute("SELECT COUNT(*) FROM banners")
-    total_banners = cur.fetchone()[0]
-    con.close()
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM banners")
+        total_banners = cur.fetchone()[0]
+    finally:
+        con.close()
 
     if total_banners < BANNERS_POR_ROTACAO:
         return None, f"<:Atencao:1534592266625093662> Não há banners suficientes no catálogo! São necessários pelo menos {BANNERS_POR_ROTACAO} banners."
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("DELETE FROM rotacao_individual")
+        cur.execute("INSERT OR REPLACE INTO rotacao_global (id, expira) VALUES (1, ?)", (expira,))
+        con.commit()
+    finally:
+        con.close()
+
+    return True, expira
 
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -2362,12 +2374,14 @@ async def expirar_pimenta_depois(usuario_id, segundos):
 def garantir_contador(usuario_id):
     """Garante que o usuário tem uma linha na tabela de contadores."""
     con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("""
-        INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)
-    """, (str(usuario_id),))
-    con.commit()
-    con.close()
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)
+        """, (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
 
 def buscar_contador(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
