@@ -6389,7 +6389,7 @@ class ViewAjuda(discord.ui.View):
 
     @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.primary, row=0)
     async def btn_adm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(embed=self.embed_outros(), view=ViewAjudaCategoria())
+        await interaction.response.edit_message(embed=self.embed_adm(), view=ViewAjudaCategoria())
 
     @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.primary, row=0)
     async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -6414,7 +6414,7 @@ class ViewAjudaCategoria(discord.ui.View):
 
     @discord.ui.button(emoji="🔧", style=discord.ButtonStyle.secondary, row=0)
     async def btn_adm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(embed=ViewAjuda().embed_outros(), view=self)
+        await interaction.response.edit_message(embed=ViewAjuda().embed_adm(), view=self)
 
     @discord.ui.button(emoji="⚙️", style=discord.ButtonStyle.secondary, row=0)
     async def btn_slash(self, interaction: discord.Interaction, button: discord.ui.Button):
