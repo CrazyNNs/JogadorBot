@@ -210,7 +210,7 @@ EMPREGOS = {
 # PETS — Dados sobre os pets
 # ============================================================
 PETS_DISPONIVEIS = {
-    "Cachorro": {
+    "Cachorros": {
         "emoji": "🐶",
         "descricao": "Leal e brincalhão, está sempre pronto para uma aventura ao seu lado.",
         "preco": 18000,
@@ -220,7 +220,7 @@ PETS_DISPONIVEIS = {
         "brinquedo_preco": 900,
         "brinquedo_usos": 10,
     },
-    "Gato": {
+    "Gatos": {
         "emoji": "🐱",
         "descricao": "Independente, mas sempre volta pro colo na hora do carinho.",
         "preco": 22000,
@@ -230,7 +230,7 @@ PETS_DISPONIVEIS = {
         "brinquedo_preco": 1100,
         "brinquedo_usos": 10,
     },
-    "Papagaio": {
+    "Aves": {
         "emoji": "🦜",
         "descricao": "Curioso e falante, adora estar por perto e repetir o que ouve.",
         "preco": 28000,
@@ -280,7 +280,7 @@ RARIDADES_PET = {
 }
 # Raças — puramente estéticas, não mudam preço/petisco/brinquedo (esses seguem a espécie)
 RACAS_POR_ESPECIE = {
-    "Cachorro": [
+    "Cachorros": [
         {"nome": "Caramelo (SRD)", "emoji": "🐶", "preco": 15000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "O mais brasileiro dos cães — vira-lata leal, resistente e brincalhão."},
         {"nome": "Poodle", "emoji": "🐩", "preco": 18000, "moeda": "joyens", "raridade": "Comum",
@@ -298,7 +298,7 @@ RACAS_POR_ESPECIE = {
         {"nome": "Cão-Fantasma", "emoji": "👻", "preco": 380, "moeda": "joyogens", "raridade": "Mítico",
          "descricao": "Ninguém sabe quando ou onde morreu. Bêbados e pessoas que passam ao lado do cemitério à noite juram ouvi-lo latir por lá."},
     ],
-    "Gato": [
+    "Gatos": [
         {"nome": "Gato SRD", "emoji": "🐈‍⬛", "preco": 14000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Um gato comum, mas extremamente carinhoso quando decide gostar de alguém."},
         {"nome": "Siamês", "emoji": "🐈", "preco": 19000, "moeda": "joyens", "raridade": "Comum",
@@ -316,15 +316,23 @@ RACAS_POR_ESPECIE = {
         {"nome": "Gato Astral", "emoji": "🐈", "preco": 410, "moeda": "joyogens", "raridade": "Mítico",
          "descricao": "Estudiosos ainda estudam a sua origem. Talvez ele seja de Andrômeda."},
     ],
-    "Papagaio": [
-        {"nome": "Calopsita", "emoji": "🐦", "preco": 24000, "moeda": "joyens", "raridade": "Comum",
+    "Aves": [
+        {"nome": "Calopsita", "emoji": "🐦", "preco": 13000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Companheira e curiosa, adora assobiar junto com você."},
-        {"nome": "Papagaio-verdadeiro", "emoji": "🦜", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
+        {"nome": "Periquito", "emoji": "🐦", "preco": 16000, "moeda": "joyens", "raridade": "Comum",
+         "descricao": "Pequeno, energético e extremamente barulhento quando quer atenção."},
+        {"nome": "Canário", "emoji": "🐦", "preco": 17000, "moeda": "joyens", "raridade": "Comum",
+         "descricao": "Pequeno e tranquilo, seu canto pode ser ouvido por toda a casa."},
+        {"nome": "Papagaio-Verdadeiro", "emoji": "🦜", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Falante nato, repete tudo que ouve com facilidade."},
-        {"nome": "Arara-azul", "emoji": "🦚", "preco": 42000, "moeda": "joyens", "raridade": "Épico",
-         "descricao": "Rara e imponente, a joia mais cara do petshop em Joyens."},
-        {"nome": "Fênix Miniatura", "emoji": "🔥", "preco": 220, "moeda": "joyogens", "raridade": "Mítico",
-         "descricao": "Ninguém sabe explicar como ela sobrevive dentro das minas. A raridade suprema."},
+        {"nome": "Arara-Canindé", "emoji": "🦜", "preco": 40000, "moeda": "joyens", "raridade": "Raro",
+         "descricao": "Colorida e inteligente, adora explorar lugares novos."},
+        {"nome": "Arara-Azul", "emoji": "🦜", "preco": 70000, "moeda": "joyens", "raridade": "Épico",
+         "descricao": "Rara e imponente, uma joia azul vinda da floresta."},
+        {"nome": "Coruja Sombria", "emoji": "🦉", "preco": 85000, "moeda": "joyens", "raridade": "Lendário",
+         "descricao": "Nem mesmo durante a noite é possível vê-la facilmente. Uma terrível caçadora do crepusculo."},
+        {"nome": "Fênix Miniatura", "emoji": "🔥", "preco": 400, "moeda": "joyogens", "raridade": "Mítico",
+         "descricao": "Eterna soberana das chamas. Mesmo após o fim da vida, uma brasa se acende e ela ressurge das cinzas quentes."},
     ],
 }
 
