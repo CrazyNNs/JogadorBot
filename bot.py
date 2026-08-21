@@ -531,11 +531,11 @@ SUBCATEGORIAS_MINERACAO = ["Ferramentas", "Equipamento", "Consumíveis"]
 SUBCATEGORIAS_EMOJI = {"Ferramentas": "⚒️", "Equipamento": "🛡️", "Consumíveis": "☕"}
 
 MINERIOS = {
-    "Carvão":   {"min": 3, "max": 8, "chance": 0.15,  "preco": 8},
-    "Cobre":    {"min": 2, "max": 5, "chance": 0.10,  "preco": 18},
-    "Ferro":    {"min": 2, "max": 4, "chance": 0.07,  "preco": 14},
-    "Ouro":     {"min": 1, "max": 2, "chance": 0.02,  "preco": 100},
-    "Diamante": {"min": 1, "max": 1, "chance": 0.003, "preco": 750},
+    "Carvão":   {"min": 3, "max": 8, "chance": 0.15,  "preco": 8,   "emoji": "<:CarvaoIcon:1540153775660994672>"},
+    "Cobre":    {"min": 2, "max": 5, "chance": 0.10,  "preco": 18,  "emoji": "<:CobreIcon:1540153773627015259>"},
+    "Ferro":    {"min": 2, "max": 4, "chance": 0.07,  "preco": 14,  "emoji": "<:FerroIcon:1540153770799927367>"},
+    "Ouro":     {"min": 1, "max": 2, "chance": 0.02,  "preco": 100, "emoji": "<:OuroIcon:1540153768996511794>"},
+    "Diamante": {"min": 1, "max": 1, "chance": 0.003, "preco": 750, "emoji": "<:DiamanteIcon:1540153767041830955>"},
 }
 
 XP_DESMORONAMENTO_SOBREVIVENCIA = 1600
@@ -1460,7 +1460,7 @@ def buscar_itens_mochila(usuario, categoria, subcategoria):
 
     if categoria == "minerar" and subcategoria == "minerios":
         minerios = buscar_minerios_usuario(usuario_id)
-        return [f"💎 **{n}** — {q}" for n, q in minerios if q > 0] or None
+        return [f"{MINERIOS.get(n, {}).get('emoji', '💎')} **{n}** — {q}" for n, q in minerios if q > 0] or None
 
     return None
 
@@ -4003,7 +4003,7 @@ class ViewMinerarInicio(ui.LayoutView):
             style=discord.ButtonStyle.success,
             disabled=(not ferramenta_ativa) or sem_hp
         )
-        btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
+        btn_vender = ui.Button(label="<:BolsaJoyensIcon:1525729605724405781> Vender Minérios", style=discord.ButtonStyle.secondary)
         btn_consumir = ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
 
         async def comecar_cb(interaction):
@@ -4128,10 +4128,11 @@ class ViewVenderMinerios(ui.LayoutView):
         else:
             for nome, qtd in minerios:
                 preco_unit = MINERIOS[nome]["preco"]
-                container.add_item(ui.TextDisplay(f"**{nome}** — {qtd} unidade(s) ({preco_unit} Joyens cada)"))
+                emoji_minerio = MINERIOS[nome]["emoji"]
+                container.add_item(ui.TextDisplay(f"{emoji_minerio} **{nome}** — {qtd} unidade(s) ({preco_unit} Joyens cada)"))
 
                 linha = ui.ActionRow()
-                btn_vender = ui.Button(label=f"Vender {nome}", style=discord.ButtonStyle.primary)
+                btn_vender = ui.Button(label=f"Vender {nome}", emoji=emoji_minerio, style=discord.ButtonStyle.primary)
                 btn_vender_tudo = ui.Button(label=f"Vender Tudo", style=discord.ButtonStyle.success)
 
                 async def vender_cb(interaction, minerio_nome=nome, quantidade_disp=qtd):
