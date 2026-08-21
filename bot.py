@@ -3537,8 +3537,8 @@ class ViewLoja(ui.LayoutView):
         btn_proximo.callback = proximo_cb
         btn_comprar.callback = comprar_cb
         linha.add_item(btn_anterior)
-        linha.add_item(btn_proximo)
         linha.add_item(btn_comprar)
+        linha.add_item(btn_proximo)
         container.add_item(linha)
 
         self.add_item(container)
@@ -3598,7 +3598,6 @@ class ViewMochilaMenu(ui.LayoutView):
 
         self.add_item(container)
 
-
 class ViewMochilaSubcategorias(ui.LayoutView):
     def __init__(self, usuario: discord.Member, categoria: str, view_menu: ViewMochilaMenu):
         super().__init__(timeout=120)
@@ -3617,6 +3616,9 @@ class ViewMochilaSubcategorias(ui.LayoutView):
             f"{sub['emoji']} **{sub['nome']}**" for sub in dados_categoria["subcategorias"].values()
         )
         container.add_item(ui.TextDisplay(f"### {dados_categoria['emoji']} {dados_categoria['nome']}\n{descricao}"))
+        thumbnail = ui.Thumbnail(URL_MOCHILA_INVENTARIO)
+        secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
+        container.add_item(secao)
         container.add_item(ui.Separator())
 
         linha = ui.ActionRow()
@@ -3663,6 +3665,9 @@ class ViewMochilaItens(ui.LayoutView):
         container = ui.Container()
         container.accent_color = discord.Colour.blurple()
         container.add_item(ui.TextDisplay(f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"))
+        thumbnail = ui.Thumbnail(URL_MOCHILA_INVENTARIO)
+        secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
+        container.add_item(secao)
         container.add_item(ui.Separator())
 
         em_mineracao = self.usuario.id in MINERACAO_ATIVAS
