@@ -4003,7 +4003,7 @@ class ViewMinerarInicio(ui.LayoutView):
             style=discord.ButtonStyle.success,
             disabled=(not ferramenta_ativa) or sem_hp
         )
-        btn_vender = ui.Button(label="<:BolsaJoyensIcon:1525729605724405781> Vender Minérios", style=discord.ButtonStyle.secondary)
+        btn_vender = ui.Button(label="💰 Vender Minérios", style=discord.ButtonStyle.secondary)
         btn_consumir = ui.Button(label="☕ Consumir", style=discord.ButtonStyle.secondary)
 
         async def comecar_cb(interaction):
@@ -4119,7 +4119,7 @@ class ViewVenderMinerios(ui.LayoutView):
         self.clear_items()
         container = ui.Container()
         container.accent_color = discord.Colour.green()
-        container.add_item(ui.TextDisplay("### 💰 Vender Minérios\nEscolha um minério para vender:"))
+        container.add_item(ui.TextDisplay("### <:BolsaJoyensIcon:1525729605724405781> Vender Minérios\nEscolha um minério para vender:"))
         container.add_item(ui.Separator())
 
         minerios = buscar_minerios_usuario(self.usuario_id)
