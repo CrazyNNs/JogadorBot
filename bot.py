@@ -249,8 +249,8 @@ LIMITE_PETS = 3
 # ============================================================
 # PETS — Negligência, HP e Doenças
 # ============================================================
-DIAS_NEGLIGENCIA_PARA_EVENTO = 5          # dias com TODOS os status zerados até rolar o evento
-DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 5       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
+DIAS_NEGLIGENCIA_PARA_EVENTO = 0.007          # dias com TODOS os status zerados até rolar o evento
+DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 0.007       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
 
 DRENO_HP_NEGLIGENCIA_POR_DIA = 10         # HP perdido por dia com todos os status zerados
 DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente sem tratamento
@@ -258,9 +258,9 @@ DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente se
 # Pesos relativos de cada evento (não precisam somar 100)
 EVENTOS_NEGLIGENCIA = {
     "foge": 30,
-    "doente": 20,
+    "doente": 60,
     "doente_e_foge": 20,
-    "resgatado": 29,
+    "resgatado": 25,
     "morre": 1,
 }
 
@@ -1342,7 +1342,7 @@ async def processar_evento_negligencia(pet_id):
             mensagem = (
                 f"🤒 Seu pet **{nome}** ficou doente por negligência!\n"
                 f"{d_emoji} **{d_nome}** — {d_desc}\n"
-                f"Use `/pet ver` → **Medicar** antes que ele piore ou pior ainda aconteça."
+                f"Use `!pets` → **Medicar** antes que ele piore ou pior ainda aconteça."
             )
         else:
             cur.execute("UPDATE pets SET ultimo_evento_negligencia = ? WHERE id = ?", (agora, pet_id))
