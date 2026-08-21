@@ -3615,7 +3615,7 @@ class ViewMochilaSubcategorias(ui.LayoutView):
         descricao = "\n".join(
             f"{sub['emoji']} **{sub['nome']}**" for sub in dados_categoria["subcategorias"].values()
         )
-        container.add_item(ui.TextDisplay(f"### {dados_categoria['emoji']} {dados_categoria['nome']}\n{descricao}"))
+        texto = f"### {dados_categoria['emoji']} {dados_categoria['nome']}\n{descricao}"
         thumbnail = ui.Thumbnail(URL_MOCHILA_INVENTARIO)
         secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
         container.add_item(secao)
@@ -3664,7 +3664,7 @@ class ViewMochilaItens(ui.LayoutView):
 
         container = ui.Container()
         container.accent_color = discord.Colour.blurple()
-        container.add_item(ui.TextDisplay(f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"))
+        texto = f"### {dados_sub['emoji']} {dados_sub['nome']}\n-# {self.usuario.display_name}"
         thumbnail = ui.Thumbnail(URL_MOCHILA_INVENTARIO)
         secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
         container.add_item(secao)
