@@ -1381,7 +1381,7 @@ def _buscar_pets_negligenciados_sync(limite_inicial):
     finally:
         con.close()
 
-@tasks.loop(hours=1)
+@tasks.loop(minutes=10)
 async def verificar_negligencia_pets():
     """Verifica pets com todos os status zerados há tempo demais e sorteia um evento."""
     agora = datetime.datetime.now(FUSO_BR)
