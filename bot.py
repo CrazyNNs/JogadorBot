@@ -8384,36 +8384,6 @@ async def missao_concluir(interaction: discord.Interaction, nome: str, membro: d
     await concluir_missao_customizada(str(membro.id), mid, nome_real, tipo_recompensa, qtd_recompensa, canal, interaction, recompensa_extra)
     await interaction.response.send_message(f"✅ Missão **{nome_real}** concluída para {membro.mention}!", ephemeral=True)
 
-@missao_group.command(name="concluir", description="Conclui manualmente uma missão Null para um membro (admin)")
-@app_commands.describe(
-    nome="Nome exato da missão",
-    membro="Membro que completou a missão"
-)
-@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
-async def missao_concluir(interaction: discord.Interaction, nome: str, membro: discord.Member):
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT id, nome, tipo_recompensa, quantidade_recompensa FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
-    resultado = cur.fetchone()
-    if not resultado:
-        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Missão **{nome}** não encontrada.", ephemeral=True)
-        con.close()
-        return
-    mid, nome_real, tipo_recompensa, qtd_recompensa = resultado
-
-    cur.execute("SELECT completada FROM missoes_customizadas_progresso WHERE usuario_id = ? AND missao_id = ?",
-                (str(membro.id), mid))
-    prog = cur.fetchone()
-    if prog and prog[0]:
-        await interaction.response.send_message(f"<:Atencao:1534592266625093662> {membro.display_name} já completou esta missão!", ephemeral=True)
-        con.close()
-        return
-    con.close()
-
-    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
-    await concluir_missao_customizada(str(membro.id), mid, nome_real, tipo_recompensa, qtd_recompensa, canal, interaction)
-    await interaction.response.send_message(f"✅ Missão **{nome_real}** concluída para {membro.mention}!", ephemeral=True)
-
 bot.tree.add_command(missao_group)
 
 bot.tree.add_command(rotacao_group)
