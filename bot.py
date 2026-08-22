@@ -449,6 +449,38 @@ MISSOES_SEMANAIS = [
     },
 ]
 
+CONDICOES_MISSAO = {
+    # --- Economia / Social ---
+    "msg_semana":                {"categoria": "Economia", "nome": "Mensagens enviadas (na semana)"},
+    "msg_total":                 {"categoria": "Economia", "nome": "Mensagens enviadas (total)"},
+    "call_semana":               {"categoria": "Economia", "nome": "Minutos em call (na semana)"},
+    "call_total":                {"categoria": "Economia", "nome": "Minutos em call (total)"},
+    "apostar_semana":            {"categoria": "Economia", "nome": "Vezes que usou !apostar (na semana)"},
+    "apostar_total":             {"categoria": "Economia", "nome": "Vezes que usou !apostar (total)"},
+    "apostar_quantidade_semana": {"categoria": "Economia", "nome": "Joyens apostados (na semana)"},
+    "apostar_quantidade_total":  {"categoria": "Economia", "nome": "Joyens apostados (total)"},
+    "diario_semana":              {"categoria": "Economia", "nome": "Vezes que usou !diario (na semana)"},
+    "diario_total":               {"categoria": "Economia", "nome": "Vezes que usou !diario (total)"},
+    "diario_seguidos":            {"categoria": "Economia", "nome": "Dias seguidos usando !diario"},
+    "trabalhar_semana":           {"categoria": "Economia", "nome": "Vezes que trabalhou (na semana)"},
+    "trabalhar_total":            {"categoria": "Economia", "nome": "Vezes que trabalhou (total)"},
+    "joyens_acumulados":          {"categoria": "Economia", "nome": "Joyens acumulados (na semana)"},
+    "joyogens_acumulados":        {"categoria": "Economia", "nome": "Joyogens acumulados (total)"},
+    "pagar_quantidade":           {"categoria": "Economia", "nome": "Joyens enviados com !pagar (total)"},
+
+    # --- Mineração ---
+    "mineracao_tempo":            {"categoria": "Mineração", "nome": "Minutos gastos minerando (total)"},
+    "mineracao_monstro":          {"categoria": "Mineração", "nome": "Monstros derrotados na mineração (total)"},
+    "mineracao_dinamite":         {"categoria": "Mineração", "nome": "Dinamites usadas na mineração (total)"},
+    "picaretas_quebradas":        {"categoria": "Mineração", "nome": "Picaretas quebradas (total)"},
+    "pimenta_consumir":           {"categoria": "Mineração", "nome": "Pimentas consumidas durante a mineração (total)"},
+    "marmita_consumir":           {"categoria": "Mineração", "nome": "Marmitas consumidas, dentro ou fora da mineração (total)"},
+
+    # --- Pets ---
+    "pet_brincadeira":            {"categoria": "Pets", "nome": "Vezes que brincou com o pet (total)"},
+    "pet_alimentar":              {"categoria": "Pets", "nome": "Vezes que alimentou o pet (total)"},
+    "pet_fullfelicidade_dias":    {"categoria": "Pets", "nome": "Recorde de dias seguidos com o pet 100% feliz"},
+}
 # ============================================================
 # KURUULANDIA — Locais do mapa
 # ============================================================
@@ -805,6 +837,12 @@ def iniciar_banco():
         "mineracao_dinamite INTEGER DEFAULT 0",
         "pet_brincadeira INTEGER DEFAULT 0",
         "pet_alimentar INTEGER DEFAULT 0",
+        "joyogens_acumulados INTEGER DEFAULT 0",
+        "pagar_quantidade INTEGER DEFAULT 0",
+        "picaretas_quebradas INTEGER DEFAULT 0",
+        "pimenta_consumir INTEGER DEFAULT 0",
+        "marmita_consumir INTEGER DEFAULT 0",
+        "pet_fullfelicidade_dias INTEGER DEFAULT 0",
     ]:
         try:
             cur.execute(f"ALTER TABLE contadores_usuarios ADD COLUMN {coluna}")
@@ -826,6 +864,12 @@ def iniciar_banco():
             aviso_enviado INTEGER DEFAULT 0
         )
     """)
+    try:
+        cur.execute("ALTER TABLE missoes_customizadas ADD COLUMN recompensa_extra TEXT")
+    except sqlite3.OperationalError:
+        pass
+    con.commit()
+    
     cur.execute("""
         CREATE TABLE IF NOT EXISTS missoes_customizadas_progresso (
             usuario_id TEXT NOT NULL,
@@ -923,6 +967,8 @@ def iniciar_banco():
         "doenca_id INTEGER REFERENCES doencas_pets(id)",
         "negligencia_desde TEXT",
         "ultimo_evento_negligencia TEXT",
+        "dias_felicidade_atual INTEGER NOT NULL DEFAULT 0",
+        "felicidade_streak_verificado_em TEXT",
     ]:
         try:
             cur.execute(f"ALTER TABLE pets ADD COLUMN {coluna}")
@@ -1788,6 +1834,72 @@ async def verificar_reset_semanal():
             )
             await canal.send(embed=embed)
 
+def _atualizar_streak_felicidade_pets_sync():
+    """Roda 1x por dia: para cada pet, verifica se ele terminou o dia com 100% de
+    felicidade. Se sim, soma +1 na sequência atual dele; se não, zera a sequência.
+    Sempre que a sequência de um pet supera o recorde salvo do dono, atualiza
+    contadores_usuarios.pet_fullfelicidade_dias (usado como condição de missão)."""
+    hoje = datetime.datetime.now(FUSO_BR).strftime("%Y-%m-%d")
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT id FROM pets")
+        pet_ids = [r[0] for r in cur.fetchall()]
+    finally:
+        con.close()
+
+    for pet_id in pet_ids:
+        atualizar_stats_pet(pet_id)  # aplica o decaimento pendente antes de conferir a felicidade
+
+        con = sqlite3.connect("jogadorbot.db")
+        try:
+            cur = con.cursor()
+            cur.execute("""
+                SELECT usuario_id, felicidade, dias_felicidade_atual, felicidade_streak_verificado_em
+                FROM pets WHERE id = ?
+            """, (pet_id,))
+            linha = cur.fetchone()
+            if not linha:
+                continue
+            usuario_id, felicidade, dias_atual, verificado_em = linha
+
+            if verificado_em == hoje:
+                continue  # esse pet já foi contabilizado hoje
+
+            novo_dias = (dias_atual or 0) + 1 if felicidade >= 100 else 0
+            cur.execute("""
+                UPDATE pets SET dias_felicidade_atual = ?, felicidade_streak_verificado_em = ?
+                WHERE id = ?
+            """, (novo_dias, hoje, pet_id))
+            con.commit()
+        finally:
+            con.close()
+
+        if novo_dias <= 0:
+            continue
+
+        garantir_contador(usuario_id)
+        con = sqlite3.connect("jogadorbot.db")
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT pet_fullfelicidade_dias FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+            r = cur.fetchone()
+            recorde_atual = (r[0] if r else 0) or 0
+            if novo_dias > recorde_atual:
+                cur.execute("UPDATE contadores_usuarios SET pet_fullfelicidade_dias = ? WHERE usuario_id = ?",
+                            (novo_dias, str(usuario_id)))
+                con.commit()
+        finally:
+            con.close()
+
+@tasks.loop(hours=1)
+async def verificar_streak_felicidade_pets():
+    """Roda a virada de dia (00h) e atualiza a sequência de felicidade máxima dos pets."""
+    agora = datetime.datetime.now(FUSO_BR)
+    if agora.hour == 0:
+        await asyncio.to_thread(_atualizar_streak_felicidade_pets_sync)
+
 def _atualizar_call_sync(member_id, entrou, agora_iso):
     """Atualiza os dados de call do usuário. Retorna os minutos de call ao sair, ou None."""
     con = sqlite3.connect("jogadorbot.db")
@@ -2357,6 +2469,7 @@ def adicionar_joyogens(usuario_id, quantidade):
     cur.execute("UPDATE usuario_stats SET joyogens = joyogens + ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
     con.commit()
     con.close()
+    atualizar_contador(usuario_id, "joyogens_acumulados", quantidade)
 
 def remover_joyogens(usuario_id, quantidade):
     garantir_stats(usuario_id)
@@ -2592,16 +2705,8 @@ async def verificar_missoes_usuario(usuario_id, ctx_ou_channel=None):
 
             tipo = missao["tipo_recompensa"]
             qtd = missao["quantidade_recompensa"]
-            if tipo == "joyens":
-                await executar_db(adicionar_joyens, usuario_id, qtd)
-                recompensa_texto = f"**+{qtd} Joyens**"
-            elif tipo == "xp":
-                canal_ctx = ctx_ou_channel or canal
-                try:
-                    await adicionar_xp(str(usuario_id), qtd, canal_ctx)
-                except Exception as e:
-                    print(f"Erro ao dar XP de missão: {e}")
-                recompensa_texto = f"**+{qtd} XP**"
+            canal_xp = ctx_ou_channel or canal
+            recompensa_texto = await formatar_e_dar_recompensa(usuario_id, tipo, qtd, None, canal_xp)
 
             if canal:
                 try:
@@ -2650,62 +2755,48 @@ def buscar_progresso_missao_customizada(usuario_id, missao_id):
     con.close()
     return resultado if resultado else (0, 0)
 
-async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None):
-    """Verifica missões customizadas com condições automáticas."""
-    garantir_contador(usuario_id)
+def calcular_progresso_condicoes(condicoes, dados):
+    """Calcula o progresso de uma missão com uma ou mais condições, sem misturar
+    escalas diferentes num único número. Retorna:
+    - percentual_geral: 0-100, é o percentual da condição MAIS ATRASADA (só bate
+      100 quando TODAS as condições baterem, igual à regra de conclusão da missão)
+    - todos_completos: True se todas as condições já bateram a meta
+    - detalhes: lista de strings "Nome da condição: atual/meta (percentual%)",
+      uma por condição, pra exibir o progresso de cada uma separadamente
+    """
+    lista_condicoes = [c.strip() for c in condicoes.split(",") if c.strip()]
+    todos_completos = True
+    percentuais = []
+    detalhes = []
+
+    for cond in lista_condicoes:
+        if ":" not in cond:
+            continue
+        campo, valor_meta_str = cond.split(":", 1)
+        campo = campo.strip()
+        try:
+            valor_meta = int(valor_meta_str.strip())
+        except ValueError:
+            continue
+        if valor_meta <= 0:
+            continue
+
+        valor_atual = dados.get(campo, 0) or 0
+        percentual = min(100, int((valor_atual / valor_meta) * 100))
+        percentuais.append(percentual)
+
+        if valor_atual < valor_meta:
+            todos_completos = False
+
+        nome_condicao = CONDICOES_MISSAO.get(campo, {}).get("nome", campo)
+        detalhes.append(f"{nome_condicao}: {min(valor_atual, valor_meta)}/{valor_meta} ({percentual}%)")
+
+    percentual_geral = min(percentuais) if percentuais else 0
+    return percentual_geral, todos_completos, detalhes
+
+def _atualizar_progresso_customizada_sync(usuario_id, mid, novo_progresso):
     con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    cur.execute("SELECT * FROM contadores_usuarios WHERE usuario_id = ?", (str(usuario_id),))
-    cols = [desc[0] for desc in cur.description]
-    row = cur.fetchone()
-    con.close()
-
-    if not row:
-        return
-
-    dados = dict(zip(cols, row))
-    dados["mineracao_tempo"] = (dados.get("mineracao_tempo_segundos", 0) or 0) // 60
-    agora = datetime.datetime.now().isoformat()
-    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
-    missoes = buscar_missoes_customizadas()
-
-    for missao in missoes:
-        mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _ = missao
-
-        # Pula missões expiradas
-        if data_fim and data_fim < agora:
-            continue
-
-        progresso_atual, completada = buscar_progresso_missao_customizada(usuario_id, mid)
-        if completada:
-            continue
-
-        # Pula missões Null (precisam de aprovação manual)
-        if condicoes.strip().lower() == "null":
-            continue
-
-        # Calcula progresso combinado
-        lista_condicoes = [c.strip() for c in condicoes.split(",")]
-        todos_completos = True
-        progresso_min = float("inf")
-
-        for cond in lista_condicoes:
-            if ":" not in cond:
-                continue
-            campo, valor_meta = cond.split(":", 1)
-            try:
-                valor_meta = int(valor_meta.strip())
-            except ValueError:
-                continue
-            valor_atual = dados.get(campo, 0) or 0
-            progresso_percentual = min(valor_atual, valor_meta)
-            progresso_min = min(progresso_min, progresso_percentual / valor_meta * (meta or valor_meta))
-            if valor_atual < valor_meta:
-                todos_completos = False
-
-        novo_progresso = int(progresso_min) if progresso_min != float("inf") else 0
-
-        con = sqlite3.connect("jogadorbot.db")
+    try:
         cur = con.cursor()
         cur.execute("""
             INSERT INTO missoes_customizadas_progresso (usuario_id, missao_id, progresso)
@@ -2713,12 +2804,125 @@ async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None
             ON CONFLICT(usuario_id, missao_id) DO UPDATE SET progresso = ?
         """, (str(usuario_id), mid, novo_progresso, novo_progresso))
         con.commit()
+    finally:
         con.close()
 
-        if todos_completos:
-            await concluir_missao_customizada(usuario_id, mid, nome, tipo_recompensa, qtd_recompensa, canal, ctx_ou_channel)
+async def verificar_missoes_customizadas_usuario(usuario_id, ctx_ou_channel=None):
+    """Verifica missões customizadas com condições automáticas."""
+    dados = await executar_db(_buscar_contador_usuario_sync, usuario_id)
+    if not dados:
+        return
 
-async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompensa, qtd_recompensa, canal=None, ctx_ou_channel=None):
+    dados["mineracao_tempo"] = (dados.get("mineracao_tempo_segundos", 0) or 0) // 60
+    agora = datetime.datetime.now().isoformat()
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    missoes = await asyncio.to_thread(buscar_missoes_customizadas)
+
+    for missao in missoes:
+        mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _, recompensa_extra = missao
+
+        # Pula missões expiradas
+        if data_fim and data_fim < agora:
+            continue
+
+        progresso_atual, completada = await asyncio.to_thread(buscar_progresso_missao_customizada, usuario_id, mid)
+        if completada:
+            continue
+
+        # Pula missões Null (precisam de aprovação manual)
+        if condicoes.strip().lower() == "null":
+            continue
+
+        percentual_geral, todos_completos, _detalhes = calcular_progresso_condicoes(condicoes, dados)
+        await executar_db(_atualizar_progresso_customizada_sync, usuario_id, mid, percentual_geral)
+
+        if todos_completos:
+            await concluir_missao_customizada(usuario_id, mid, nome, tipo_recompensa, qtd_recompensa, canal, ctx_ou_channel, recompensa_extra)
+
+def texto_recompensa(tipo_recompensa, qtd_recompensa, recompensa_extra=None):
+    """Só monta o texto de exibição da recompensa, sem conceder nada — usado em
+    listagens/embeds (diferente de formatar_e_dar_recompensa, que efetivamente dá o prêmio)."""
+    if tipo_recompensa == "joyens":
+        return f"{qtd_recompensa} Joyens"
+    if tipo_recompensa == "joyogens":
+        return f"{qtd_recompensa} Joyogens"
+    if tipo_recompensa == "xp":
+        return f"{qtd_recompensa} XP"
+    if tipo_recompensa == "banner":
+        return f"Banner: {recompensa_extra}"
+    if tipo_recompensa == "pet":
+        return f"Pet: {recompensa_extra.replace('|', ' (') + ')' if recompensa_extra and '|' in recompensa_extra else recompensa_extra}"
+    return str(tipo_recompensa)
+
+def _dar_banner_sync(usuario_id, nome_banner):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT id FROM banners WHERE LOWER(nome) = LOWER(?)", (nome_banner or "",))
+        resultado = cur.fetchone()
+        if not resultado:
+            return False
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                    (str(usuario_id), resultado[0]))
+        con.commit()
+        return True
+    finally:
+        con.close()
+
+def _dar_pet_sync(usuario_id, especie, raca):
+    agora = datetime.datetime.now(FUSO_BR).isoformat()
+    nome_pet = f"{especie} da Missão"
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets (usuario_id, especie, raca, nome, fome, energia, higiene, felicidade, hp, criado_em, ultima_atualizacao)
+            VALUES (?, ?, ?, ?, 100, 100, 100, 100, 100, ?, ?)
+        """, (str(usuario_id), especie, raca, nome_pet, agora, agora))
+        con.commit()
+    finally:
+        con.close()
+
+async def formatar_e_dar_recompensa(usuario_id, tipo_recompensa, qtd_recompensa, recompensa_extra=None, canal_xp=None):
+    """Concede a recompensa de uma missão (semanal ou customizada) e devolve o texto
+    pronto pra mostrar no embed. Fonte única pra todos os tipos de recompensa."""
+    if tipo_recompensa == "joyens":
+        await asyncio.to_thread(adicionar_joyens, usuario_id, qtd_recompensa)
+        return f"**+{qtd_recompensa} Joyens**"
+
+    if tipo_recompensa == "joyogens":
+        await asyncio.to_thread(adicionar_joyogens, usuario_id, qtd_recompensa)
+        return f"**+{qtd_recompensa} Joyogens**"
+
+    if tipo_recompensa == "xp":
+        if canal_xp:
+            try:
+                await adicionar_xp(str(usuario_id), qtd_recompensa, canal_xp)
+            except Exception as e:
+                print(f"Erro ao dar XP de missão: {e}")
+        return f"**+{qtd_recompensa} XP**"
+
+    if tipo_recompensa == "banner":
+        encontrado = await asyncio.to_thread(_dar_banner_sync, usuario_id, recompensa_extra)
+        if not encontrado:
+            print(f"Missão tentou dar o banner '{recompensa_extra}', mas ele não existe mais.")
+            return f"**Banner: {recompensa_extra}** (não encontrado — avise um admin)"
+        return f"**🖼️ Banner: {recompensa_extra}**"
+
+    if tipo_recompensa == "pet":
+        especie, _, raca = (recompensa_extra or "").partition("|")
+        especie = especie.strip()
+        raca = raca.strip() or None
+        if especie not in PETS_DISPONIVEIS:
+            print(f"Missão tentou dar o pet '{recompensa_extra}', mas a espécie não existe mais.")
+            return f"**Pet: {recompensa_extra}** (não encontrado — avise um admin)"
+        await asyncio.to_thread(_dar_pet_sync, usuario_id, especie, raca)
+        raca_texto = f" ({raca})" if raca else ""
+        return f"**🐾 Pet: {especie}{raca_texto}**"
+
+    return str(tipo_recompensa)
+
+async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompensa, qtd_recompensa, canal=None, ctx_ou_channel=None, recompensa_extra=None):
     """Marca uma missão customizada como completada e dá a recompensa."""
     agora = datetime.datetime.now().isoformat()
     con = sqlite3.connect("jogadorbot.db")
@@ -2731,19 +2935,8 @@ async def concluir_missao_customizada(usuario_id, missao_id, nome, tipo_recompen
     con.commit()
     con.close()
 
-    if tipo_recompensa == "joyens":
-        adicionar_joyens(usuario_id, qtd_recompensa)
-        recompensa_texto = f"**+{qtd_recompensa} Joyens**"
-    elif tipo_recompensa == "xp":
-        canal_ctx = ctx_ou_channel or canal
-        if canal_ctx:
-            try:
-                await adicionar_xp(str(usuario_id), qtd_recompensa, canal_ctx)
-            except Exception as e:
-                print(f"Erro ao dar XP de missão personalizada: {e}")
-        recompensa_texto = f"**+{qtd_recompensa} XP**"
-    else:
-        recompensa_texto = tipo_recompensa
+    canal_xp = ctx_ou_channel or canal
+    recompensa_texto = await formatar_e_dar_recompensa(usuario_id, tipo_recompensa, qtd_recompensa, recompensa_extra, canal_xp)
 
     if canal:
         try:
@@ -3839,6 +4032,7 @@ class ViewConsumiveis(ui.LayoutView):
                 await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
                 return
             remover_item_mineracao(self.usuario_id, "Marmita", 1)
+            atualizar_contador(self.usuario_id, "marmita_consumir", 1)
             stats_atual = buscar_stats(self.usuario_id)
             novo_hp = atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
             self.montar()
@@ -3866,6 +4060,7 @@ class ViewConsumiveis(ui.LayoutView):
                 await interaction.response.send_message("Você não tem mais pimentas!", ephemeral=True)
                 return
             remover_item_mineracao(self.usuario_id, "Pimenta", 1)
+            atualizar_contador(self.usuario_id, "pimenta_consumir", 1)
             con = sqlite3.connect("jogadorbot.db")
             cur = con.cursor()
             cur.execute("UPDATE usuario_stats SET pimenta_ativa = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
@@ -3917,6 +4112,7 @@ class ViewConsumiveisMineracao(ui.LayoutView):
                     await interaction.response.send_message("Você não tem mais marmitas!", ephemeral=True)
                     return
                 remover_item_mineracao(self.usuario_id, "Marmita", 1)
+                atualizar_contador(self.usuario_id, "marmita_consumir", 1)
                 stats_atual = buscar_stats(self.usuario_id)
                 novo_hp = atualizar_hp(self.usuario_id, stats_atual["hp_atual"] + 20)
                 await interaction.response.send_message(f"✅ Você comeu uma marmita! HP: {novo_hp}/{hp_maximo(self.usuario_id)}", ephemeral=True)
@@ -4506,9 +4702,10 @@ class ViewMineracao(ui.LayoutView):
         await interaction.response.defer()
 
     async def picareta_quebrou(self):
+        atualizar_contador(self.usuario_id, "picaretas_quebradas", 1)
         for child in [self.btn_atacar, self.btn_dinamite, self.btn_parar]:
             child.disabled = True
-
+            
         ferramentas_disponiveis = {
             nome: dados for nome, dados in ITENS_MINERACAO.items()
             if dados.get("subcategoria") == "Ferramentas" and "usos" in dados
@@ -6136,6 +6333,7 @@ class ViewPagamento(discord.ui.View):
 
         remover_joyens(self.remetente.id, self.quantidade)
         adicionar_joyens(self.destinatario.id, self.quantidade)
+        atualizar_contador(self.remetente.id, "pagar_quantidade", self.quantidade)
 
         for item in self.children:
             item.disabled = True
@@ -6553,6 +6751,9 @@ class ViewMissoesCustomizadas(ui.LayoutView):
         container.add_item(ui.TextDisplay(f"# {titulo}\n-# {self.usuario.display_name}"))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
+        dados = _buscar_contador_usuario_sync(self.usuario.id) or {}
+        dados["mineracao_tempo"] = (dados.get("mineracao_tempo_segundos", 0) or 0) // 60
+
         inicio = self.pagina * self.por_pagina
         fim = inicio + self.por_pagina
         missoes_pagina = self.missoes[inicio:fim]
@@ -6561,17 +6762,18 @@ class ViewMissoesCustomizadas(ui.LayoutView):
             container.add_item(ui.TextDisplay("Nenhuma missão disponível nesta categoria."))
         else:
             for missao in missoes_pagina:
-                mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _ = missao
+                mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd_recompensa, data_fim, _, recompensa_extra = missao
                 progresso, completada = buscar_progresso_missao_customizada(self.usuario.id, mid)
-                recompensa = f"+{qtd_recompensa} {'Joyens' if tipo_recompensa == 'joyens' else 'XP'}"
+                recompensa = f"+{texto_recompensa(tipo_recompensa, qtd_recompensa, recompensa_extra)}"
                 if condicoes.strip().lower() == "null":
                     status = "✅ Concluída!" if completada else "📸 Envie uma prova para completar"
                 else:
-                    meta_val = meta or 1
-                    progresso_val = min(progresso, meta_val)
-                    porcentagem = int((progresso_val / meta_val) * 100)
+                    porcentagem, _, detalhes = calcular_progresso_condicoes(condicoes, dados)
+                    if completada:
+                        porcentagem = 100
                     barra = "█" * (porcentagem // 10) + "░" * (10 - porcentagem // 10)
-                    status = "✅ Concluída!" if completada else f"`{barra}` {progresso_val}/{meta_val}"
+                    linha_detalhes = f"\n-# {' · '.join(detalhes)}" if len(detalhes) > 1 else ""
+                    status = "✅ Concluída!" if completada else f"`{barra}` {porcentagem}%{linha_detalhes}"
                 prazo = ""
                 if data_fim:
                     expira_dt = datetime.datetime.fromisoformat(data_fim)
@@ -6622,6 +6824,7 @@ async def on_ready():
     verificar_reset_semanal.start()
     verificar_missoes_temporarias.start()
     verificar_negligencia_pets.start()
+    verificar_streak_felicidade_pets.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
@@ -7955,12 +8158,12 @@ async def level_dar_error(interaction: discord.Interaction, error: app_commands.
     else:
         raise error
 
-async def avisar_membros_nova_missao(guild, nome, descricao, data_fim_iso, tipo_recompensa, qtd_recompensa):
+async def avisar_membros_nova_missao(guild, nome, descricao, data_fim_iso, tipo_recompensa, qtd_recompensa, recompensa_extra=None):
     """Envia uma DM para todos os membros do servidor avisando sobre uma nova missão."""
     if guild is None:
         return
 
-    recompensa_texto = f"{qtd_recompensa} {'Joyens' if tipo_recompensa == 'joyens' else 'XP'}"
+    recompensa_texto = texto_recompensa(tipo_recompensa, qtd_recompensa, recompensa_extra)
 
     embed = discord.Embed(
         title="📢 Nova Missão Disponível!",
@@ -7987,10 +8190,11 @@ missao_group = app_commands.Group(name="missao", description="Gerenciamento de m
     nome="Nome da missão",
     descricao="Descrição da missão",
     tipo="permanente ou temporaria",
-    condicoes="Condições separadas por vírgula. Ex: trabalhar_total:50 ou null",
-    meta="Meta total da missão (deixe 0 para condição null)",
-    tipo_recompensa="joyens ou xp",
-    quantidade_recompensa="Quantidade da recompensa",
+    condicoes="Condições separadas por vírgula, cada uma já com sua meta. Ex: trabalhar_total:50 ou null. Veja /missao condicoes",
+    tipo_recompensa="joyens, xp, joyogens, banner ou pet",
+    quantidade_recompensa="Quantidade da recompensa (pra banner/pet, coloque 1)",
+    meta="Só informativo pro admin — deixe 0. O progresso real usa a meta de cada condição (campo acima)",
+    recompensa_extra="Só pra banner (nome exato) ou pet (espécie, ou 'Espécie|Raça')",
     data_fim="Data de fim para temporárias. Formato: DD/MM/AAAA HH:MM (deixe vazio para permanentes)"
 )
 @app_commands.check(lambda interaction: eh_admin(interaction.user.id))
@@ -8000,9 +8204,10 @@ async def missao_criar(
     descricao: str,
     tipo: str,
     condicoes: str,
-    meta: int,
     tipo_recompensa: str,
     quantidade_recompensa: int,
+    meta: int = 0,
+    recompensa_extra: str = None,
     data_fim: str = None
 ):
     tipo = tipo.lower()
@@ -8010,9 +8215,66 @@ async def missao_criar(
         await interaction.response.send_message("<:Atencao:1534592266625093662> Tipo inválido! Use `permanente` ou `temporaria`.", ephemeral=True)
         return
 
-    if tipo_recompensa not in ["joyens", "xp"]:
-        await interaction.response.send_message("<:Atencao:1534592266625093662> Tipo de recompensa inválido! Use `joyens` ou `xp`.", ephemeral=True)
+    tipo_recompensa = tipo_recompensa.lower()
+    if tipo_recompensa not in ["joyens", "xp", "joyogens", "banner", "pet"]:
+        await interaction.response.send_message(
+            "<:Atencao:1534592266625093662> Tipo de recompensa inválido! Use `joyens`, `xp`, `joyogens`, `banner` ou `pet`.", ephemeral=True
+        )
         return
+
+    # Condições fora do dicionário unificado são recusadas na criação — evita
+    # missão com condição escrita errada que nunca vai completar.
+    if condicoes.strip().lower() != "null":
+        for cond in condicoes.split(","):
+            campo = cond.split(":", 1)[0].strip()
+            if campo and campo not in CONDICOES_MISSAO:
+                lista_valida = ", ".join(sorted(CONDICOES_MISSAO.keys()))
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Condição `{campo}` não existe. Use `/missao condicoes` pra ver a lista, ou uma destas:\n`{lista_valida}`",
+                    ephemeral=True
+                )
+                return
+
+    if tipo_recompensa == "banner":
+        if not recompensa_extra:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Pra recompensa `banner`, preencha `recompensa_extra` com o nome exato do banner.", ephemeral=True
+            )
+            return
+        con = sqlite3.connect("jogadorbot.db")
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT 1 FROM banners WHERE LOWER(nome) = LOWER(?)", (recompensa_extra,))
+            if not cur.fetchone():
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Não existe nenhum banner chamado **{recompensa_extra}**.", ephemeral=True
+                )
+                return
+        finally:
+            con.close()
+
+    if tipo_recompensa == "pet":
+        if not recompensa_extra:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Pra recompensa `pet`, preencha `recompensa_extra` com a espécie "
+                "(ex: `Cachorro`) ou espécie e raça (ex: `Cachorro|Husky Siberiano`).", ephemeral=True
+            )
+            return
+        especie, _, raca = recompensa_extra.partition("|")
+        especie = especie.strip()
+        raca = raca.strip() or None
+        if especie not in PETS_DISPONIVEIS:
+            especies_validas = ", ".join(PETS_DISPONIVEIS.keys())
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Espécie **{especie}** não existe. Use uma destas: `{especies_validas}`.", ephemeral=True
+            )
+            return
+        if raca and raca not in [r["nome"] for r in RACAS_POR_ESPECIE.get(especie, [])]:
+            racas_validas = ", ".join(r["nome"] for r in RACAS_POR_ESPECIE.get(especie, []))
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Raça **{raca}** não existe pra {especie}. Use uma destas: `{racas_validas}`.", ephemeral=True
+            )
+            return
 
     data_fim_iso = None
     if tipo == "temporaria":
@@ -8030,16 +8292,31 @@ async def missao_criar(
     try:
         cur.execute("""
             INSERT INTO missoes_customizadas
-            (nome, descricao, tipo, condicoes, meta, tipo_recompensa, quantidade_recompensa, data_fim)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (nome, descricao, tipo, condicoes, meta if meta > 0 else None, tipo_recompensa, quantidade_recompensa, data_fim_iso))
+            (nome, descricao, tipo, condicoes, meta, tipo_recompensa, quantidade_recompensa, data_fim, recompensa_extra)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (nome, descricao, tipo, condicoes, meta if meta > 0 else None, tipo_recompensa, quantidade_recompensa, data_fim_iso, recompensa_extra))
         con.commit()
         await interaction.response.send_message(f"✅ Missão **{nome}** criada com sucesso!", ephemeral=True)
-        await avisar_membros_nova_missao(interaction.guild, nome, descricao, data_fim_iso, tipo_recompensa, quantidade_recompensa)
+        await avisar_membros_nova_missao(interaction.guild, nome, descricao, data_fim_iso, tipo_recompensa, quantidade_recompensa, recompensa_extra)
     except sqlite3.IntegrityError:
         await interaction.response.send_message(f"<:Atencao:1534592266625093662> Já existe uma missão com o nome **{nome}**.", ephemeral=True)
     finally:
         con.close()
+
+@missao_group.command(name="condicoes", description="Lista todos os códigos de condição disponíveis pras missões (admin)")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_condicoes(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📋 Códigos de condição disponíveis",
+        description="Use no formato `codigo:meta` em `/missao criar`, separados por vírgula.",
+        color=discord.Color.blurple()
+    )
+    categorias = {}
+    for codigo, dados in CONDICOES_MISSAO.items():
+        categorias.setdefault(dados["categoria"], []).append(f"`{codigo}` — {dados['nome']}")
+    for categoria, linhas in categorias.items():
+        embed.add_field(name=categoria, value="\n".join(linhas), inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @missao_group.command(name="deletar", description="Deleta uma missão (admin)")
 @app_commands.describe(nome="Nome exato da missão a deletar")
@@ -8068,14 +8345,44 @@ async def missao_lista(interaction: discord.Interaction):
         await interaction.response.send_message("Nenhuma missão criada ainda.", ephemeral=True)
         return
     embed = discord.Embed(title="📋 Lista de Missões", color=discord.Color.purple())
-    for mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd, data_fim, _ in missoes:
+    for mid, nome, descricao, tipo, condicoes, meta, tipo_recompensa, qtd, data_fim, _, recompensa_extra in missoes:
         prazo = datetime.datetime.fromisoformat(data_fim).strftime("%d/%m/%Y às %H:%M") if data_fim else "Sem prazo"
         embed.add_field(
             name=f"{nome} ({tipo})",
-            value=f"{descricao}\nCondição: `{condicoes}` | Meta: {meta}\nRecompensa: {qtd} {tipo_recompensa}\nPrazo: {prazo}",
+            value=f"{descricao}\nCondição: `{condicoes}`" + (f" | Meta (info): {meta}" if meta else "") + f"\nRecompensa: {texto_recompensa(tipo_recompensa, qtd, recompensa_extra)}\nPrazo: {prazo}",
             inline=False
         )
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@missao_group.command(name="concluir", description="Conclui manualmente uma missão Null para um membro (admin)")
+@app_commands.describe(
+    nome="Nome exato da missão",
+    membro="Membro que completou a missão"
+)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_concluir(interaction: discord.Interaction, nome: str, membro: discord.Member):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT id, nome, tipo_recompensa, quantidade_recompensa, recompensa_extra FROM missoes_customizadas WHERE LOWER(nome) = LOWER(?)", (nome,))
+    resultado = cur.fetchone()
+    if not resultado:
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> Missão **{nome}** não encontrada.", ephemeral=True)
+        con.close()
+        return
+    mid, nome_real, tipo_recompensa, qtd_recompensa, recompensa_extra = resultado
+
+    cur.execute("SELECT completada FROM missoes_customizadas_progresso WHERE usuario_id = ? AND missao_id = ?",
+                (str(membro.id), mid))
+    prog = cur.fetchone()
+    if prog and prog[0]:
+        await interaction.response.send_message(f"<:Atencao:1534592266625093662> {membro.display_name} já completou esta missão!", ephemeral=True)
+        con.close()
+        return
+    con.close()
+
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    await concluir_missao_customizada(str(membro.id), mid, nome_real, tipo_recompensa, qtd_recompensa, canal, interaction, recompensa_extra)
+    await interaction.response.send_message(f"✅ Missão **{nome_real}** concluída para {membro.mention}!", ephemeral=True)
 
 @missao_group.command(name="concluir", description="Conclui manualmente uma missão Null para um membro (admin)")
 @app_commands.describe(
