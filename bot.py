@@ -249,8 +249,8 @@ LIMITE_PETS = 3
 # ============================================================
 # PETS — Negligência, HP e Doenças
 # ============================================================
-DIAS_NEGLIGENCIA_PARA_EVENTO = 0.007          # dias com TODOS os status zerados até rolar o evento
-DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 0.007       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
+DIAS_NEGLIGENCIA_PARA_EVENTO = 1          # dias com TODOS os status zerados até rolar o evento
+DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 1       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
 
 DRENO_HP_NEGLIGENCIA_POR_DIA = 10         # HP perdido por dia com todos os status zerados
 DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente sem tratamento
