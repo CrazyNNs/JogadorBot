@@ -112,6 +112,7 @@ RARIDADES = {
     "Raro":     0.15,
     "Epico":    0.07,
     "Lendario": 0.03,
+    "Exclusivo": 0,
 }
 
 # Variavéis de level
@@ -2145,8 +2146,8 @@ def sortear_nova_rotacao():
     cur.execute("SELECT banner_id FROM rotacao_historico")
     historico = [row[0] for row in cur.fetchall()]
 
-    # Busca todos os banners do catálogo
-    cur.execute("SELECT id, raridade FROM banners")
+    # Busca todos os banners do catálogo (exceto os exclusivos, que nunca entram na rotação)
+    cur.execute("SELECT id, raridade FROM banners WHERE raridade != 'Exclusivo'")
     todos = cur.fetchall()
 
     # Filtra os do histórico recente
@@ -2205,7 +2206,7 @@ def sortear_rotacao_individual(usuario_id):
     cur.execute("SELECT banner_id FROM rotacao_historico_individual WHERE usuario_id = ?", (str(usuario_id),))
     historico = [row[0] for row in cur.fetchall()]
 
-    cur.execute("SELECT id, raridade FROM banners")
+    cur.execute("SELECT id, raridade FROM banners WHERE raridade != 'Exclusivo'")
     todos = cur.fetchall()
 
     disponiveis = [b for b in todos if b[0] not in historico]
