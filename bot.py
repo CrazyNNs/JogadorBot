@@ -255,13 +255,18 @@ DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 1       # se continuar negligenciado e já est
 DRENO_HP_NEGLIGENCIA_POR_DIA = 10         # HP perdido por dia com todos os status zerados
 DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente sem tratamento
 
-# Pesos relativos de cada evento (não precisam somar 100)
-EVENTOS_NEGLIGENCIA = {
-    "foge": 30,
-    "doente": 60,
-    "doente_e_foge": 20,
-    "resgatado": 25,
-    "morre": 1,
+# Estágio 2: pet já doente e continua negligenciado — pode continuar doente, fugir ou ser resgatado
+EVENTOS_ESTAGIO_2 = {
+    "continua": 40,
+    "fuga": 30,
+    "resgate": 30,
+}
+
+# Estágio 3: já passou pelo estágio 2 e continua negligenciado — desfecho final
+EVENTOS_ESTAGIO_3 = {
+    "fuga": 35,
+    "resgate": 35,
+    "morte": 30,
 }
 
 # Moedas aceitas em qualquer preço do jogo (pets, itens futuros, etc.)
@@ -967,8 +972,7 @@ def iniciar_banco():
         "doenca_id INTEGER REFERENCES doencas_pets(id)",
         "negligencia_desde TEXT",
         "ultimo_evento_negligencia TEXT",
-        "dias_felicidade_atual INTEGER NOT NULL DEFAULT 0",
-        "felicidade_streak_verificado_em TEXT",
+        "negligencia_estagio INTEGER NOT NULL DEFAULT 0",
     ]:
         try:
             cur.execute(f"ALTER TABLE pets ADD COLUMN {coluna}")
@@ -1357,32 +1361,24 @@ async def processar_evento_negligencia(pet_id):
     """Sorteia e aplica um evento para um pet negligenciado há muito tempo, e avisa o dono por DM."""
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT usuario_id, nome, doenca_id FROM pets WHERE id = ?", (pet_id,))
+    cur.execute("SELECT usuario_id, nome, doenca_id, negligencia_estagio FROM pets WHERE id = ?", (pet_id,))
     linha = cur.fetchone()
     if not linha:
         con.close()
         return
-    usuario_id, nome, doenca_id_atual = linha
+    usuario_id, nome, doenca_id_atual, estagio_atual = linha
 
-    eventos = dict(EVENTOS_NEGLIGENCIA)
-    if doenca_id_atual is not None:
-        eventos.pop("doente", None)  # já está doente, essa opção não entra no sorteio
-
-    evento = random.choices(list(eventos.keys()), weights=list(eventos.values()), k=1)[0]
     agora = datetime.datetime.now(FUSO_BR).isoformat()
     mensagem = None
 
-    if evento == "foge":
-        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
-        mensagem = f"😢 Seu pet **{nome}** fugiu de casa por causa da negligência. Ele não vai voltar."
-
-    elif evento == "doente":
+    # --- Estágio 1: ainda saudável -> sempre fica doente ---
+    if doenca_id_atual is None:
         cur.execute("SELECT id, emoji, nome, descricao FROM doencas_pets ORDER BY RANDOM() LIMIT 1")
         doenca = cur.fetchone()
         if doenca:
             doenca_id, d_emoji, d_nome, d_desc = doenca
             cur.execute(
-                "UPDATE pets SET doenca_id = ?, ultimo_evento_negligencia = ? WHERE id = ?",
+                "UPDATE pets SET doenca_id = ?, negligencia_estagio = 1, ultimo_evento_negligencia = ? WHERE id = ?",
                 (doenca_id, agora, pet_id)
             )
             mensagem = (
@@ -1393,17 +1389,44 @@ async def processar_evento_negligencia(pet_id):
         else:
             cur.execute("UPDATE pets SET ultimo_evento_negligencia = ? WHERE id = ?", (agora, pet_id))
 
-    elif evento == "doente_e_foge":
-        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
-        mensagem = f"🤒😢 Seu pet **{nome}** ficou doente e fugiu por causa da negligência. Ele não vai voltar."
+    # --- Estágio 2: já doente, continua negligenciado -> continua doente, foge ou é resgatado ---
+    elif estagio_atual == 1:
+        evento = random.choices(
+            list(EVENTOS_ESTAGIO_2.keys()), weights=list(EVENTOS_ESTAGIO_2.values()), k=1
+        )[0]
 
-    elif evento == "resgatado":
-        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
-        mensagem = f"🏠 Vizinhos perceberam que **{nome}** estava sendo negligenciado e o resgataram. Ele agora tem um novo lar."
+        if evento == "continua":
+            cur.execute(
+                "UPDATE pets SET negligencia_estagio = 2, ultimo_evento_negligencia = ? WHERE id = ?",
+                (agora, pet_id)
+            )
+            mensagem = f"🤒 Seu pet **{nome}** continua doente e a situação está piorando. Trate ele o quanto antes!"
 
-    elif evento == "morre":
-        cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
-        mensagem = f"💔 Seu pet **{nome}** não resistiu à negligência e morreu."
+        elif evento == "fuga":
+            cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+            mensagem = f"🤒😢 Seu pet **{nome}** estava doente e fugiu por causa da negligência. Ele não vai voltar."
+
+        elif evento == "resgate":
+            cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+            mensagem = f"🏠 Vizinhos perceberam que **{nome}** estava doente e negligenciado, e o resgataram. Ele agora tem um novo lar."
+
+    # --- Estágio 3: já passou pelo estágio 2 e continua negligenciado -> desfecho final ---
+    else:
+        evento = random.choices(
+            list(EVENTOS_ESTAGIO_3.keys()), weights=list(EVENTOS_ESTAGIO_3.values()), k=1
+        )[0]
+
+        if evento == "fuga":
+            cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+            mensagem = f"😢 Seu pet **{nome}** não aguentou mais e fugiu de casa. Ele não vai voltar."
+
+        elif evento == "resgate":
+            cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+            mensagem = f"🏠 Vizinhos perceberam que **{nome}** estava gravemente negligenciado e o resgataram. Ele agora tem um novo lar."
+
+        elif evento == "morte":
+            cur.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+            mensagem = f"💔 Seu pet **{nome}** não resistiu à negligência e morreu."
 
     con.commit()
     con.close()
@@ -5547,7 +5570,10 @@ class ViewEscolherMedicamento(discord.ui.View):
             "UPDATE medicamentos_usuarios SET quantidade = quantidade - 1 WHERE usuario_id = ? AND nome = ?",
             (str(self.usuario_id), nome_remedio)
         )
-        cur.execute("UPDATE pets SET doenca_id = NULL, ultimo_evento_negligencia = NULL WHERE id = ?", (self.pet_id,))
+        cur.execute(
+            "UPDATE pets SET doenca_id = NULL, negligencia_estagio = 0, ultimo_evento_negligencia = NULL WHERE id = ?",
+            (self.pet_id,)
+        )
         con.commit()
         con.close()
 
