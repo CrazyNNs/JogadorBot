@@ -4409,7 +4409,7 @@ class ViewMineracao(ui.LayoutView):
         self.tempo_registrado = False
         self.ataque_event = asyncio.Event()
         self.texto_status = "> Você começou a minerar. O som da picareta ecoa pela caverna..."
-        self.imagem_atual = "minerar1.png"
+        self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
 
         self.btn_atacar = discord.ui.Button(label="⚔️ Atacar", style=discord.ButtonStyle.danger, disabled=True)
         self.btn_atacar.callback = self.atacar_callback
@@ -4549,7 +4549,7 @@ class ViewMineracao(ui.LayoutView):
                     return
             else:
                 self.texto_status = "> 🪨 Você continua minerando calmamente..."
-                self.imagem_atual = "minerar1.png"
+                self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
                 await self.atualizar_mensagem()
 
         if not self.finalizado:
@@ -4566,11 +4566,11 @@ class ViewMineracao(ui.LayoutView):
                 await adicionar_xp(str(self.usuario_id), XP_DESMORONAMENTO_SOBREVIVENCIA, self.ctx)
                 await asyncio.sleep(3)
                 self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
-                self.imagem_atual = "minerar1.png"
+                self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
                 await self.atualizar_mensagem()
                 await asyncio.sleep(3)
                 self.texto_status = "> 🪨 Você retoma a mineração após o susto..."
-                self.imagem_atual = "minerar1.png"
+                self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
                 await self.atualizar_mensagem()
             else:
                 causa = "> 💥 Um desmoronamento cobriu toda a passagem e você não teve tempo de escapar."
@@ -4652,7 +4652,7 @@ class ViewMineracao(ui.LayoutView):
                     await self.atualizar_mensagem()
                     await asyncio.sleep(2)
                     self.texto_status = "⛏️ Você retoma a mineração após a vitória..."
-                    self.imagem_atual = "minerar1.png"
+                    self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
                     self.btn_atacar.disabled = True
                     await self.atualizar_mensagem()
                     return
@@ -4753,7 +4753,7 @@ class ViewMineracao(ui.LayoutView):
                     self.btn_dinamite.disabled = not (buscar_qtd_item_mineracao(self.usuario_id, "Dinamite") > 0)
                     self.btn_parar.disabled = False
                     self.texto_status = "⛏️ Picareta trocada! Você volta a minerar..."
-                    self.imagem_atual = "minerar1.png"
+                    self.imagem_atual = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/upload/main/Imagens/minerar1.gif"
                     await self.atualizar_mensagem()
                     self.task = bot.loop.create_task(self.loop_mineracao())
                 return comprar_cb
