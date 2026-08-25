@@ -7272,7 +7272,7 @@ async def trabalhar(ctx):
         description=acao,
         color=discord.Color.green()
     )
-    embed.add_field(name="Salário recebido", value=f"{salario} Joyens", inline=True)
+    embed.add_field(name="Salário recebido", value=f"+{salario} Joyens", inline=True)
     embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
     embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
     embed.set_footer(text=f"Próximo trabalho em 40 minutos")
