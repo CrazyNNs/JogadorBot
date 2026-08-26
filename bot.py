@@ -3662,11 +3662,16 @@ class ViewKuruulandia(ui.LayoutView):
                 botao.callback = self.abrir_loja
             elif local["chave"] == "petshop":
                 botao.callback = self.abrir_petshop
+            elif local["chave"] == "banco":
+                botao.callback = self.abrir_banco
             linha.add_item(botao)
         container.add_item(linha)
 
         self.add_item(container)
 
+    async def abrir_banco(self, interaction: discord.Interaction):
+        view = ViewBanco(interaction.user)
+        await interaction.response.edit_message(view=view, attachments=[])
 # ============================================================
 # VIEW - Loja de banners
 # ============================================================
@@ -6929,11 +6934,6 @@ class ViewBanco(ui.LayoutView):
         container.add_item(linha)
 
         self.add_item(container)
-
-@bot.command(name="banco")
-async def banco(ctx):
-    view = ViewBanco(ctx.author)
-    await ctx.send(view=view)
     
 # ============================================================
 # VIEW - Pagamento entre usuários
