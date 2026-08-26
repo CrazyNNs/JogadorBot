@@ -104,6 +104,13 @@ CANAL_NOTIFICACOES_ID = 1520676033425313885
 # Rotação da loja
 DURACAO_ROTACAO_HORAS = 5
 BANNERS_POR_ROTACAO = 4
+    
+# Sistema de Drops
+CANAIS_DROP = [
+    1505973042344624238,  # 👉 troque pelos IDs reais dos canais elegíveis pra spawn de drop
+]
+DROP_INTERVALO_MIN_HORAS = 3
+DROP_INTERVALO_MAX_HORAS = 8
 
 # Raridades disponíveis e suas chances na rotação
 RARIDADES = {
@@ -1131,6 +1138,23 @@ def iniciar_banco():
             PRIMARY KEY (usuario_id, minerio)
         )
     """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS chaves_usuario (
+            usuario_id TEXT PRIMARY KEY,
+            quantidade INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS drops_ativos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            canal_id TEXT NOT NULL,
+            mensagem_id TEXT,
+            criado_em TEXT NOT NULL,
+            aberto_por TEXT,
+            aberto_em TEXT
+        )
+    """)
     
     con.commit()
     con.close()
@@ -1161,7 +1185,7 @@ def buscar_todas_conquistas():
     return resultado
 
 # ============================================================
-# FUNÇÕES AUXILIARES - Economia e loja de banners
+# FUNÇÕES AUXILIARES - Economia e +
 # ============================================================
 
 def buscar_joyens(usuario_id):
@@ -1171,6 +1195,138 @@ def buscar_joyens(usuario_id):
     resultado = cur.fetchone()
     con.close()
     return resultado[0] if resultado else 0
+
+# ============================================================
+# SISTEMA DE DROPS
+# ============================================================
+def buscar_chaves(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("SELECT quantidade FROM chaves_usuario WHERE usuario_id = ?", (str(usuario_id),))
+    resultado = cur.fetchone()
+    con.close()
+    return resultado[0] if resultado else 0
+
+def adicionar_chaves(usuario_id, quantidade):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO chaves_usuario (usuario_id, quantidade) VALUES (?, ?)
+        ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + ?
+    """, (str(usuario_id), quantidade, quantidade))
+    con.commit()
+    con.close()
+
+def remover_chaves(usuario_id, quantidade):
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE chaves_usuario SET quantidade = MAX(0, quantidade - ?) WHERE usuario_id = ?",
+                (quantidade, str(usuario_id)))
+    con.commit()
+    con.close()
+
+class ViewDrop(discord.ui.View):
+    def __init__(self, drop_id):
+        super().__init__(timeout=None)
+        self.drop_id = drop_id
+
+    @discord.ui.button(label="Abrir", emoji="🎁", style=discord.ButtonStyle.success)
+    async def abrir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        chaves = buscar_chaves(interaction.user.id)
+        if chaves <= 0:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Você não tem nenhuma 🗝️ Chave para abrir este drop!",
+                ephemeral=True
+            )
+            return
+
+        # Update atômico: só "ganha" o drop quem conseguir gravar aberto_por primeiro
+        # (protege contra dois cliques quase simultâneos)
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE drops_ativos SET aberto_por = ?, aberto_em = ? WHERE id = ? AND aberto_por IS NULL",
+            (str(interaction.user.id), datetime.datetime.now(FUSO_BR).isoformat(), self.drop_id)
+        )
+        con.commit()
+        venceu = cur.rowcount > 0
+        con.close()
+
+        for item in self.children:
+            item.disabled = True
+
+        if not venceu:
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                "<:Atencao:1534592266625093662> Esse drop já foi aberto por outra pessoa! Fique de olho pro próximo.",
+                ephemeral=True
+            )
+            return
+
+        remover_chaves(interaction.user.id, 1)
+
+        # 🔧 ETAPA 2 (próxima etapa): trocar essa recompensa fixa pelo loot table
+        # cruzando mineração + petshop + banners normais/exclusivos.
+        recompensa = 100
+        adicionar_joyens(interaction.user.id, recompensa)
+
+        embed = discord.Embed(
+            title="🎁 Drop Aberto!",
+            description=f"{interaction.user.mention} usou uma 🗝️ Chave e ganhou **{recompensa} Joyens**!",
+            color=discord.Color.gold()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+def sortear_proximo_horario_drop():
+    horas = random.uniform(DROP_INTERVALO_MIN_HORAS, DROP_INTERVALO_MAX_HORAS)
+    return datetime.datetime.now(FUSO_BR) + datetime.timedelta(hours=horas)
+
+
+PROXIMO_DROP_EM = sortear_proximo_horario_drop()
+
+
+async def spawnar_drop(canal_forcado=None):
+    global PROXIMO_DROP_EM
+
+    canal_id = canal_forcado or random.choice(CANAIS_DROP)
+    canal = bot.get_channel(canal_id)
+    if canal is None:
+        PROXIMO_DROP_EM = sortear_proximo_horario_drop()
+        return None
+
+    agora = datetime.datetime.now(FUSO_BR)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("INSERT INTO drops_ativos (canal_id, criado_em) VALUES (?, ?)",
+                (str(canal.id), agora.isoformat()))
+    drop_id = cur.lastrowid
+    con.commit()
+    con.close()
+
+    embed = discord.Embed(
+        title="🎁 Um drop apareceu!",
+        description="Alguém deixou um baú por aqui... Use uma 🗝️ Chave pra abrir antes que outra pessoa pegue!",
+        color=discord.Color.blurple()
+    )
+    view = ViewDrop(drop_id)
+    mensagem = await canal.send(embed=embed, view=view)
+
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE drops_ativos SET mensagem_id = ? WHERE id = ?", (str(mensagem.id), drop_id))
+    con.commit()
+    con.close()
+
+    PROXIMO_DROP_EM = sortear_proximo_horario_drop()
+    return mensagem
+
+
+@tasks.loop(minutes=10)
+async def verificar_drop():
+    agora = datetime.datetime.now(FUSO_BR)
+    if agora >= PROXIMO_DROP_EM:
+        await spawnar_drop()
 
 def buscar_joyogens(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
@@ -7326,6 +7482,7 @@ async def on_ready():
     verificar_missoes_temporarias.start()
     verificar_negligencia_pets.start()
     verificar_streak_felicidade_pets.start()
+    verificar_drop.start()
     verificar_cobranca_emprestimos.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
@@ -8019,6 +8176,54 @@ async def conquista_lista(interaction: discord.Interaction):
 # ============================================================
 # COMANDOS SLASH — Loja de banners
 # ============================================================
+
+drop_group = app_commands.Group(name="drop", description="Sistema de drops em canais aleatórios")
+
+@drop_group.command(name="chave", description="Dá Chaves de drop para um usuário (admin)")
+@app_commands.describe(
+    membro="Quem vai receber as Chaves",
+    quantidade="Quantidade de Chaves a dar"
+)
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def drop_chave_dar(interaction: discord.Interaction, membro: discord.Member, quantidade: int):
+    if membro.bot:
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Não é possível dar Chaves para um bot!", ephemeral=True)
+        return
+    if quantidade <= 0:
+        await interaction.response.send_message("<:Atencao:1534592266625093662> A quantidade deve ser maior que 0!", ephemeral=True)
+        return
+
+    adicionar_chaves(membro.id, quantidade)
+    novo_total = buscar_chaves(membro.id)
+
+    embed = discord.Embed(
+        title="🗝️ Chaves Concedidas!",
+        description=f"{membro.mention} recebeu **{quantidade} Chave(s)**!",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="Total agora", value=f"{novo_total} Chave(s)")
+    embed.set_footer(text=f"Concedido por {interaction.user.display_name}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@drop_chave_dar.error
+async def drop_chave_dar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.", ephemeral=True)
+    else:
+        raise error
+
+@drop_group.command(name="testar", description="Força um drop agora no canal atual, sem esperar o sorteio (admin)")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def drop_testar(interaction: discord.Interaction):
+    await interaction.response.send_message("🎁 Gerando drop de teste neste canal...", ephemeral=True)
+    await spawnar_drop(canal_forcado=interaction.channel_id)
+
+@drop_testar.error
+async def drop_testar_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Você não tem permissão para usar este comando.", ephemeral=True)
+    else:
+        raise error
 
 banner_group = app_commands.Group(name="banner", description="Gerenciamento de banners")
 
@@ -8798,6 +9003,8 @@ bot.tree.add_command(level_group)
 bot.tree.add_command(admin_group)
 
 bot.tree.add_command(banner_group)
+
+bot.tree.add_command(drop_group)
 
 bot.tree.add_command(conquista_group)
 
