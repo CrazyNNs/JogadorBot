@@ -502,7 +502,7 @@ LOCAIS_KURUULANDIA = [
     {"chave": "petshop", "emoji": "🐾", "nome": "Petshop", "local": "Animalia", "disponivel": True},
     {"chave": "cassino", "emoji": "🎰", "nome": "Cassino", "local": "_(em breve)_", "disponivel": False},
     {"chave": "mineracao", "emoji": "⛏️", "nome": "Mineração", "local": "Abismo Terrível", "disponivel": False},
-    {"chave": "banco", "emoji": "🏦", "nome": "Banco", "local": "_(em breve)_", "disponivel": False},
+    {"chave": "banco", "emoji": "🏦", "nome": "Banco", "local": "Banco Sakurai", "disponivel": True},
 ]
 
 # ============================================================
