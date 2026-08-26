@@ -499,6 +499,15 @@ LOCAIS_KURUULANDIA = [
 ]
 
 # ============================================================
+# BANCO — configuração de empréstimos
+# ============================================================
+JUROS_EMPRESTIMO = 0.15          # 15% de juros se pagar depois do prazo (ajuste aqui se quiser outro valor)
+DIAS_MINIMOS_EMPRESTIMO = 3
+DIAS_MAXIMOS_EMPRESTIMO = 30     # "1 mês" tratado como 30 dias
+VALOR_MINIMO_EMPRESTIMO = 1000
+VALOR_POR_DIA_EXTRA_EMPRESTIMO = 5000  # a cada 5.000 pedidos, +1 dia até a cobrança
+
+# ============================================================
 # ITENS DE MINERAÇÃO — Loja e sistema de mineração
 # ============================================================
 ITENS_MINERACAO = {
@@ -666,6 +675,25 @@ def iniciar_banco():
             ultimo_diario TEXT
         )
     """)
+    try:
+        cur.execute("ALTER TABLE economia ADD COLUMN joyens_banco INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    con.commit()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS emprestimos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id TEXT NOT NULL,
+            valor_pedido INTEGER NOT NULL,
+            valor_juros INTEGER NOT NULL,
+            valor_total INTEGER NOT NULL,
+            data_pedido TEXT NOT NULL,
+            data_cobranca TEXT NOT NULL,
+            pago INTEGER DEFAULT 0,
+            cobranca_executada INTEGER DEFAULT 0
+        )
+    """)
+    con.commit()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS banners (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1178,7 +1206,176 @@ def remover_joyens(usuario_id, quantidade):
     cur.execute("UPDATE economia SET joyens = joyens - ? WHERE usuario_id = ?", (quantidade, str(usuario_id)))
     con.commit()
     con.close()
+    
+# --- Banco: saldo guardado (separado da carteira) ---
+def buscar_joyens_banco(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT joyens_banco FROM economia WHERE usuario_id = ?", (str(usuario_id),))
+        resultado = cur.fetchone()
+        return (resultado[0] if resultado and resultado[0] else 0)
+    finally:
+        con.close()
 
+def depositar_no_banco_sync(usuario_id, valor):
+    remover_joyens(usuario_id, valor)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO economia (usuario_id, joyens, joyens_banco) VALUES (?, 0, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET joyens_banco = joyens_banco + ?
+        """, (str(usuario_id), valor, valor))
+        con.commit()
+    finally:
+        con.close()
+
+def sacar_do_banco_sync(usuario_id, valor):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE economia SET joyens_banco = joyens_banco - ? WHERE usuario_id = ?", (valor, str(usuario_id)))
+        con.commit()
+    finally:
+        con.close()
+    adicionar_joyens(usuario_id, valor)
+
+# --- Banco: empréstimos ---
+
+def calcular_dias_emprestimo(valor):
+    """3 dias mínimo, +1 dia a cada 5.000 pedidos, até o teto de 30 dias (1 mês)."""
+    dias = DIAS_MINIMOS_EMPRESTIMO + (valor // VALOR_POR_DIA_EXTRA_EMPRESTIMO)
+    return min(dias, DIAS_MAXIMOS_EMPRESTIMO)
+
+def calcular_valor_maximo_emprestimo(usuario_id):
+    """10x o saldo atual da carteira, ou 10x1.000 se o saldo for menor que 1.000."""
+    saldo = buscar_joyens(usuario_id)
+    base = max(saldo, VALOR_MINIMO_EMPRESTIMO)
+    return base * 10
+
+def buscar_emprestimo_ativo(usuario_id):
+    """Retorna o empréstimo em aberto do usuário (dict) ou None."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, valor_pedido, valor_juros, valor_total, data_pedido, data_cobranca, pago
+            FROM emprestimos WHERE usuario_id = ? AND pago = 0
+            ORDER BY id DESC LIMIT 1
+        """, (str(usuario_id),))
+        linha = cur.fetchone()
+        if not linha:
+            return None
+        return {
+            "id": linha[0], "valor_pedido": linha[1], "valor_juros": linha[2],
+            "valor_total": linha[3], "data_pedido": linha[4], "data_cobranca": linha[5], "pago": linha[6]
+        }
+    finally:
+        con.close()
+
+def criar_emprestimo_sync(usuario_id, valor):
+    """Cria o empréstimo, deposita o valor na carteira e devolve os detalhes calculados."""
+    dias = calcular_dias_emprestimo(valor)
+    juros = int(valor * JUROS_EMPRESTIMO)
+    total = valor + juros
+    agora = datetime.datetime.now(FUSO_BR)
+    data_pedido = agora.isoformat()
+    data_cobranca = (agora + datetime.timedelta(days=dias)).isoformat()
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO emprestimos (usuario_id, valor_pedido, valor_juros, valor_total, data_pedido, data_cobranca)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (str(usuario_id), valor, juros, total, data_pedido, data_cobranca))
+        con.commit()
+    finally:
+        con.close()
+
+    adicionar_joyens(usuario_id, valor)
+    return dias, juros, total, data_cobranca
+
+def pagar_emprestimo_sync(usuario_id):
+    """Paga o empréstimo ativo. Se for antes do prazo de cobrança, os juros são
+    cancelados e só o valor pedido é cobrado. Retorna (sucesso, erro, valor_pago, juros_perdoados)."""
+    emprestimo = buscar_emprestimo_ativo(usuario_id)
+    if not emprestimo:
+        return False, "Você não tem nenhum empréstimo em aberto.", 0, 0
+
+    agora = datetime.datetime.now(FUSO_BR)
+    data_cobranca = datetime.datetime.fromisoformat(emprestimo["data_cobranca"])
+    pagou_antes_do_prazo = agora < data_cobranca
+
+    valor_a_pagar = emprestimo["valor_pedido"] if pagou_antes_do_prazo else emprestimo["valor_total"]
+    juros_perdoados = emprestimo["valor_juros"] if pagou_antes_do_prazo else 0
+
+    saldo = buscar_joyens(usuario_id)
+    if saldo < valor_a_pagar:
+        return False, f"Você precisa de {valor_a_pagar} Joyens pra quitar o empréstimo, mas seu saldo na carteira é {saldo}.", 0, 0
+
+    remover_joyens(usuario_id, valor_a_pagar)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE emprestimos SET pago = 1 WHERE id = ?", (emprestimo["id"],))
+        con.commit()
+    finally:
+        con.close()
+
+    return True, "", valor_a_pagar, juros_perdoados
+
+def _cobrar_emprestimos_vencidos_sync():
+    """Roda periodicamente: cobra automaticamente da carteira quem deixou o
+    empréstimo vencer sem pagar. Se o usuário não tiver saldo suficiente, cobra
+    o que ele tem e encerra o empréstimo assim mesmo (não deixa dívida acumulando)."""
+    agora_iso = datetime.datetime.now(FUSO_BR).isoformat()
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, usuario_id, valor_total FROM emprestimos
+            WHERE pago = 0 AND cobranca_executada = 0 AND data_cobranca <= ?
+        """, (agora_iso,))
+        vencidos = cur.fetchall()
+    finally:
+        con.close()
+
+    cobrados = []
+    for emp_id, usuario_id, valor_total in vencidos:
+        saldo = buscar_joyens(usuario_id)
+        valor_cobrado = min(saldo, valor_total)
+        if valor_cobrado > 0:
+            remover_joyens(usuario_id, valor_cobrado)
+
+        con = sqlite3.connect("jogadorbot.db")
+        try:
+            cur = con.cursor()
+            cur.execute("UPDATE emprestimos SET pago = 1, cobranca_executada = 1 WHERE id = ?", (emp_id,))
+            con.commit()
+        finally:
+            con.close()
+
+        cobrados.append((usuario_id, valor_cobrado, valor_total))
+    return cobrados
+
+@tasks.loop(hours=1)
+async def verificar_cobranca_emprestimos():
+    """Cobra automaticamente empréstimos vencidos e avisa o usuário por DM."""
+    cobrados = await asyncio.to_thread(_cobrar_emprestimos_vencidos_sync)
+    for usuario_id, valor_cobrado, valor_total in cobrados:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            if valor_cobrado < valor_total:
+                await usuario.send(
+                    f"🏦 Seu empréstimo venceu! Você só tinha <:JoyensIcon:1536254492797050880>{valor_cobrado} Joyens na carteira, "
+                    f"então cobramos tudo que você tinha e o empréstimo foi encerrado. Evite atrasar da próxima vez!"
+                )
+            else:
+                await usuario.send(f"🏦 Seu empréstimo venceu e cobramos <:JoyensIcon:1536254492797050880>**{valor_cobrado} Joyens** automaticamente da sua carteira (valor + juros).")
+        except:
+            pass
 # ============================================================
 # SISTEMA DE PETS E STATUS
 def contar_pets(usuario_id):
@@ -3204,7 +3401,7 @@ class ViewPerfil(discord.ui.LayoutView):
         await interaction.response.edit_message(view=view, attachments=[])
 
 # ============================================================
-# VIEW (BOTÕES) - Conquistas de usuário
+# VIEW - Conquistas de usuário
 # ============================================================
 class ViewConquistas(discord.ui.LayoutView):
     def __init__(self, usuario: discord.Member, conquistas: list, pagina: int):
@@ -3315,9 +3512,211 @@ class ViewKuruulandia(ui.LayoutView):
         self.add_item(container)
 
 # ============================================================
-# VIEW (BOTÕES) - Loja de banners
+# VIEW - Loja de banners
 # ============================================================
+class ViewLoja(discord.ui.View):
+    def __init__(self, usuario_id, banners, rotacao=False, expira=None):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.banners = banners
+        self.rotacao = rotacao
+        self.expira = expira
+        self.index = 0
+        self.atualizar_botoes()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    def atualizar_botoes(self):
+        self.anterior.disabled = self.index == 0
+        self.proximo.disabled = self.index >= len(self.banners) - 1
+        banner_id = self.banners[self.index][0]
+        self.comprar.disabled = usuario_tem_banner(self.usuario_id, banner_id)
+        self.comprar.label = "✅ Já possui" if usuario_tem_banner(self.usuario_id, banner_id) else "🛒 Comprar"
+
+    def gerar_embed(self):
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        joyens = buscar_joyens(self.usuario_id)
+        tem = usuario_tem_banner(self.usuario_id, banner_id)
+        embed = discord.Embed(
+            title=f"🖼️ {nome}",
+            description=descricao,
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Raridade", value=f"**{raridade}**", inline=True)
+        embed.add_field(name="Preço", value=f"<:JoyensIcon:1536254492797050880>{preco} Joyens", inline=True)
+        embed.add_field(name="Seu saldo", value=f"{joyens} Joyens", inline=True)
+        if tem:
+            embed.add_field(name="Status", value="✅ Você já possui este banner", inline=False)
+        elif joyens < preco:
+            embed.add_field(name="Status", value="<:Atencao:1534592266625093662> Joyens insuficientes", inline=False)
+        if self.expira:
+            expira_dt = datetime.datetime.fromisoformat(self.expira)
+            embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)} • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
+        else:
+            embed.set_footer(text=f"Banner {self.index + 1} de {len(self.banners)}")
+        if os.path.exists(arquivo):
+            embed.set_image(url="attachment://preview.png")
+        return embed
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
+    async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina -= 1
+        self.atualizar_botoes()
+        await self.atualizar_mensagem(interaction)
+
+    @discord.ui.button(label="🛒 Comprar", style=discord.ButtonStyle.success, row=0)
+    async def comprar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        comprador_id = interaction.user.id
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        joyens = buscar_joyens(comprador_id)
+        if joyens < preco:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1536254492797050880>{joyens} e precisa de <:JoyensIcon:1536254492797050880>{preco}.",
+                ephemeral=True
+            )
+            return
+        if usuario_tem_banner(comprador_id, banner_id):
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Você já possui este banner!",
+                ephemeral=True
+            )
+            return
+        remover_joyens(comprador_id, preco)
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                    (str(comprador_id), banner_id))
+        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                    (str(comprador_id), banner_id))
+        con.commit()
+        con.close()
+
+        await interaction.response.send_message(
+            f"✅ Banner **{nome}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
+            ephemeral=True
+        )
+        await interaction.message.edit(view=self)
+    
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
+    async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.pagina += 1
+        self.atualizar_botoes()
+        await self.atualizar_mensagem(interaction)
+
+    @discord.ui.button(label="Loja", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger, row=0)
+    async def voltar_loja(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🏪 Armazém 404",
+            description="**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="🖼️ Banners", value="Banners exclusivos por tempo limitado!", inline=False)
+        embed.add_field(name="⛏️ Mineração", value="Ferramentas, equipamentos e consumíveis!", inline=False)
+        embed.set_footer(text=f"Seu saldo: {buscar_joyens(self.usuario_id)} Joyens")
+        view = ViewMenuLoja(self.usuario_id)
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[])
+
+
+class ViewMenuLoja(ui.LayoutView):
+    def __init__(self, usuario_id):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.montar()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def voltar_mapa(self, interaction: discord.Interaction):
+        view = ViewKuruulandia(self.usuario_id)
+        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
+
+    async def voltar_mapa(self, interaction: discord.Interaction):
+        view = ViewKuruulandia(self.usuario_id)
+        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        if arquivo:
+            await interaction.response.edit_message(view=view, attachments=[arquivo])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.blurple()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_mapa
+        linha_topo = ui.Section(ui.TextDisplay("\u200b"), accessory=btn_voltar)
+        container.add_item(linha_topo)
+
+        cabecalho = ui.Section(
+            ui.TextDisplay(
+                "### 🏪 Armazém 404\n"
+                "**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:"
+            ),
+            accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
+        )
+        container.add_item(cabecalho)
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        categorias = [
+            ("🖼️ Banners", "Personalize o seu perfil com banners exclusivos!", "banners"),
+            ("⛏️ Mineração", "Ferramentas, equipamentos e consumíveis!", "mineracao"),
+        ]
+
+        for i, (label, descricao, chave) in enumerate(categorias):
+            linha = ui.ActionRow()
+            botao = ui.Button(label=label, style=discord.ButtonStyle.primary)
+
+            async def callback(interaction, categoria=chave):
+                if categoria == "banners":
+                    await self.abrir_banners(interaction)
+                elif categoria == "mineracao":
+                    view = ViewLojaMineracao(self.usuario_id)
+                    await interaction.response.edit_message(view=view, attachments=[])
+
+            botao.callback = callback
+            linha.add_item(botao)
+            container.add_item(linha)
+            container.add_item(ui.TextDisplay(descricao))
+            if i < len(categorias) - 1:
+                container.add_item(ui.Separator())
+
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.TextDisplay(f"-# Seu saldo: {buscar_joyens(self.usuario_id)} Joyens"))
+
+        self.add_item(container)
+
+    async def abrir_banners(self, interaction: discord.Interaction):
+        banners, expira = buscar_banners_rotacao(self.usuario_id)
+        if not banners:
+            await interaction.response.send_message(
+                "Nenhum banner disponível na sua rotação no momento! Tente novamente mais tarde.", ephemeral=True
+            )
+            return
+        view = ViewLoja(self.usuario_id, banners, rotacao=True, expira=expira, view_menu=self)
+        banner_id, nome, descricao, preco, arquivo, raridade = banners[0]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
+            await interaction.response.edit_message(view=view, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(view=view, attachments=[])
 
 # LOJA DE MINERAÇÃO ===============================================
 class ViewLojaMineracao(ui.LayoutView):
@@ -3427,7 +3826,7 @@ class ViewComprarItemMineracao(ui.LayoutView):
 
         self.add_item(container)
 # ============================================================
-# VIEW (BOTÕES) - Loja de Banner
+# VIEW - Loja de Banner
 # ============================================================
 class ViewLoja(ui.LayoutView):
     def __init__(self, usuario_id, banners, rotacao=False, expira=None, view_menu=None):
@@ -3575,7 +3974,7 @@ class ViewLoja(ui.LayoutView):
             await interaction.response.edit_message(view=self, attachments=[])
 
 # ============================================================
-# VIEW (BOTÕES) - Inventário Geral
+# VIEW - Inventário Geral
 # ============================================================
 class ViewMochilaMenu(ui.LayoutView):
     def __init__(self, usuario: discord.Member):
@@ -3806,7 +4205,7 @@ class ViewMochilaItens(ui.LayoutView):
 
         self.add_item(container)
 # ============================================================
-# VIEW (BOTÕES) - Mineração - Tela inicial
+# VIEW - Mineração - Tela inicial
 # ============================================================
 class ViewConsumiveis(ui.LayoutView):
     def __init__(self, usuario_id, view_inicio, mensagem_inicio=None):
@@ -4212,7 +4611,7 @@ class ViewVenderMinerios(ui.LayoutView):
         self.add_item(container)
 
 # ============================================================
-# VIEW (BOTÕES) - Mineração - O jogo
+# VIEW - Mineração - O jogo
 # ============================================================
 class ViewMineracao(ui.LayoutView):
     def __init__(self, usuario_id, ctx):
@@ -4747,7 +5146,7 @@ class ViewMineracao(ui.LayoutView):
         MINERACAO_ATIVAS.discard(self.usuario_id)
         
 # ============================================================
-# VIEW (BOTÕES) - Petshop
+# VIEW - Petshop
 # ============================================================
 
 class ViewMenuPetshop(ui.LayoutView):
@@ -5207,7 +5606,7 @@ class ViewComprarSabonete(ui.LayoutView):
 
         self.add_item(container)
 # ============================================================
-# VIEW (BOTÕES) - !pets (Components V2)
+# VIEW - !pets (Components V2)
 # ============================================================
 class ViewComprarMedicamento(ui.LayoutView):
     def __init__(self, usuario_id):
@@ -5772,7 +6171,7 @@ class ViewPets(discord.ui.LayoutView):
         await interaction.response.edit_message(view=self)
         
 # ============================================================
-# VIEW (BOTÕES) - Inventário de banner
+# VIEW - Inventário de banner
 # ============================================================
 
 class ViewMochilaBanners(discord.ui.LayoutView):
@@ -6103,7 +6502,285 @@ class ViewCatalogoBanners(discord.ui.View):
         await interaction.followup.send(mensagem_confirmacao, ephemeral=True)
 
 # ============================================================
-# VIEW (BOTÕES) - Pagamento entre usuários
+# VIEW - Banco, modais e telas
+# ============================================================
+class ModalDepositar(discord.ui.Modal, title="Depositar no Banco"):
+    quantidade = discord.ui.TextInput(
+        label="Quantidade de Joyens",
+        placeholder="Ex: 5000",
+        max_length=12,
+        min_length=1
+    )
+
+    def __init__(self, usuario_id, view_banco):
+        super().__init__()
+        self.usuario_id = usuario_id
+        self.view_banco = view_banco
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.quantidade.value.strip().replace(".", "").replace(",", "")
+        if not texto.isdigit() or int(texto) <= 0:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Digite um número inteiro maior que 0!", ephemeral=True)
+            return
+
+        valor = int(texto)
+        saldo_carteira = buscar_joyens(self.usuario_id)
+        if valor > saldo_carteira:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você só tem <:JoyensIcon:1536254492797050880>**{saldo_carteira} Joyens** na carteira!", ephemeral=True
+            )
+            return
+
+        await asyncio.to_thread(depositar_no_banco_sync, self.usuario_id, valor)
+        self.view_banco.montar()
+        await interaction.response.edit_message(view=self.view_banco)
+        await interaction.followup.send(f"✅ Você depositou <:JoyensIcon:1536254492797050880>**{valor} Joyens** no banco!", ephemeral=True)
+
+class ModalSacar(discord.ui.Modal, title="Sacar do Banco"):
+    quantidade = discord.ui.TextInput(
+        label="Quantidade de Joyens",
+        placeholder="Ex: 5000",
+        max_length=12,
+        min_length=1
+    )
+
+    def __init__(self, usuario_id, view_banco):
+        super().__init__()
+        self.usuario_id = usuario_id
+        self.view_banco = view_banco
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.quantidade.value.strip().replace(".", "").replace(",", "")
+        if not texto.isdigit() or int(texto) <= 0:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Digite um número inteiro maior que 0!", ephemeral=True)
+            return
+
+        valor = int(texto)
+        saldo_banco = buscar_joyens_banco(self.usuario_id)
+        if valor > saldo_banco:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você só tem <:JoyensIcon:1536254492797050880>**{saldo_banco} Joyens** guardados no banco!", ephemeral=True
+            )
+            return
+
+        await asyncio.to_thread(sacar_do_banco_sync, self.usuario_id, valor)
+        self.view_banco.montar()
+        await interaction.response.edit_message(view=self.view_banco)
+        await interaction.followup.send(f"✅ Você sacou <:JoyensIcon:1536254492797050880>**{valor} Joyens** do banco!", ephemeral=True)
+
+class ModalPedirEmprestimo(discord.ui.Modal, title="Pedir Empréstimo"):
+    quantidade = discord.ui.TextInput(
+        label="Quantidade de Joyens",
+        placeholder="Ex: 10000",
+        max_length=12,
+        min_length=1
+    )
+
+    def __init__(self, usuario_id, view_emprestimo):
+        super().__init__()
+        self.usuario_id = usuario_id
+        self.view_emprestimo = view_emprestimo
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.quantidade.value.strip().replace(".", "").replace(",", "")
+        if not texto.isdigit() or int(texto) <= 0:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Digite um número inteiro maior que 0!", ephemeral=True)
+            return
+        valor = int(texto)
+
+        if buscar_emprestimo_ativo(self.usuario_id):
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Você já tem um empréstimo em aberto!", ephemeral=True)
+            return
+
+        if valor < VALOR_MINIMO_EMPRESTIMO:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> O valor mínimo de empréstimo é <:JoyensIcon:1536254492797050880>**{VALOR_MINIMO_EMPRESTIMO} Joyens**.", ephemeral=True
+            )
+            return
+
+        valor_maximo = calcular_valor_maximo_emprestimo(self.usuario_id)
+        if valor > valor_maximo:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Seu limite atual é <:JoyensIcon:1536254492797050880>**{valor_maximo} Joyens** (10x seu saldo na carteira, "
+                f"ou 10x{VALOR_MINIMO_EMPRESTIMO} se seu saldo for menor que isso).",
+                ephemeral=True
+            )
+            return
+
+        dias, juros, total, data_cobranca_iso = await asyncio.to_thread(criar_emprestimo_sync, self.usuario_id, valor)
+        data_cobranca = datetime.datetime.fromisoformat(data_cobranca_iso)
+
+        self.view_emprestimo.montar()
+        await interaction.response.edit_message(view=self.view_emprestimo)
+        await interaction.followup.send(
+            f"✅ Empréstimo de <:JoyensIcon:1536254492797050880>**{valor} Joyens** aprovado! O valor já caiu na sua carteira.\n"
+            f"> Juros se atrasar: <:JoyensIcon:1536254492797050880>**{juros} Joyens** (total com juros: <:JoyensIcon:1536254492797050880>{total})\n"
+            f"> Prazo de cobrança: **{data_cobranca.strftime('%d/%m/%Y às %H:%M')}** ({dias} dia(s))\n"
+            f"-# Pague antes do prazo em `Pagar Empréstimo` e você não paga nenhum juros!",
+            ephemeral=True
+        )
+
+class ViewEmprestimoMenu(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, view_banco):
+        super().__init__(timeout=180)
+        self.usuario = usuario
+        self.view_banco = view_banco
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+
+        emprestimo = buscar_emprestimo_ativo(self.usuario.id)
+
+        if emprestimo:
+            data_cobranca = datetime.datetime.fromisoformat(emprestimo["data_cobranca"])
+            prazo_texto = data_cobranca.strftime("%d/%m/%Y às %H:%M")
+            agora = datetime.datetime.now(FUSO_BR)
+            if agora < data_cobranca:
+                valor_a_pagar = emprestimo["valor_pedido"]
+                nota_juros = "-# ✅ Pague agora e os juros são cancelados!"
+            else:
+                valor_a_pagar = emprestimo["valor_total"]
+                nota_juros = "-# ⚠️ O prazo já passou, os juros já foram aplicados."
+
+            texto = (
+                f"### 🏦 Empréstimos\n"
+                f"-# {self.usuario.display_name}\n\n"
+                f"Você tem um empréstimo em aberto:\n"
+                f"> **Valor pedido:** <:JoyensIcon:1536254492797050880>{emprestimo['valor_pedido']} Joyens\n"
+                f"> **Com juros:** <:JoyensIcon:1536254492797050880>{emprestimo['valor_total']} Joyens\n"
+                f"> **Prazo de cobrança:** {prazo_texto}\n"
+                f"> **Valor a pagar agora:** <:JoyensIcon:1536254492797050880>{valor_a_pagar} Joyens\n"
+                f"{nota_juros}"
+            )
+        else:
+            valor_maximo = calcular_valor_maximo_emprestimo(self.usuario.id)
+            texto = (
+                f"### 🏦 Empréstimos\n"
+                f"-# {self.usuario.display_name}\n\n"
+                f"Você não tem nenhum empréstimo em aberto.\n\n"
+                f"> **Valor mínimo:** <:JoyensIcon:1536254492797050880>{VALOR_MINIMO_EMPRESTIMO} Joyens\n"
+                f"> **Seu limite atual:** <:JoyensIcon:1536254492797050880>{valor_maximo} Joyens\n"
+                f"-# Quanto mais você pede, mais dias até a cobrança (mínimo 3, máximo 30)."
+            )
+
+        container.add_item(ui.TextDisplay(texto))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        btn_pedir = ui.Button(label="Pedir Empréstimo", emoji="💳", style=discord.ButtonStyle.success, disabled=bool(emprestimo))
+        btn_pagar = ui.Button(label="Pagar Empréstimo", emoji="💸", style=discord.ButtonStyle.danger, disabled=not bool(emprestimo))
+
+        async def pedir_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            await interaction.response.send_modal(ModalPedirEmprestimo(self.usuario.id, self))
+
+        async def pagar_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            sucesso, erro, valor_pago, juros_perdoados = await asyncio.to_thread(pagar_emprestimo_sync, self.usuario.id)
+            if not sucesso:
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> {erro}", ephemeral=True)
+                return
+            self.montar()
+            await interaction.response.edit_message(view=self)
+            texto_sucesso = f"✅ Empréstimo quitado! Você pagou <:JoyensIcon:1536254492797050880>**{valor_pago} Joyens**."
+            if juros_perdoados > 0:
+                texto_sucesso += f"\n🎉 Pagou antes do prazo, então os <:JoyensIcon:1536254492797050880>**{juros_perdoados} Joyens** de juros foram cancelados!"
+            await interaction.followup.send(texto_sucesso, ephemeral=True)
+
+        btn_pedir.callback = pedir_cb
+        btn_pagar.callback = pagar_cb
+        linha.add_item(btn_pedir)
+        linha.add_item(btn_pagar)
+        container.add_item(linha)
+
+        linha_voltar = ui.ActionRow()
+        btn_voltar = ui.Button(label="Voltar", emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.secondary)
+        async def voltar_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            self.view_banco.montar()
+            await interaction.response.edit_message(view=self.view_banco)
+        btn_voltar.callback = voltar_cb
+        linha_voltar.add_item(btn_voltar)
+        container.add_item(linha_voltar)
+
+        self.add_item(container)
+
+class ViewBanco(ui.LayoutView):
+    def __init__(self, usuario: discord.Member):
+        super().__init__(timeout=180)
+        self.usuario = usuario
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.green()
+
+        saldo_carteira = buscar_joyens(self.usuario.id)
+        saldo_banco = buscar_joyens_banco(self.usuario.id)
+
+        texto = (
+            f"### 🏦 Banco JogadorBot\n"
+            f"-# {self.usuario.display_name}\n\n"
+            f"**Carteira:** <:JoyensIcon:1536254492797050880>{saldo_carteira} Joyens\n"
+            f"**Guardado no banco:** <:JoyensIcon:1536254492797050880>{saldo_banco} Joyens"
+        )
+        container.add_item(ui.TextDisplay(texto))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        btn_depositar = ui.Button(label="Depositar", emoji="💰", style=discord.ButtonStyle.success)
+        btn_sacar = ui.Button(label="Sacar", emoji="💵", style=discord.ButtonStyle.primary)
+        btn_emprestimo = ui.Button(label="Empréstimo", emoji="🏦", style=discord.ButtonStyle.secondary)
+        btn_investir = ui.Button(label="Investir", emoji="📈", style=discord.ButtonStyle.secondary, disabled=True)
+
+        async def depositar_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            await interaction.response.send_modal(ModalDepositar(self.usuario.id, self))
+
+        async def sacar_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            await interaction.response.send_modal(ModalSacar(self.usuario.id, self))
+
+        async def emprestimo_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            view = ViewEmprestimoMenu(self.usuario, self)
+            await interaction.response.edit_message(view=view)
+
+        btn_depositar.callback = depositar_cb
+        btn_sacar.callback = sacar_cb
+        btn_emprestimo.callback = emprestimo_cb
+
+        linha.add_item(btn_depositar)
+        linha.add_item(btn_sacar)
+        linha.add_item(btn_emprestimo)
+        linha.add_item(btn_investir)
+        container.add_item(linha)
+
+        self.add_item(container)
+
+@bot.command(name="banco")
+async def banco(ctx):
+    view = ViewBanco(ctx.author)
+    await ctx.send(view=view)
+    
+# ============================================================
+# VIEW - Pagamento entre usuários
 # ============================================================
 
 class ViewPagamento(discord.ui.View):
@@ -6278,7 +6955,7 @@ class LayoutConfirmacaoEmprego(ui.LayoutView):
         self.add_item(container)
 
 # ============================================================
-# VIEW (BOTÕES) - Comando de !ajuda
+# VIEW - Comando de !ajuda
 # ============================================================
 class ViewAjuda(discord.ui.View):
     def __init__(self):
@@ -6649,6 +7326,7 @@ async def on_ready():
     verificar_missoes_temporarias.start()
     verificar_negligencia_pets.start()
     verificar_streak_felicidade_pets.start()
+    verificar_cobranca_emprestimos.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
