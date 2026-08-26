@@ -3801,7 +3801,7 @@ class ViewMochilaMenu(ui.LayoutView):
 
         linha = ui.ActionRow()
         for chave, dados in INVENTARIO_ESTRUTURA.items():
-            botao = ui.Button(label=dados["nome"], emoji=dados["emoji"], style=discord.ButtonStyle.primary)
+            botao = ui.Button(emoji=dados["emoji"], style=discord.ButtonStyle.primary)
             async def cb(interaction, categoria=chave):
                 if interaction.user.id != self.usuario.id:
                     await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
@@ -6530,9 +6530,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
         embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
         embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
-        embed.add_field(name=f"`{PREFIX}loja`", value="Abre a loja de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
-        embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
         embed.set_footer(text="<:BolsaJoyensIcon:1525729605724405781> Economia • JogadorBot")
         return embed
 
@@ -6549,7 +6547,6 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}saldo [@usuario]`", value="Mostra o saldo de Joyens do usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}rank`", value="Abre o rank de (joyens/level)", inline=False)
-        embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra as missões semanais e o progresso", inline=False)
         embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra todas as categorias de missões", inline=False)
         embed.set_footer(text="ℹ️ Informação • JogadorBot")
         return embed
@@ -6562,8 +6559,8 @@ class ViewAjuda(discord.ui.View):
         )
         embed.add_field(name=f"`{PREFIX}dado [lados]`", value="Rola um dado. Ex: `!dado 20`", inline=False)
         embed.add_field(name=f"`{PREFIX}moeda`", value="Joga uma moeda (cara ou coroa)", inline=False)
-        embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
         embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e <:Atencao:1534592266625093662>", inline=False)
+        embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
         embed.add_field(name=f"`{PREFIX}minerar`", value="Minera Joyogens e minérios raros", inline=False)
         embed.set_footer(text="🎮 Diversão • JogadorBot")
         return embed
@@ -6575,6 +6572,7 @@ class ViewAjuda(discord.ui.View):
             color=discord.Color.og_blurple()
         )
         embed.add_field(name=f"`{PREFIX}limpar [quantidade]`", value="Apaga mensagens (requer permissão)", inline=False)
+        embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
         embed.set_footer(text="🔧 Administrativos • JogadorBot")
         return embed
 
@@ -6587,12 +6585,13 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name="`/conquista criar`", value="Cria uma nova conquista no catálogo", inline=False)
         embed.add_field(name="`/conquista dar`", value="Dá uma conquista para um usuário", inline=False)
         embed.add_field(name="`/conquista lista`", value="Lista todas as conquistas disponíveis", inline=False)
+        embed.add_field(name="`/editar tipo nome`", value="Edita um produto (banner ou conquista)", inline=False)
         embed.add_field(name="`/banner adicionar`", value="Adiciona um banner à loja", inline=False)
+        embed.add_field(name="`/banner dar`", value="Dá banner para um usuário", inline=False)
         embed.add_field(name="`/banner deletar`", value="Deleta um banner da loja", inline=False)
         embed.add_field(name="`/categoria criar`", value="Cria uma categoria de banners", inline=False)
         embed.add_field(name="`/categoria deletar`", value="Deleta uma categoria e seus banners", inline=False)
         embed.add_field(name="`/categoria lista`", value="Lista todas as categorias", inline=False)
-        embed.add_field(name="`/editar tipo nome`", value="Edita um produto (banner ou conquista)", inline=False)
         embed.add_field(name="`/rotacao ver`", value="Mostra os banners da rotação atual", inline=False)
         embed.add_field(name="`/rotacao forcar`", value="Força uma nova rotação imediatamente", inline=False)
         embed.add_field(name="`/adminbot gerenciar`", value="Adiciona ou remove um admin", inline=False)
