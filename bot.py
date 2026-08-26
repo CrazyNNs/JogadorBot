@@ -3848,7 +3848,7 @@ class ViewMochilaSubcategorias(ui.LayoutView):
 
         linha = ui.ActionRow()
         for chave_sub, sub in dados_categoria["subcategorias"].items():
-            botao = ui.Button(label=sub["nome"], emoji=sub["emoji"], style=discord.ButtonStyle.secondary)
+            botao = ui.Button(emoji=sub["emoji"], style=discord.ButtonStyle.secondary)
             async def cb(interaction, subcategoria=chave_sub):
                 if interaction.user.id != self.usuario.id:
                     await interaction.response.send_message("Essa mochila não é sua!", ephemeral=True)
