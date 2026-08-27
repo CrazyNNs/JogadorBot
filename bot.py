@@ -413,7 +413,7 @@ MISSOES_SEMANAIS = [
         "condicao": "apostar_semana",
         "meta": 15,
         "tipo_recompensa": "joyens",
-        "quantidade_recompensa": 15000,
+        "quantidade_recompensa": 1500,
     },
     {
         "id": "diario_semana",
