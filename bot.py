@@ -312,7 +312,7 @@ RACAS_POR_ESPECIE = {
          "descricao": "Ninguém sabe quando ou onde morreu. Bêbados e pessoas que passam ao lado do cemitério à noite juram ouvi-lo latir por lá."},
     ],
     "Gatos": [
-        {"nome": "Gato SRD", "emoji": "<:GatoSRDIcon:1541993300163035287>", "preco": 14000, "moeda": "joyens", "raridade": "Comum",
+        {"nome": "Gato SRD", "emoji": "<:GatoSRDIcon:1542360701312434227>", "preco": 14000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Um gato comum, mas extremamente carinhoso quando decide gostar de alguém."},
         {"nome": "Siamês", "emoji": "<:GatoSiamesIcon:1541993298133127218>", "preco": 19000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Falante e sociável, adora estar por perto do dono."},
@@ -6890,7 +6890,7 @@ class ViewBanco(ui.LayoutView):
         saldo_banco = buscar_joyens_banco(self.usuario.id)
 
         texto = (
-            f"### 🏦 Banco JogadorBot\n"
+            f"### 🏦 Banco Sakurai\n"
             f"-# {self.usuario.display_name}\n\n"
             f"**Carteira:** <:JoyensIcon:1536254492797050880>{saldo_carteira} Joyens\n"
             f"**Guardado no banco:** <:JoyensIcon:1536254492797050880>{saldo_banco} Joyens"
@@ -7120,7 +7120,7 @@ class ViewAjuda(discord.ui.View):
     def embed_inicial(self):
         embed = discord.Embed(
             title="📖 Central de Comandos",
-            description="Bem-vindo à central de comandos do **JogadorBot**!\nEscolha uma categoria abaixo para ver os comandos disponíveis.",
+            description="Bem-vindo à central de comandos do **Sakurai**!\nEscolha uma categoria abaixo para ver os comandos disponíveis.",
             color=discord.Color.blurple()
         )
         embed.add_field(
@@ -7162,7 +7162,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
         embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
-        embed.set_footer(text="<:BolsaJoyensIcon:1525729605724405781> Economia • JogadorBot")
+        embed.set_footer(text="<:BolsaJoyensIcon:1525729605724405781> Economia • Sakurai")
         return embed
 
     def embed_informacao(self):
@@ -7179,7 +7179,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}catalogo`", value="Abre o catálogo completo de banners", inline=False)
         embed.add_field(name=f"`{PREFIX}rank`", value="Abre o rank de (joyens/level)", inline=False)
         embed.add_field(name=f"`{PREFIX}missoes [@usuario]`", value="Mostra todas as categorias de missões", inline=False)
-        embed.set_footer(text="ℹ️ Informação • JogadorBot")
+        embed.set_footer(text="ℹ️ Informação • Sakurai")
         return embed
 
     def embed_diversao(self):
@@ -7193,7 +7193,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e <:Atencao:1534592266625093662>", inline=False)
         embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
         embed.add_field(name=f"`{PREFIX}minerar`", value="Minera Joyogens e minérios raros", inline=False)
-        embed.set_footer(text="🎮 Diversão • JogadorBot")
+        embed.set_footer(text="🎮 Diversão • Sakurai")
         return embed
 
     def embed_adm(self):
@@ -7204,7 +7204,7 @@ class ViewAjuda(discord.ui.View):
         )
         embed.add_field(name=f"`{PREFIX}limpar [quantidade]`", value="Apaga mensagens (requer permissão)", inline=False)
         embed.add_field(name=f"`{PREFIX}addjoyens @usuario quantidade`", value="Adiciona Joyens a um usuário (admin)", inline=False)
-        embed.set_footer(text="🔧 Administrativos • JogadorBot")
+        embed.set_footer(text="🔧 Administrativos • Sakurai")
         return embed
 
     def embed_slash(self):
@@ -7227,7 +7227,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name="`/rotacao forcar`", value="Força uma nova rotação imediatamente", inline=False)
         embed.add_field(name="`/adminbot gerenciar`", value="Adiciona ou remove um admin", inline=False)
         embed.add_field(name="`/adminbot lista`", value="Lista todos os admins ativos", inline=False)
-        embed.set_footer(text="⚙️ Slash • JogadorBot")
+        embed.set_footer(text="⚙️ Slash • Sakurai")
         return embed
 
     @discord.ui.button(emoji="<:BolsaJoyensIcon:1525729605724405781>", style=discord.ButtonStyle.primary, row=0)
@@ -7702,7 +7702,7 @@ async def apostar(ctx, quantidade: int):
 @bot.command(name="catalogo")
 async def catalogo(ctx):
     embed = discord.Embed(
-        title="📖 Catálogo do JogadorBot",
+        title="📖 Catálogo do Sakurai",
         description="Bem-vindo ao catálogo! Escolha o que deseja ver:",
         color=discord.Color.blue()
     )
