@@ -314,9 +314,9 @@ RACAS_POR_ESPECIE = {
     "Gatos": [
         {"nome": "Gato SRD", "emoji": "<:GatoSRDIcon:1542360701312434227>", "preco": 14000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Um gato comum, mas extremamente carinhoso quando decide gostar de alguém."},
-        {"nome": "Siamês", "emoji": "<:GatoSiamesIcon:1541993298133127218>", "preco": 19000, "moeda": "joyens", "raridade": "Comum",
+        {"nome": "Siamês", "emoji": "<:GatoSiamesIcon:1542384463793627226>", "preco": 19000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Falante e sociável, adora estar por perto do dono."},
-        {"nome": "Maine Coon", "emoji": "<:GatoMaineCoonIcon:1541993295432130640>", "preco": 22000, "moeda": "joyens", "raridade": "Comum",
+        {"nome": "Maine Coon", "emoji": "<:GatoMaineCoonIcon:1542384480231366757>", "preco": 22000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Gigante, tranquilo e extremamente companheiro."},
         {"nome": "Persa", "emoji": "🐈", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Tranquilo e elegante, prefere um cantinho quentinho pra dormir."},
