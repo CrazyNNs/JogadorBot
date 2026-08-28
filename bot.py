@@ -667,12 +667,12 @@ INVENTARIO_ESTRUTURA = {
 # Quanto maior o peso, mais chance de cair no drop. Baseado na raridade que já
 # existe nos itens de mineração e nos pets (petiscos/brinquedos usam a raridade
 # da espécie do pet). Ajuste os números aqui se quiser mudar as chances.
-PESO_RARIDADE_DROP = {
-    "Comum": 40,
-    "Raro": 20,
-    "Épico": 8,
-    "Lendário": 3,
-    "Mítico": 1,
+CHANCE_RARIDADE_DROP = {
+    "Comum": 0.12,
+    "Raro": 0.05,
+    "Épico": 0.015,
+    "Lendário": 0.003,
+    "Mítico": 0.0005,
 }
 
 def _dar_petisco_drop_sync(usuario_id, tipo):
@@ -725,46 +725,37 @@ def _dar_medicamento_drop_sync(usuario_id, nome):
 
 def _construir_loot_table_sync():
     """Monta a loot table completa: itens de mineração, itens de petshop (sem
-    pets) e banners exclusivos (exceto o Sakurai BETA). Cada entrada tem um peso
-    baseado na raridade — quanto mais raro, menor a chance."""
+    pets) e banners exclusivos (exceto o Sakurai BETA). Cada entrada tem sua
+    própria chance de cair, baseada na raridade — quanto mais raro, menor a chance."""
     itens = []
 
-    # --- Mineração: ferramentas, equipamentos e consumíveis da loja de mineração ---
     for nome, dados in ITENS_MINERACAO.items():
-        peso = PESO_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 10)
+        chance = CHANCE_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 0.05)
         itens.append({
-            "peso": peso,
-            "categoria": "⛏️ Mineração",
+            "chance": chance,
             "descricao": f"{dados['emoji']} **{nome}**",
             "conceder": (lambda uid, n=nome: adicionar_item_mineracao(uid, n, 1)),
         })
 
-    # --- Petshop: petiscos e brinquedos por espécie (usa a raridade da espécie do pet) ---
     for especie, dados in PETS_DISPONIVEIS.items():
-        peso = PESO_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 10)
+        chance = CHANCE_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 0.05)
         itens.append({
-            "peso": peso,
-            "categoria": "🐾 Petshop",
+            "chance": chance,
             "descricao": f"🍖 **{dados['petisco_nome']}**",
             "conceder": (lambda uid, t=dados["petisco_nome"]: _dar_petisco_drop_sync(uid, t)),
         })
         itens.append({
-            "peso": peso,
-            "categoria": "🐾 Petshop",
+            "chance": chance,
             "descricao": f"🧸 **{dados['brinquedo_nome']}**",
             "conceder": (lambda uid, t=dados["brinquedo_nome"], u=dados["brinquedo_usos"]: _dar_brinquedo_drop_sync(uid, t, u)),
         })
 
-    # Sabonete é único e universal (serve pra qualquer pet)
     itens.append({
-        "peso": PESO_RARIDADE_DROP["Comum"],
-        "categoria": "🐾 Petshop",
+        "chance": CHANCE_RARIDADE_DROP["Comum"],
         "descricao": f"🧼 **{SABONETE_NOME}**",
         "conceder": (lambda uid: _dar_sabonete_drop_sync(uid)),
     })
 
-    # Medicamentos — normais (tratam 1 doença específica) contam como Raro,
-    # especiais/universais (tratam qualquer doença) contam como Épico
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
@@ -773,15 +764,13 @@ def _construir_loot_table_sync():
     finally:
         con.close()
     for nome, emoji, especial in medicamentos:
-        peso = PESO_RARIDADE_DROP["Épico"] if especial else PESO_RARIDADE_DROP["Raro"]
+        chance = CHANCE_RARIDADE_DROP["Épico"] if especial else CHANCE_RARIDADE_DROP["Raro"]
         itens.append({
-            "peso": peso,
-            "categoria": "🐾 Petshop",
+            "chance": chance,
             "descricao": f"{emoji} **{nome}**",
             "conceder": (lambda uid, n=nome: _dar_medicamento_drop_sync(uid, n)),
         })
 
-    # --- Banners exclusivos, exceto o Sakurai BETA ---
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
@@ -791,8 +780,7 @@ def _construir_loot_table_sync():
         con.close()
     for nome_banner in banners_exclusivos:
         itens.append({
-            "peso": PESO_RARIDADE_DROP["Lendário"],
-            "categoria": "🖼️ Banner Exclusivo",
+            "chance": CHANCE_RARIDADE_DROP["Lendário"],
             "descricao": f"🖼️ **{nome_banner}**",
             "conceder": (lambda uid, n=nome_banner: _dar_banner_sync(uid, n)),
         })
@@ -800,17 +788,18 @@ def _construir_loot_table_sync():
     return itens
 
 def sortear_e_conceder_drop_sync(usuario_id):
-    """Sorteia um item da loot table (ponderado por raridade) e concede pro
-    usuário. Retorna (categoria, descricao) do item sorteado, ou (None, None)
-    se a loot table estiver vazia (ex: nenhum banner exclusivo cadastrado ainda)."""
+    """Rola a chance de CADA item da loot table individualmente (não é 'escolhe
+    1 vencedor' — cada item tem sua própria rolagem independente). Por isso um
+    drop pode sair vazio, com 1 item, ou com vários de uma vez. Concede
+    automaticamente tudo que caiu e devolve a lista de descrições dos itens
+    (lista vazia se não caiu nada)."""
     itens = _construir_loot_table_sync()
-    if not itens:
-        return None, None
-
-    pesos = [item["peso"] for item in itens]
-    escolhido = random.choices(itens, weights=pesos, k=1)[0]
-    escolhido["conceder"](usuario_id)
-    return escolhido["categoria"], escolhido["descricao"]
+    itens_dropados = []
+    for item in itens:
+        if random.random() < item["chance"]:
+            item["conceder"](usuario_id)
+            itens_dropados.append(item["descricao"])
+    return itens_dropados
     
 # ============================================================
 # BANCO DE DADOS
@@ -1426,20 +1415,20 @@ class ViewDrop(discord.ui.View):
 
         remover_chaves(interaction.user.id, 1)
 
-        categoria, descricao_item = await asyncio.to_thread(sortear_e_conceder_drop_sync, interaction.user.id)
+        itens_dropados = await asyncio.to_thread(sortear_e_conceder_drop_sync, interaction.user.id)
 
-        if categoria is None:
-            # Loot table vazia (ex: nenhum banner exclusivo cadastrado ainda) — devolve a chave.
+        if not itens_dropados:
             adicionar_chaves(interaction.user.id, 1)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} abriu o baú, mas ele estava vazio! Sua 🗝️ Chave foi devolvida.",
+                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua 🗝️ Chave foi devolvida.",
                 color=discord.Color.greyple()
             )
         else:
+            lista_itens = "\n".join(itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{categoria}\n{descricao_item}",
+                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{lista_itens}",
                 color=discord.Color.gold()
             )
         await interaction.response.edit_message(embed=embed, view=self)
