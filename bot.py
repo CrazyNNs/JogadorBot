@@ -525,6 +525,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
+        "raridade": "Comum",
     },
     "Picareta": {
         "emoji": "<:PicaretaIcon:1532959065641062410>",
@@ -533,6 +534,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 20 usos.",
         "usos": 20,
+        "raridade": "Raro",
     },
     "Picareta Fortificada": {
         "emoji": "<:PicaretaFortificadaIcon:1532962738257662193>",
@@ -541,6 +543,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Necessária para minerar. Aguenta 35 usos.",
         "usos": 35,
+        "raridade": "Épico",
     },
     "Dinamite": {
         "emoji": "🧨",
@@ -548,6 +551,7 @@ ITENS_MINERACAO = {
         "preco": 30000,
         "moeda": "joyogens",
         "descricao": "Minera instantaneamente. 10% de chance de falhar.",
+        "raridade": "Lendário",
     },
     "Capacete Antigo": {
         "emoji": "<:CapaceteAntigoIcon:1533279462043418684>",
@@ -556,6 +560,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Absorve até 30 de dano antes de quebrar.",
         "durabilidade": 30,
+        "raridade": "Comum",
     },
     "Capacete": {
         "emoji": "<:CapaceteMedioIcon:1533279479353446480>",
@@ -564,6 +569,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Absorve até 40 de dano antes de quebrar.",
         "durabilidade": 40,
+        "raridade": "Raro",
     },
     "Capacete Fortificado": {
         "emoji": "<:CapaceteFortificado:1538736711620890735>",
@@ -572,6 +578,7 @@ ITENS_MINERACAO = {
         "moeda": "joyens",
         "descricao": "Absorve até 60 de dano antes de quebrar.",
         "durabilidade": 60,
+        "raridade": "Épico",
     },
     "Marmita": {
         "emoji": "🍱",
@@ -579,6 +586,7 @@ ITENS_MINERACAO = {
         "preco": 500,
         "moeda": "joyens",
         "descricao": "Recupera 20 de HP.",
+        "raridade": "Comum",
     },
     "Pimenta": {
         "emoji": "🌶️",
@@ -586,6 +594,7 @@ ITENS_MINERACAO = {
         "preco": 700,
         "moeda": "joyens",
         "descricao": "Aumenta o dano de ataque em 30%.",
+        "raridade": "Comum",
     },
 }
 
@@ -651,6 +660,158 @@ INVENTARIO_ESTRUTURA = {
     },
 }
 
+# ============================================================
+# LOOT TABLE DO DROP — Mineração + Petshop (sem pets) + Banners exclusivos
+# ============================================================
+
+# Quanto maior o peso, mais chance de cair no drop. Baseado na raridade que já
+# existe nos itens de mineração e nos pets (petiscos/brinquedos usam a raridade
+# da espécie do pet). Ajuste os números aqui se quiser mudar as chances.
+PESO_RARIDADE_DROP = {
+    "Comum": 40,
+    "Raro": 20,
+    "Épico": 8,
+    "Lendário": 3,
+    "Mítico": 1,
+}
+
+def _dar_petisco_drop_sync(usuario_id, tipo):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, 1)
+            ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + 1
+        """, (str(usuario_id), tipo))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_brinquedo_drop_sync(usuario_id, tipo, usos):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?
+        """, (str(usuario_id), tipo, usos, usos))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_sabonete_drop_sync(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, 1)
+            ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + 1
+        """, (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_medicamento_drop_sync(usuario_id, nome):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO medicamentos_usuarios (usuario_id, nome, quantidade) VALUES (?, ?, 1)
+            ON CONFLICT(usuario_id, nome) DO UPDATE SET quantidade = quantidade + 1
+        """, (str(usuario_id), nome))
+        con.commit()
+    finally:
+        con.close()
+
+def _construir_loot_table_sync():
+    """Monta a loot table completa: itens de mineração, itens de petshop (sem
+    pets) e banners exclusivos (exceto o Sakurai BETA). Cada entrada tem um peso
+    baseado na raridade — quanto mais raro, menor a chance."""
+    itens = []
+
+    # --- Mineração: ferramentas, equipamentos e consumíveis da loja de mineração ---
+    for nome, dados in ITENS_MINERACAO.items():
+        peso = PESO_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 10)
+        itens.append({
+            "peso": peso,
+            "categoria": "⛏️ Mineração",
+            "descricao": f"{dados['emoji']} **{nome}**",
+            "conceder": (lambda uid, n=nome: adicionar_item_mineracao(uid, n, 1)),
+        })
+
+    # --- Petshop: petiscos e brinquedos por espécie (usa a raridade da espécie do pet) ---
+    for especie, dados in PETS_DISPONIVEIS.items():
+        peso = PESO_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 10)
+        itens.append({
+            "peso": peso,
+            "categoria": "🐾 Petshop",
+            "descricao": f"🍖 **{dados['petisco_nome']}**",
+            "conceder": (lambda uid, t=dados["petisco_nome"]: _dar_petisco_drop_sync(uid, t)),
+        })
+        itens.append({
+            "peso": peso,
+            "categoria": "🐾 Petshop",
+            "descricao": f"🧸 **{dados['brinquedo_nome']}**",
+            "conceder": (lambda uid, t=dados["brinquedo_nome"], u=dados["brinquedo_usos"]: _dar_brinquedo_drop_sync(uid, t, u)),
+        })
+
+    # Sabonete é único e universal (serve pra qualquer pet)
+    itens.append({
+        "peso": PESO_RARIDADE_DROP["Comum"],
+        "categoria": "🐾 Petshop",
+        "descricao": f"🧼 **{SABONETE_NOME}**",
+        "conceder": (lambda uid: _dar_sabonete_drop_sync(uid)),
+    })
+
+    # Medicamentos — normais (tratam 1 doença específica) contam como Raro,
+    # especiais/universais (tratam qualquer doença) contam como Épico
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT nome, emoji, especial FROM medicamentos")
+        medicamentos = cur.fetchall()
+    finally:
+        con.close()
+    for nome, emoji, especial in medicamentos:
+        peso = PESO_RARIDADE_DROP["Épico"] if especial else PESO_RARIDADE_DROP["Raro"]
+        itens.append({
+            "peso": peso,
+            "categoria": "🐾 Petshop",
+            "descricao": f"{emoji} **{nome}**",
+            "conceder": (lambda uid, n=nome: _dar_medicamento_drop_sync(uid, n)),
+        })
+
+    # --- Banners exclusivos, exceto o Sakurai BETA ---
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT nome FROM banners WHERE raridade = 'Exclusivo' AND nome != 'Sakurai BETA'")
+        banners_exclusivos = [r[0] for r in cur.fetchall()]
+    finally:
+        con.close()
+    for nome_banner in banners_exclusivos:
+        itens.append({
+            "peso": PESO_RARIDADE_DROP["Lendário"],
+            "categoria": "🖼️ Banner Exclusivo",
+            "descricao": f"🖼️ **{nome_banner}**",
+            "conceder": (lambda uid, n=nome_banner: _dar_banner_sync(uid, n)),
+        })
+
+    return itens
+
+def sortear_e_conceder_drop_sync(usuario_id):
+    """Sorteia um item da loot table (ponderado por raridade) e concede pro
+    usuário. Retorna (categoria, descricao) do item sorteado, ou (None, None)
+    se a loot table estiver vazia (ex: nenhum banner exclusivo cadastrado ainda)."""
+    itens = _construir_loot_table_sync()
+    if not itens:
+        return None, None
+
+    pesos = [item["peso"] for item in itens]
+    escolhido = random.choices(itens, weights=pesos, k=1)[0]
+    escolhido["conceder"](usuario_id)
+    return escolhido["categoria"], escolhido["descricao"]
+    
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
@@ -1265,16 +1426,22 @@ class ViewDrop(discord.ui.View):
 
         remover_chaves(interaction.user.id, 1)
 
-        # 🔧 ETAPA 2 (próxima etapa): trocar essa recompensa fixa pelo loot table
-        # cruzando mineração + petshop + banners normais/exclusivos.
-        recompensa = 100
-        adicionar_joyens(interaction.user.id, recompensa)
+        categoria, descricao_item = await asyncio.to_thread(sortear_e_conceder_drop_sync, interaction.user.id)
 
-        embed = discord.Embed(
-            title="🎁 Drop Aberto!",
-            description=f"{interaction.user.mention} usou uma 🗝️ Chave e ganhou **{recompensa} Joyens**!",
-            color=discord.Color.gold()
-        )
+        if categoria is None:
+            # Loot table vazia (ex: nenhum banner exclusivo cadastrado ainda) — devolve a chave.
+            adicionar_chaves(interaction.user.id, 1)
+            embed = discord.Embed(
+                title="🎁 Drop Aberto!",
+                description=f"{interaction.user.mention} abriu o baú, mas ele estava vazio! Sua 🗝️ Chave foi devolvida.",
+                color=discord.Color.greyple()
+            )
+        else:
+            embed = discord.Embed(
+                title="🎁 Drop Aberto!",
+                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{categoria}\n{descricao_item}",
+                color=discord.Color.gold()
+            )
         await interaction.response.edit_message(embed=embed, view=self)
 
 
@@ -3975,7 +4142,150 @@ class ViewComprarItemMineracao(ui.LayoutView):
 # ============================================================
 # VIEW - Loja de Banner
 # ============================================================
+class ViewLoja(ui.LayoutView):
+    def __init__(self, usuario_id, banners, rotacao=False, expira=None, view_menu=None):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.banners = banners
+        self.rotacao = rotacao
+        self.expira = expira
+        self.index = 0
+        self.view_menu = view_menu
+        self.montar()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    def montar(self):
+        self.clear_items()
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        joyens = buscar_joyens(self.usuario_id)
+        tem = usuario_tem_banner(self.usuario_id, banner_id)
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+
+        async def voltar_cb(interaction):
+            self.view_menu.montar()
+            arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
+            if arquivo_lojaicon:
+                await interaction.response.edit_message(view=self.view_menu, attachments=[arquivo_lojaicon])
+            else:
+                await interaction.response.edit_message(view=self.view_menu, attachments=[])
+
+        btn_voltar.callback = voltar_cb
+
+        linha_topo = ui.Section(
+            ui.TextDisplay("\u200b"),
+            accessory=btn_voltar
+        )
+        container.add_item(linha_topo)
+        container.add_item(ui.TextDisplay(f"### 🖼️ {nome}"))
+        container.add_item(ui.TextDisplay(descricao))
+        container.add_item(ui.Separator())
+
+        info_texto = (
+            f"**Raridade:** {raridade}\n"
+            f"**Preço:** <:JoyensIcon:1536254492797050880>{preco} Joyens\n"
+            f"**Seu saldo:** {joyens} Joyens"
+        )
+        if tem:
+            info_texto += "\n✅ Você já possui este banner"
+        elif joyens < preco:
+            info_texto += "\n<:Atencao:1534592266625093662> Joyens insuficientes"
+        container.add_item(ui.TextDisplay(info_texto))
+
+        if os.path.exists(arquivo):
+            container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{os.path.basename(arquivo)}")))
+
+        rodape = f"Banner {self.index + 1} de {len(self.banners)}"
+        if self.expira:
+            expira_dt = datetime.datetime.fromisoformat(self.expira)
+            rodape += f" • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}"
+        container.add_item(ui.TextDisplay(f"-# {rodape}"))
+        container.add_item(ui.Separator())
+
+        linha = ui.ActionRow()
+        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.index == 0)
+        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.index >= len(self.banners) - 1)
+        btn_comprar = ui.Button(
+            label="✅ Já possui" if tem else "🛒 Comprar",
+            style=discord.ButtonStyle.success,
+            disabled=tem
+        )
+
+        async def anterior_cb(interaction):
+            self.index -= 1
+            self.montar()
+            await self.atualizar(interaction)
+
+        async def proximo_cb(interaction):
+            self.index += 1
+            self.montar()
+            await self.atualizar(interaction)
+
+        async def comprar_cb(interaction):
+            comprador_id = interaction.user.id
+            banner_id_atual, nome_atual, descricao_atual, preco_atual, arquivo_atual, raridade_atual = self.banners[self.index]
+            joyens_atual = buscar_joyens(comprador_id)
+            if joyens_atual < preco_atual:
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1536254492797050880>{joyens_atual} e precisa de <:JoyensIcon:1536254492797050880>{preco_atual}.",
+                    ephemeral=True
+                )
+                return
+            if usuario_tem_banner(comprador_id, banner_id_atual):
+                await interaction.response.send_message(
+                    "<:Atencao:1534592266625093662> Você já possui este banner!",
+                    ephemeral=True
+                )
+                return
+            remover_joyens(comprador_id, preco_atual)
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
+                        (str(comprador_id), banner_id_atual))
+            cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
+                        (str(comprador_id), banner_id_atual))
+            con.commit()
+            con.close()
+
+            await interaction.response.send_message(
+                f"✅ Banner **{nome_atual}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
+                ephemeral=True
+            )
+            self.montar()
+            arquivo_novo = discord.File(arquivo_atual, filename=os.path.basename(arquivo_atual)) if os.path.exists(arquivo_atual) else None
+            if arquivo_novo:
+                await interaction.message.edit(view=self, attachments=[arquivo_novo])
+            else:
+                await interaction.message.edit(view=self, attachments=[])
+
+        btn_anterior.callback = anterior_cb
+        btn_proximo.callback = proximo_cb
+        btn_comprar.callback = comprar_cb
+        linha.add_item(btn_anterior)
+        linha.add_item(btn_comprar)
+        linha.add_item(btn_proximo)
+        container.add_item(linha)
+
+        self.add_item(container)
+
+    async def atualizar(self, interaction: discord.Interaction):
+        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
+        if os.path.exists(arquivo):
+            arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
+            await interaction.response.edit_message(view=self, attachments=[arquivo_discord])
+        else:
+            await interaction.response.edit_message(view=self, attachments=[])
 
 # ============================================================
 # VIEW - Inventário Geral
