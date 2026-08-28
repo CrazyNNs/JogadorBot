@@ -663,7 +663,11 @@ INVENTARIO_ESTRUTURA = {
 # ============================================================
 # LOOT TABLE DO DROP — Mineração + Petshop (sem pets) + Banners exclusivos
 # ============================================================
-
+# Depois que um item já caiu, essa é a chance de vir +1 unidade (25%), depois
+# +1 de novo (25% de 25% = 6,25%), e assim por diante — cada unidade extra
+# fica mais difícil, até o teto de QUANTIDADE_MAXIMA_DROP.
+CHANCE_QUANTIDADE_EXTRA = 0.25
+QUANTIDADE_MAXIMA_DROP = 5
 # Quanto maior o peso, mais chance de cair no drop. Baseado na raridade que já
 # existe nos itens de mineração e nos pets (petiscos/brinquedos usam a raridade
 # da espécie do pet). Ajuste os números aqui se quiser mudar as chances.
@@ -675,53 +679,65 @@ CHANCE_RARIDADE_DROP = {
     "Mítico": 0.0005,
 }
 
-def _dar_petisco_drop_sync(usuario_id, tipo):
+def _dar_petisco_drop_sync(usuario_id, tipo, qtd=1):
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
         cur.execute("""
-            INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, 1)
-            ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + 1
-        """, (str(usuario_id), tipo))
+            INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), tipo, qtd, qtd))
         con.commit()
     finally:
         con.close()
 
-def _dar_brinquedo_drop_sync(usuario_id, tipo, usos):
+def _dar_brinquedo_drop_sync(usuario_id, tipo, usos, qtd=1):
+    usos_totais = usos * qtd
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
         cur.execute("""
             INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?)
             ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?
-        """, (str(usuario_id), tipo, usos, usos))
+        """, (str(usuario_id), tipo, usos_totais, usos_totais))
         con.commit()
     finally:
         con.close()
 
-def _dar_sabonete_drop_sync(usuario_id):
+def _dar_sabonete_drop_sync(usuario_id, qtd=1):
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
         cur.execute("""
-            INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, 1)
-            ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + 1
-        """, (str(usuario_id),))
+            INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), qtd, qtd))
         con.commit()
     finally:
         con.close()
 
-def _dar_medicamento_drop_sync(usuario_id, nome):
+def _dar_medicamento_drop_sync(usuario_id, nome, qtd=1):
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
         cur.execute("""
-            INSERT INTO medicamentos_usuarios (usuario_id, nome, quantidade) VALUES (?, ?, 1)
-            ON CONFLICT(usuario_id, nome) DO UPDATE SET quantidade = quantidade + 1
-        """, (str(usuario_id), nome))
+            INSERT INTO medicamentos_usuarios (usuario_id, nome, quantidade) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, nome) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), nome, qtd, qtd))
         con.commit()
     finally:
         con.close()
+
+def rolar_quantidade_drop():
+    """Depois que um item já passou na rolagem de chance, rola se vem em dobro,
+    triplo etc. Cada unidade extra é mais difícil que a anterior — a chance é
+    multiplicada por si mesma a cada rolagem — até um teto de segurança."""
+    quantidade = 1
+    chance_atual = CHANCE_QUANTIDADE_EXTRA
+    while quantidade < QUANTIDADE_MAXIMA_DROP and random.random() < chance_atual:
+        quantidade += 1
+        chance_atual *= CHANCE_QUANTIDADE_EXTRA
+    return quantidade
 
 def _construir_loot_table_sync():
     """Monta a loot table completa: itens de mineração, itens de petshop (sem
@@ -733,27 +749,31 @@ def _construir_loot_table_sync():
         chance = CHANCE_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 0.05)
         itens.append({
             "chance": chance,
+            "empilhavel": True,
             "descricao": f"{dados['emoji']} **{nome}**",
-            "conceder": (lambda uid, n=nome: adicionar_item_mineracao(uid, n, 1)),
+            "conceder": (lambda uid, qtd, n=nome: adicionar_item_mineracao(uid, n, qtd)),
         })
 
     for especie, dados in PETS_DISPONIVEIS.items():
         chance = CHANCE_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 0.05)
         itens.append({
             "chance": chance,
+            "empilhavel": True,
             "descricao": f"🍖 **{dados['petisco_nome']}**",
-            "conceder": (lambda uid, t=dados["petisco_nome"]: _dar_petisco_drop_sync(uid, t)),
+            "conceder": (lambda uid, qtd, t=dados["petisco_nome"]: _dar_petisco_drop_sync(uid, t, qtd)),
         })
         itens.append({
             "chance": chance,
+            "empilhavel": True,
             "descricao": f"🧸 **{dados['brinquedo_nome']}**",
-            "conceder": (lambda uid, t=dados["brinquedo_nome"], u=dados["brinquedo_usos"]: _dar_brinquedo_drop_sync(uid, t, u)),
+            "conceder": (lambda uid, qtd, t=dados["brinquedo_nome"], u=dados["brinquedo_usos"]: _dar_brinquedo_drop_sync(uid, t, u, qtd)),
         })
 
     itens.append({
         "chance": CHANCE_RARIDADE_DROP["Comum"],
+        "empilhavel": True,
         "descricao": f"🧼 **{SABONETE_NOME}**",
-        "conceder": (lambda uid: _dar_sabonete_drop_sync(uid)),
+        "conceder": (lambda uid, qtd: _dar_sabonete_drop_sync(uid, qtd)),
     })
 
     con = sqlite3.connect("jogadorbot.db")
@@ -767,10 +787,12 @@ def _construir_loot_table_sync():
         chance = CHANCE_RARIDADE_DROP["Épico"] if especial else CHANCE_RARIDADE_DROP["Raro"]
         itens.append({
             "chance": chance,
+            "empilhavel": True,
             "descricao": f"{emoji} **{nome}**",
-            "conceder": (lambda uid, n=nome: _dar_medicamento_drop_sync(uid, n)),
+            "conceder": (lambda uid, qtd, n=nome: _dar_medicamento_drop_sync(uid, n, qtd)),
         })
 
+    # Banners NÃO empilham (é posse, não quantidade) — sempre concede 1.
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
@@ -781,24 +803,26 @@ def _construir_loot_table_sync():
     for nome_banner in banners_exclusivos:
         itens.append({
             "chance": CHANCE_RARIDADE_DROP["Lendário"],
+            "empilhavel": False,
             "descricao": f"🖼️ **{nome_banner}**",
-            "conceder": (lambda uid, n=nome_banner: _dar_banner_sync(uid, n)),
+            "conceder": (lambda uid, qtd, n=nome_banner: _dar_banner_sync(uid, n)),
         })
 
     return itens
 
 def sortear_e_conceder_drop_sync(usuario_id):
-    """Rola a chance de CADA item da loot table individualmente (não é 'escolhe
-    1 vencedor' — cada item tem sua própria rolagem independente). Por isso um
-    drop pode sair vazio, com 1 item, ou com vários de uma vez. Concede
-    automaticamente tudo que caiu e devolve a lista de descrições dos itens
-    (lista vazia se não caiu nada)."""
+    """Rola a chance de CADA item da loot table individualmente. Itens
+    empilháveis também rolam quantidade (pode vir mais de 1, mas é mais raro
+    quanto mais vem). Concede automaticamente tudo que caiu e devolve a lista
+    de descrições (vazia se não caiu nada)."""
     itens = _construir_loot_table_sync()
     itens_dropados = []
     for item in itens:
         if random.random() < item["chance"]:
-            item["conceder"](usuario_id)
-            itens_dropados.append(item["descricao"])
+            quantidade = rolar_quantidade_drop() if item.get("empilhavel", True) else 1
+            item["conceder"](usuario_id, quantidade)
+            sufixo = f" x{quantidade}" if quantidade > 1 else ""
+            itens_dropados.append(f"{item['descricao']}{sufixo}")
     return itens_dropados
     
 # ============================================================
@@ -1428,7 +1452,7 @@ class ViewDrop(discord.ui.View):
             lista_itens = "\n".join(itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{lista_itens}",
+                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n> {lista_itens}",
                 color=discord.Color.gold()
             )
         await interaction.response.edit_message(embed=embed, view=self)
