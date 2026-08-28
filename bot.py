@@ -2084,20 +2084,6 @@ def _expirar_admins_sync():
     finally:
         con.close()
 
-def _expirar_admins_sync():
-    con = sqlite3.connect("jogadorbot.db")
-    try:
-        cur = con.cursor()
-        agora = datetime.datetime.now().isoformat()
-        cur.execute("SELECT usuario_id FROM admins WHERE expira IS NOT NULL AND expira <= ?", (agora,))
-        expirados = cur.fetchall()
-        for (usuario_id,) in expirados:
-            cur.execute("DELETE FROM admins WHERE usuario_id = ?", (usuario_id,))
-        con.commit()
-        return expirados
-    finally:
-        con.close()
-
 @tasks.loop(minutes=5)
 async def verificar_admins_expirados():
     expirados = await asyncio.to_thread(_expirar_admins_sync)
@@ -3828,7 +3814,7 @@ class ViewMenuLoja(ui.LayoutView):
 
         cabecalho = ui.Section(
             ui.TextDisplay(
-                "### 🏪 Armazém 404\n"
+                "### 🍆 Armazém 404\n"
                 "**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:"
             ),
             accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
