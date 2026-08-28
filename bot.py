@@ -3814,7 +3814,7 @@ class ViewMenuLoja(ui.LayoutView):
 
         cabecalho = ui.Section(
             ui.TextDisplay(
-                "### 🍆 Armazém 404\n"
+                "### 🏪 Armazém 404\n"
                 "**Axl** - Quer itens que nem mesmo eu sei de onde vieram? Aqui é o lugar!\nEscolha uma categoria:"
             ),
             accessory=ui.Thumbnail(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/lojaicon.png")
@@ -3975,150 +3975,7 @@ class ViewComprarItemMineracao(ui.LayoutView):
 # ============================================================
 # VIEW - Loja de Banner
 # ============================================================
-class ViewLoja(ui.LayoutView):
-    def __init__(self, usuario_id, banners, rotacao=False, expira=None, view_menu=None):
-        super().__init__(timeout=120)
-        self.usuario_id = usuario_id
-        self.banners = banners
-        self.rotacao = rotacao
-        self.expira = expira
-        self.index = 0
-        self.view_menu = view_menu
-        self.montar()
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.usuario_id:
-            await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Essa loja não é sua! Vá para o **Armazém 404** para abrir a sua aba.",
-                ephemeral=True
-            )
-            return False
-        return True
-
-    def montar(self):
-        self.clear_items()
-        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
-        joyens = buscar_joyens(self.usuario_id)
-        tem = usuario_tem_banner(self.usuario_id, banner_id)
-
-        container = ui.Container()
-        container.accent_color = discord.Colour.gold()
-
-        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
-
-        async def voltar_cb(interaction):
-            self.view_menu.montar()
-            arquivo_lojaicon = discord.File("lojaicon.png", filename="lojaicon.png") if os.path.exists("lojaicon.png") else None
-            if arquivo_lojaicon:
-                await interaction.response.edit_message(view=self.view_menu, attachments=[arquivo_lojaicon])
-            else:
-                await interaction.response.edit_message(view=self.view_menu, attachments=[])
-
-        btn_voltar.callback = voltar_cb
-
-        linha_topo = ui.Section(
-            ui.TextDisplay("\u200b"),
-            accessory=btn_voltar
-        )
-        container.add_item(linha_topo)
-        container.add_item(ui.TextDisplay(f"### 🖼️ {nome}"))
-        container.add_item(ui.TextDisplay(descricao))
-        container.add_item(ui.Separator())
-
-        info_texto = (
-            f"**Raridade:** {raridade}\n"
-            f"**Preço:** <:JoyensIcon:1536254492797050880>{preco} Joyens\n"
-            f"**Seu saldo:** {joyens} Joyens"
-        )
-        if tem:
-            info_texto += "\n✅ Você já possui este banner"
-        elif joyens < preco:
-            info_texto += "\n<:Atencao:1534592266625093662> Joyens insuficientes"
-        container.add_item(ui.TextDisplay(info_texto))
-
-        if os.path.exists(arquivo):
-            container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=f"attachment://{os.path.basename(arquivo)}")))
-
-        rodape = f"Banner {self.index + 1} de {len(self.banners)}"
-        if self.expira:
-            expira_dt = datetime.datetime.fromisoformat(self.expira)
-            rodape += f" • Rotação expira: {expira_dt.strftime('%d/%m/%Y às %H:%M')}"
-        container.add_item(ui.TextDisplay(f"-# {rodape}"))
-        container.add_item(ui.Separator())
-
-        linha = ui.ActionRow()
-        btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=self.index == 0)
-        btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=self.index >= len(self.banners) - 1)
-        btn_comprar = ui.Button(
-            label="✅ Já possui" if tem else "🛒 Comprar",
-            style=discord.ButtonStyle.success,
-            disabled=tem
-        )
-
-        async def anterior_cb(interaction):
-            self.index -= 1
-            self.montar()
-            await self.atualizar(interaction)
-
-        async def proximo_cb(interaction):
-            self.index += 1
-            self.montar()
-            await self.atualizar(interaction)
-
-        async def comprar_cb(interaction):
-            comprador_id = interaction.user.id
-            banner_id_atual, nome_atual, descricao_atual, preco_atual, arquivo_atual, raridade_atual = self.banners[self.index]
-            joyens_atual = buscar_joyens(comprador_id)
-            if joyens_atual < preco_atual:
-                await interaction.response.send_message(
-                    f"<:Atencao:1534592266625093662> Você não tem Joyens suficientes! Você tem <:JoyensIcon:1536254492797050880>{joyens_atual} e precisa de <:JoyensIcon:1536254492797050880>{preco_atual}.",
-                    ephemeral=True
-                )
-                return
-            if usuario_tem_banner(comprador_id, banner_id_atual):
-                await interaction.response.send_message(
-                    "<:Atencao:1534592266625093662> Você já possui este banner!",
-                    ephemeral=True
-                )
-                return
-            remover_joyens(comprador_id, preco_atual)
-            con = sqlite3.connect("jogadorbot.db")
-            cur = con.cursor()
-            cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)",
-                        (str(comprador_id), banner_id_atual))
-            cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?",
-                        (str(comprador_id), banner_id_atual))
-            con.commit()
-            con.close()
-
-            await interaction.response.send_message(
-                f"✅ Banner **{nome_atual}** comprado! Use o botão **🖼️ Banners** no seu perfil para equipá-lo.",
-                ephemeral=True
-            )
-            self.montar()
-            arquivo_novo = discord.File(arquivo_atual, filename=os.path.basename(arquivo_atual)) if os.path.exists(arquivo_atual) else None
-            if arquivo_novo:
-                await interaction.message.edit(view=self, attachments=[arquivo_novo])
-            else:
-                await interaction.message.edit(view=self, attachments=[])
-
-        btn_anterior.callback = anterior_cb
-        btn_proximo.callback = proximo_cb
-        btn_comprar.callback = comprar_cb
-        linha.add_item(btn_anterior)
-        linha.add_item(btn_comprar)
-        linha.add_item(btn_proximo)
-        container.add_item(linha)
-
-        self.add_item(container)
-
-    async def atualizar(self, interaction: discord.Interaction):
-        banner_id, nome, descricao, preco, arquivo, raridade = self.banners[self.index]
-        if os.path.exists(arquivo):
-            arquivo_discord = discord.File(arquivo, filename=os.path.basename(arquivo))
-            await interaction.response.edit_message(view=self, attachments=[arquivo_discord])
-        else:
-            await interaction.response.edit_message(view=self, attachments=[])
 
 # ============================================================
 # VIEW - Inventário Geral
