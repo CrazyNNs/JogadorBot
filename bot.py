@@ -1449,10 +1449,10 @@ class ViewDrop(discord.ui.View):
                 color=discord.Color.greyple()
             )
         else:
-            lista_itens = "\n".join(itens_dropados)
+            lista_itens = "\n".join(f"> {item}" for item in itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n> {lista_itens}",
+                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{lista_itens}",
                 color=discord.Color.gold()
             )
         await interaction.response.edit_message(embed=embed, view=self)
