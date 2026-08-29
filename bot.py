@@ -5603,7 +5603,7 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
 
         raca_texto = f" ({self.raca})" if self.raca else ""
         await interaction.response.send_message(
-            f"{dados['emoji']} **{self.nome_pet.value}**{raca_texto} agora faz parte da família! Use `/pet ver` para cuidar dele.",
+            f"{dados['emoji']} **{self.nome_pet.value}**{raca_texto} agora faz parte da família! Use `!pets` para cuidar dele.",
             ephemeral=True
         )
 
@@ -5690,7 +5690,7 @@ class ViewEscolherRaca(ui.LayoutView):
         async def callback(interaction: discord.Interaction):
             if contar_pets(self.usuario_id) >= LIMITE_PETS:
                 await interaction.response.send_message(
-                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `/pet ver`.",
+                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `!pets`.",
                     ephemeral=True
                 )
                 return
@@ -5775,7 +5775,7 @@ class ViewComprarPet(ui.LayoutView):
         async def callback(interaction: discord.Interaction):
             if contar_pets(self.usuario_id) >= LIMITE_PETS:
                 await interaction.response.send_message(
-                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `/pet ver`.",
+                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `!pets`.",
                     ephemeral=True
                 )
                 return
