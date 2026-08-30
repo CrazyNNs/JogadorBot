@@ -2217,7 +2217,7 @@ def _buscar_pets_negligenciados_sync(limite_inicial):
         cur = con.cursor()
         cur.execute("""
             SELECT id, ultimo_evento_negligencia FROM pets
-            WHERE negligencia_desde IS NOT NULL AND negligencia_desde <= ?
+            WHERE negligencia_desde IS NOT NULL AND negligencia_desde <= ? AND disponivel_adocao = 0
         """, (limite_inicial,))
         return cur.fetchall()
     finally:
