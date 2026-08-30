@@ -97,7 +97,7 @@ intents.message_content = True
 intents.members = True
 intents.presences = True  # necessário pro login diário detectar quem está online
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+bot = commands.Bot(command_prefix=!, intents=intents)
 
 TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
