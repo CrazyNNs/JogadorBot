@@ -1445,6 +1445,42 @@ def sortear_item_aleatorio_mineracao_petshop_sync(usuario_id):
     conceder(usuario_id)
     return descricao
 
+def buscar_login_diario(usuario_id):
+    """Só consulta o progresso do login diário do usuário, sem registrar nada
+    (ao contrário de _registrar_login_diario_sync). Usado pra exibir a tela."""
+    semana = semana_atual()
+    hoje = datetime.datetime.now(FUSO_BR).strftime("%Y-%m-%d")
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT dia_atual, semana, ultimo_login FROM login_diario WHERE usuario_id = ?", (str(usuario_id),))
+        linha = cur.fetchone()
+    finally:
+        con.close()
+
+    if not linha:
+        return {"dia_atual": 0, "logou_hoje": False}
+
+    dia_atual, semana_salva, ultimo_login = linha
+    if semana_salva != semana:
+        dia_atual = 0  # a semana virou, o progresso salvo já ficou pra trás
+
+    return {"dia_atual": dia_atual, "logou_hoje": (semana_salva == semana and ultimo_login == hoje)}
+
+def texto_recompensa_login_diario(dia):
+    """Texto de exibição da recompensa de um dia do login diário (não concede nada)."""
+    r = RECOMPENSAS_LOGIN_DIARIO[dia]
+    if r["tipo"] == "xp":
+        return f"{r['quantidade']} XP"
+    if r["tipo"] == "joyens":
+        return f"{r['quantidade']} Joyens"
+    if r["tipo"] == "chave":
+        return f"{r['quantidade']} 🗝️ Chave(s)"
+    if r["tipo"] == "item_aleatorio":
+        return "Item aleatório (Mineração/Petshop)"
+    return "?"
+
 def _registrar_login_diario_sync(usuario_id):
     """Verifica se o usuário já ganhou o login de hoje. Se não, avança um dia
     no ciclo semanal (resetando se a semana virou) e devolve o dia conquistado
@@ -7669,6 +7705,7 @@ class ViewMissoesMenu(ui.LayoutView):
         btn_semanais = ui.Button(label="🗓️ Semanais", style=discord.ButtonStyle.primary)
         btn_permanentes = ui.Button(label="📌 Permanentes", style=discord.ButtonStyle.primary)
         btn_temporarias = ui.Button(label="⏳ Temporárias", style=discord.ButtonStyle.primary)
+        btn_logins = ui.Button(label="Logins", emoji="📅", style=discord.ButtonStyle.secondary)
 
         async def ir_semanais(interaction: discord.Interaction):
             view = ViewMissoesSemanais(self.usuario, pagina=0, view_menu=self)
@@ -7682,14 +7719,77 @@ class ViewMissoesMenu(ui.LayoutView):
             view = ViewMissoesCustomizadas(self.usuario, tipo="temporaria", pagina=0, view_menu=self)
             await interaction.response.edit_message(view=view)
 
+        async def ir_logins(interaction: discord.Interaction):
+            view = ViewLoginDiario(self.usuario, view_menu=self)
+            await interaction.response.edit_message(view=view)
+
         btn_semanais.callback = ir_semanais
         btn_permanentes.callback = ir_permanentes
         btn_temporarias.callback = ir_temporarias
+        btn_logins.callback = ir_logins
 
         linha.add_item(btn_semanais)
         linha.add_item(btn_permanentes)
         linha.add_item(btn_temporarias)
+        linha.add_item(btn_logins)
         container.add_item(linha)
+
+        self.add_item(container)
+
+
+class ViewLoginDiario(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, view_menu: ViewMissoesMenu):
+        super().__init__(timeout=120)
+        self.usuario = usuario
+        self.view_menu = view_menu
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        dados = buscar_login_diario(self.usuario.id)
+        dia_atual = dados["dia_atual"]
+        logou_hoje = dados["logou_hoje"]
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.blue()
+        container.add_item(ui.TextDisplay(f"# 📅 Login Diário\n-# {self.usuario.display_name} • Semana {semana_atual()}"))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        if logou_hoje:
+            status_texto = f"✅ Você já logou hoje! Progresso: **{dia_atual}/7**"
+        elif dia_atual >= 7:
+            status_texto = "🎉 Você completou o ciclo dessa semana! Volte na próxima segunda."
+        else:
+            status_texto = f"⏳ Fique online no Discord pra receber o login de hoje! Progresso: **{dia_atual}/7**"
+        container.add_item(ui.TextDisplay(status_texto))
+        container.add_item(ui.Separator())
+
+        linhas = []
+        for dia in range(1, 8):
+            recompensa_texto = texto_recompensa_login_diario(dia)
+            if dia <= dia_atual:
+                marcador = "✅"
+            elif dia == dia_atual + 1:
+                marcador = "➡️"
+            else:
+                marcador = "🔒"
+            linhas.append(f"{marcador} **Dia {dia}** — {recompensa_texto}")
+        container.add_item(ui.TextDisplay("\n".join(linhas)))
+        container.add_item(ui.Separator())
+
+        linha_botoes = ui.ActionRow()
+        btn_voltar = ui.Button(label="Voltar", emoji="◀️", style=discord.ButtonStyle.secondary)
+
+        async def voltar_cb(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            self.view_menu.montar()
+            await interaction.response.edit_message(view=self.view_menu)
+
+        btn_voltar.callback = voltar_cb
+        linha_botoes.add_item(btn_voltar)
+        container.add_item(linha_botoes)
 
         self.add_item(container)
 
