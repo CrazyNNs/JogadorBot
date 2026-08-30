@@ -1478,7 +1478,7 @@ def texto_recompensa_login_diario(dia):
     if r["tipo"] == "chave":
         return f"{r['quantidade']} 🗝️ Chave(s)"
     if r["tipo"] == "item_aleatorio":
-        return "Item aleatório (Mineração/Petshop)"
+        return "Item aleatório"
     return "?"
 
 def _registrar_login_diario_sync(usuario_id):
