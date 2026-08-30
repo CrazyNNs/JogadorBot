@@ -92,6 +92,13 @@ async def executar_db(func, *args, **kwargs):
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+intents.presences = True  # necessário pro login diário detectar quem está online
+
+bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+
 TOKEN = os.environ.get("TOKEN")
 PREFIX = "!"
 DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
@@ -824,7 +831,18 @@ def sortear_e_conceder_drop_sync(usuario_id):
             sufixo = f" x{quantidade}" if quantidade > 1 else ""
             itens_dropados.append(f"{item['descricao']}{sufixo}")
     return itens_dropados
-    
+# ============================================================
+# Login Diário
+# ============================================================
+RECOMPENSAS_LOGIN_DIARIO = {
+    1: {"tipo": "item_aleatorio"},
+    2: {"tipo": "xp", "quantidade": 200},
+    3: {"tipo": "chave", "quantidade": 1},
+    4: {"tipo": "joyens", "quantidade": 1000},
+    5: {"tipo": "xp", "quantidade": 200},
+    6: {"tipo": "chave", "quantidade": 1},
+    7: {"tipo": "item_aleatorio"},
+}
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
@@ -875,6 +893,17 @@ def iniciar_banco():
         )
     """)
     con.commit()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS login_diario (
+            usuario_id TEXT PRIMARY KEY,
+            dia_atual INTEGER DEFAULT 0,
+            semana TEXT,
+            ultimo_login TEXT
+        )
+    """)
+    con.commit()
+    
     cur.execute("""
         CREATE TABLE IF NOT EXISTS banners (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1333,6 +1362,180 @@ def iniciar_banco():
     con.commit()
     con.close()
 
+# ============================================================
+# FUNÇÕES AUXILIARES - Login Diário
+# ============================================================
+def _dar_petisco_generico_sync(usuario_id, tipo, qtd=1):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_petiscos (usuario_id, tipo, quantidade) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, tipo) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), tipo, qtd, qtd))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_brinquedo_generico_sync(usuario_id, tipo, usos, qtd=1):
+    usos_totais = usos * qtd
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?
+        """, (str(usuario_id), tipo, usos_totais, usos_totais))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_sabonete_generico_sync(usuario_id, qtd=1):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO pets_sabonete (usuario_id, quantidade) VALUES (?, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), qtd, qtd))
+        con.commit()
+    finally:
+        con.close()
+
+def _dar_medicamento_generico_sync(usuario_id, nome, qtd=1):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO medicamentos_usuarios (usuario_id, nome, quantidade) VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, nome) DO UPDATE SET quantidade = quantidade + ?
+        """, (str(usuario_id), nome, qtd, qtd))
+        con.commit()
+    finally:
+        con.close()
+
+def sortear_item_aleatorio_mineracao_petshop_sync(usuario_id):
+    """Sorteia (sempre concede 1) um item aleatório entre Mineração e Petshop —
+    usado nas recompensas do login diário (dias 1 e 7). Sorteio uniforme: todo
+    item tem a mesma chance, sem peso de raridade."""
+    opcoes = []
+
+    for nome, dados in ITENS_MINERACAO.items():
+        opcoes.append((f"{dados['emoji']} **{nome}**", lambda uid, n=nome: adicionar_item_mineracao(uid, n, 1)))
+
+    for especie, dados in PETS_DISPONIVEIS.items():
+        opcoes.append((f"🍖 **{dados['petisco_nome']}**",
+                        lambda uid, t=dados["petisco_nome"]: _dar_petisco_generico_sync(uid, t)))
+        opcoes.append((f"🧸 **{dados['brinquedo_nome']}**",
+                        lambda uid, t=dados["brinquedo_nome"], u=dados["brinquedo_usos"]: _dar_brinquedo_generico_sync(uid, t, u)))
+
+    opcoes.append((f"🧼 **{SABONETE_NOME}**", lambda uid: _dar_sabonete_generico_sync(uid)))
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT nome, emoji FROM medicamentos")
+        medicamentos = cur.fetchall()
+    finally:
+        con.close()
+    for nome, emoji in medicamentos:
+        opcoes.append((f"{emoji} **{nome}**", lambda uid, n=nome: _dar_medicamento_generico_sync(uid, n)))
+
+    descricao, conceder = random.choice(opcoes)
+    conceder(usuario_id)
+    return descricao
+
+def _registrar_login_diario_sync(usuario_id):
+    """Verifica se o usuário já ganhou o login de hoje. Se não, avança um dia
+    no ciclo semanal (resetando se a semana virou) e devolve o dia conquistado
+    (1-7). Devolve None se já foi contabilizado hoje, ou se já completou os 7
+    dias dessa semana (fica esperando a virada de semana)."""
+    hoje = datetime.datetime.now(FUSO_BR).strftime("%Y-%m-%d")
+    semana = semana_atual()
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT dia_atual, semana, ultimo_login FROM login_diario WHERE usuario_id = ?", (str(usuario_id),))
+        linha = cur.fetchone()
+
+        if not linha:
+            dia_atual, semana_salva, ultimo_login = 0, semana, None
+        else:
+            dia_atual, semana_salva, ultimo_login = linha
+
+        if semana_salva != semana:
+            dia_atual = 0  # virou a semana, o ciclo de 7 dias recomeça
+
+        if ultimo_login == hoje:
+            return None  # já contabilizado hoje
+
+        if dia_atual >= 7:
+            return None  # já completou os 7 dias dessa semana
+
+        dia_atual += 1
+
+        cur.execute("""
+            INSERT INTO login_diario (usuario_id, dia_atual, semana, ultimo_login) VALUES (?, ?, ?, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET dia_atual = ?, semana = ?, ultimo_login = ?
+        """, (str(usuario_id), dia_atual, semana, hoje, dia_atual, semana, hoje))
+        con.commit()
+    finally:
+        con.close()
+
+    return dia_atual
+
+async def conceder_login_diario(usuario_id, dia, canal=None):
+    """Concede a recompensa do dia do login diário e avisa no canal de notificações."""
+    recompensa = RECOMPENSAS_LOGIN_DIARIO[dia]
+    tipo = recompensa["tipo"]
+    qtd = recompensa.get("quantidade", 1)
+
+    if tipo == "xp":
+        try:
+            await adicionar_xp(str(usuario_id), qtd, canal)
+        except Exception as e:
+            print(f"Erro ao dar XP do login diário: {e}")
+        texto_recompensa = f"**+{qtd} XP**"
+    elif tipo == "joyens":
+        await asyncio.to_thread(adicionar_joyens, usuario_id, qtd)
+        texto_recompensa = f"**+{qtd} Joyens**"
+    elif tipo == "chave":
+        await asyncio.to_thread(adicionar_chaves, usuario_id, qtd)
+        texto_recompensa = f"**+{qtd} 🗝️ Chave(s)**"
+    elif tipo == "item_aleatorio":
+        texto_recompensa = await asyncio.to_thread(sortear_item_aleatorio_mineracao_petshop_sync, usuario_id)
+    else:
+        texto_recompensa = "?"
+
+    if canal:
+        try:
+            usuario = await bot.fetch_user(int(usuario_id))
+            embed = discord.Embed(
+                title="📅 Login Diário!",
+                description=f"{usuario.mention} logou no Discord hoje — **Dia {dia}/7**\nRecompensa: {texto_recompensa}",
+                color=discord.Color.blue()
+            )
+            await canal.send(embed=embed)
+        except:
+            pass
+
+@tasks.loop(minutes=15)
+async def verificar_login_diario():
+    """Verifica quem está online no Discord agora e credita o login diário de
+    quem ainda não foi contabilizado hoje. Rodar a cada 15 min (em vez de só na
+    conexão/desconexão) garante que quem já estava online antes do bot ligar
+    também seja contabilizado."""
+    canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
+    for guild in bot.guilds:
+        for member in guild.members:
+            if member.bot:
+                continue
+            if member.status == discord.Status.offline:
+                continue
+            dia = await asyncio.to_thread(_registrar_login_diario_sync, member.id)
+            if dia:
+                await conceder_login_diario(member.id, dia, canal)
 # ============================================================
 # FUNÇÕES AUXILIARES - Conquistas
 # ============================================================
@@ -7650,6 +7853,7 @@ async def on_ready():
     verificar_streak_felicidade_pets.start()
     verificar_drop.start()
     verificar_cobranca_emprestimos.start()
+    verificar_login_diario.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
