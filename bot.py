@@ -1409,7 +1409,7 @@ class ViewDrop(discord.ui.View):
         chaves = buscar_chaves(interaction.user.id)
         if chaves <= 0:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Você não tem nenhuma 🗝️ Chave para abrir este drop!",
+                "<:Atencao:1534592266625093662> Você não tem nenhuma <:ChaveIcon:1543113835169185912> Chave para abrir este drop!",
                 ephemeral=True
             )
             return
@@ -1445,14 +1445,14 @@ class ViewDrop(discord.ui.View):
             adicionar_chaves(interaction.user.id, 1)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua 🗝️ Chave foi devolvida.",
+                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua <:ChaveIcon:1543113835169185912> Chave foi devolvida.",
                 color=discord.Color.greyple()
             )
         else:
             lista_itens = "\n".join(f"> {item}" for item in itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma 🗝️ Chave e encontrou:\n\n{lista_itens}",
+                description=f"{interaction.user.mention} usou uma <:ChaveIcon:1543113835169185912> Chave e encontrou:\n\n{lista_itens}",
                 color=discord.Color.gold()
             )
         await interaction.response.edit_message(embed=embed, view=self)
@@ -1486,7 +1486,7 @@ async def spawnar_drop(canal_forcado=None):
 
     embed = discord.Embed(
         title="🎁 Um drop apareceu!",
-        description="Alguém deixou um baú por aqui... Use uma 🗝️ Chave pra abrir antes que outra pessoa pegue!",
+        description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1543113835169185912> Chave pra abrir antes que outra pessoa pegue!",
         color=discord.Color.blurple()
     )
     view = ViewDrop(drop_id)
@@ -8363,7 +8363,7 @@ async def drop_chave_dar(interaction: discord.Interaction, membro: discord.Membe
     novo_total = buscar_chaves(membro.id)
 
     embed = discord.Embed(
-        title="🗝️ Chaves Concedidas!",
+        title="<:ChaveIcon:1543113835169185912> Chaves Concedidas!",
         description=f"{membro.mention} recebeu **{quantidade} Chave(s)**!",
         color=discord.Color.gold()
     )
