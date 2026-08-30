@@ -92,17 +92,17 @@ async def executar_db(func, *args, **kwargs):
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
+TOKEN = os.environ.get("TOKEN")
+PREFIX = "!"
+DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
+FUSO_BR = ZoneInfo("America/Recife")
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.presences = True  # necessário pro login diário detectar quem está online
 
-bot = commands.Bot(command_prefix=!, intents=intents)
-
-TOKEN = os.environ.get("TOKEN")
-PREFIX = "!"
-DONO_ID = 880243114403573780  # Seu ID — sempre tem acesso total
-FUSO_BR = ZoneInfo("America/Recife")
+bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # Canais de notificação
 CANAL_CONQUISTAS_ID = 1517028501356806144
