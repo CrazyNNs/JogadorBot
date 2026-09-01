@@ -8541,6 +8541,33 @@ async def kuruu(ctx):
         await ctx.send(view=view, file=arquivo)
     else:
         await ctx.send(view=view)
+
+@bot.command(name="debuglogin")
+async def debuglogin(ctx, membro: discord.Member = None):
+    """Mostra o que o Discord está reportando pro status de alguém agora,
+    pra diagnosticar o sistema de login diário."""
+    membro = membro or ctx.author
+    if membro.id != ctx.author.id and not eh_admin(ctx.author.id):
+        await ctx.send("<:Atencao:1534592266625093662> Só admins podem checar o status de outra pessoa.")
+        return
+
+    dados = buscar_login_diario(membro.id)
+    seria_contado = (not membro.bot) and membro.status != discord.Status.offline
+
+    embed = discord.Embed(title="🔍 Debug — Login Diário", color=discord.Color.orange())
+    embed.add_field(name="Membro", value=membro.mention, inline=False)
+    embed.add_field(name="Status reportado pelo Discord", value=f"`{membro.status}`", inline=True)
+    embed.add_field(name="Status bruto (raw)", value=f"`{membro.raw_status}`", inline=True)
+    embed.add_field(name="É bot?", value=str(membro.bot), inline=True)
+    embed.add_field(name="Seria contado AGORA?", value=("✅ Sim" if seria_contado else "❌ Não"), inline=False)
+    embed.add_field(
+        name="Progresso salvo no banco",
+        value=f"Dia {dados['dia_atual']}/7 • Já logou hoje: {'Sim' if dados['logou_hoje'] else 'Não'}",
+        inline=False
+    )
+    embed.add_field(name="Intent de presença do bot (código)", value=str(bot.intents.presences), inline=True)
+    embed.set_footer(text="Se 'Status reportado' vier sempre 'offline' mesmo com a pessoa online, o Presence Intent não está de fato ativo no gateway.")
+    await ctx.send(embed=embed)
 # ============================================================
 # COMANDOS SLASH — CONQUISTAS
 # ============================================================
