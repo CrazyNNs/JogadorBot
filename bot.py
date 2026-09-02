@@ -3913,7 +3913,7 @@ class ViewPerfil(discord.ui.LayoutView):
         botao_conquistas = discord.ui.Button(label="Conquistas", emoji="<:ConquistasIcon:1538613267109519512>", style=discord.ButtonStyle.primary)
         botao_conquistas.callback = self.ver_conquistas
 
-        botao_banners = discord.ui.Button(label="Banners", emoji="🖼️", style=discord.ButtonStyle.secondary)
+        botao_banners = discord.ui.Button(label="Banners", emoji="🖼️", style=discord.ButtonStyle.primary)
         botao_banners.callback = self.ver_banners
 
         container.add_item(discord.ui.ActionRow(botao_conquistas, botao_banners))
