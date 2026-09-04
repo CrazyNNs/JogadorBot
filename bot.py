@@ -1009,6 +1009,17 @@ def iniciar_banco():
             ultimo_trabalho TEXT
         )
     """)
+    for coluna in [
+        "trabalho_ativo_desde TEXT",
+        "canal_trabalho_id TEXT",
+        "salario_sessao_atual INTEGER DEFAULT 0",
+        "salario_pendente INTEGER DEFAULT 0",
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE empregos_usuarios ADD COLUMN {coluna}")
+        except sqlite3.OperationalError:
+            pass
+    con.commit()
 
     # Rewards
     cur.execute("""
@@ -1353,6 +1364,115 @@ def iniciar_banco():
     
     con.commit()
     con.close()
+# ============================================================
+# FUNÇÕES AUXILIARES - Sistema NeoTrabalhar
+# ============================================================
+DURACAO_TRABALHO_SEGUNDOS = 20 * 60         # 20 minutos de turno
+INTERVALO_BARRA_TRABALHO_SEGUNDOS = 10       # a barra atualiza a cada 10s
+JANELA_RESGATE_SALARIO_SEGUNDOS = 10 * 60    # 10 minutos pra clicar em "Resgatar" antes de expirar
+
+def _barra_trabalho(tick_atual, total_ticks, tamanho=20):
+    preenchido = int((tick_atual / total_ticks) * tamanho)
+    porcentagem = int((tick_atual / total_ticks) * 100)
+    barra = "█" * preenchido + "░" * (tamanho - preenchido)
+    return f"`{barra}` {porcentagem}%"
+
+def _iniciar_trabalho_sync(usuario_id, canal_id, salario_sessao):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        agora = datetime.datetime.now().isoformat()
+        cur.execute("""
+            UPDATE empregos_usuarios
+            SET vezes_trabalhadas = vezes_trabalhadas + 1,
+                trabalho_ativo_desde = ?, canal_trabalho_id = ?, salario_sessao_atual = ?
+            WHERE usuario_id = ?
+        """, (agora, str(canal_id), salario_sessao, str(usuario_id)))
+        con.commit()
+    finally:
+        con.close()
+
+def _finalizar_sessao_trabalho_sync(usuario_id):
+    """Move o salário da sessão atual pra pendente, limpa o estado 'trabalhando'
+    (e reinicia o cooldown a partir de agora). Devolve o total pendente, que
+    inclui essa sessão + qualquer salário de sessões passadas não resgatado."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT salario_sessao_atual, salario_pendente FROM empregos_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+        linha = cur.fetchone()
+        sessao = (linha[0] if linha else 0) or 0
+        pendente_atual = (linha[1] if linha else 0) or 0
+        novo_pendente = pendente_atual + sessao
+
+        agora = datetime.datetime.now().isoformat()
+        cur.execute("""
+            UPDATE empregos_usuarios
+            SET trabalho_ativo_desde = NULL, canal_trabalho_id = NULL,
+                salario_sessao_atual = 0, salario_pendente = ?, ultimo_trabalho = ?
+            WHERE usuario_id = ?
+        """, (novo_pendente, agora, str(usuario_id)))
+        con.commit()
+    finally:
+        con.close()
+    return novo_pendente
+
+def _resgatar_salario_sync(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT salario_pendente FROM empregos_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+        linha = cur.fetchone()
+        total = (linha[0] if linha else 0) or 0
+        cur.execute("UPDATE empregos_usuarios SET salario_pendente = 0 WHERE usuario_id = ?", (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
+    if total > 0:
+        adicionar_joyens(usuario_id, total)
+    return total
+
+class ViewResgatarSalario(discord.ui.View):
+    def __init__(self, usuario_id, total_salario):
+        super().__init__(timeout=JANELA_RESGATE_SALARIO_SEGUNDOS)
+        self.usuario_id = usuario_id
+        self.total_salario = total_salario
+        self.mensagem = None  # setada depois de enviar, pra dar pra editar no timeout
+
+    @discord.ui.button(label="Resgatar Salário", emoji="💰", style=discord.ButtonStyle.success)
+    async def resgatar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.usuario_id:
+            await interaction.response.send_message("Esse salário não é seu!", ephemeral=True)
+            return
+
+        total = await asyncio.to_thread(_resgatar_salario_sync, self.usuario_id)
+        novo_saldo = await asyncio.to_thread(buscar_joyens, self.usuario_id)
+
+        button.disabled = True
+        button.label = "Resgatado!"
+        self.stop()
+
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.followup.send(f"✅ Você resgatou **{total} Joyens**! Novo saldo: **{novo_saldo} Joyens**.", ephemeral=True)
+
+    async def on_timeout(self):
+        if not self.mensagem:
+            return
+        for item in self.children:
+            item.disabled = True
+        try:
+            embed = self.mensagem.embeds[0]
+            embed.color = discord.Color.greyple()
+            embed.add_field(
+                name="⏰ Tempo esgotado",
+                value=f"Você não resgatou a tempo. Os **{self.total_salario} Joyens** ficaram guardados e serão somados automaticamente ao seu próximo salário.",
+                inline=False
+            )
+            await self.mensagem.edit(embed=embed, view=self)
+        except (discord.NotFound, discord.Forbidden):
+            pass
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Login Diário
@@ -3040,8 +3160,10 @@ def sortear_nova_rodada_global():
 def buscar_emprego(usuario_id):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT emprego, vezes_trabalhadas, ultimo_trabalho FROM empregos_usuarios WHERE usuario_id = ?",
-                (str(usuario_id),))
+    cur.execute("""
+        SELECT emprego, vezes_trabalhadas, ultimo_trabalho, trabalho_ativo_desde, salario_pendente
+        FROM empregos_usuarios WHERE usuario_id = ?
+    """, (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
     return resultado
@@ -3892,7 +4014,7 @@ class ViewPerfil(discord.ui.LayoutView):
 
         emprego_dados = buscar_emprego(membro.id)
         if emprego_dados:
-            emprego_nome, vezes_trabalhadas, _ = emprego_dados
+            emprego_nome, vezes_trabalhadas, _, _, _ = emprego_dados
             emprego_info = EMPREGOS.get(emprego_nome)
             emoji_emp = emprego_info["emoji"] if emprego_info else "<:EmpregosIcon:1525710982364532890>"
             emprego_texto = f"{emoji_emp} **{emprego_nome}** | {vezes_trabalhadas} vez(es) trabalhadas"
@@ -8328,9 +8450,24 @@ async def trabalhar(ctx):
         await ctx.send(view=layout)
         return
 
-    emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
+    emprego_nome, vezes_trabalhadas, ultimo_trabalho, trabalho_ativo_desde, salario_pendente = emprego_dados
 
-    # Verifica cooldown
+    # Já está no meio de um turno?
+    if trabalho_ativo_desde:
+        inicio = datetime.datetime.fromisoformat(trabalho_ativo_desde)
+        decorrido = (datetime.datetime.now() - inicio).total_seconds()
+        if decorrido < DURACAO_TRABALHO_SEGUNDOS:
+            restante = int(DURACAO_TRABALHO_SEGUNDOS - decorrido)
+            minutos, segundos = divmod(restante, 60)
+            await ctx.send(f"⏳ {ctx.author.mention} Você já está trabalhando! Faltam **{minutos}m{segundos}s** pro turno acabar.")
+            return
+        else:
+            # O turno já deveria ter acabado mas ninguém finalizou (ex: o bot reiniciou
+            # no meio do turno) — finaliza agora, guardando o salário como pendente,
+            # antes de deixar o usuário começar um turno novo.
+            await asyncio.to_thread(_finalizar_sessao_trabalho_sync, ctx.author.id)
+
+    # Verifica cooldown (conta a partir do fim do último turno trabalhado)
     restante = tempo_restante_trabalho(ultimo_trabalho)
     if restante != 0:
         await ctx.send(f"⏰ {ctx.author.mention} Você precisa descansar! Pode trabalhar novamente em **{restante}**.")
@@ -8341,40 +8478,58 @@ async def trabalhar(ctx):
         await ctx.send("<:Atencao:1534592266625093662> Seu emprego não foi encontrado! Use `!empregos` para escolher um novo.")
         return
 
-    # Calcula salário e XP
-    salario = random.randint(emprego["salario_min"], emprego["salario_max"])
-    xp_ganho = random.randint(50, 100)
-    acao = random.choice(emprego["acoes"]).format(salario=salario)
+    salario_sessao = random.randint(emprego["salario_min"], emprego["salario_max"])
+    await asyncio.to_thread(_iniciar_trabalho_sync, ctx.author.id, ctx.channel.id, salario_sessao)
 
-    # Atualiza banco
-    con = sqlite3.connect("jogadorbot.db")
-    cur = con.cursor()
-    agora = datetime.datetime.now().isoformat()
-    cur.execute("""
-        UPDATE empregos_usuarios
-        SET vezes_trabalhadas = vezes_trabalhadas + 1, ultimo_trabalho = ?
-        WHERE usuario_id = ?
-    """, (agora, str(ctx.author.id)))
-    con.commit()
-    con.close()
+    total_ticks = DURACAO_TRABALHO_SEGUNDOS // INTERVALO_BARRA_TRABALHO_SEGUNDOS
 
-    adicionar_joyens(ctx.author.id, salario)
-    novo_saldo = buscar_joyens(ctx.author.id)
-
-    embed = discord.Embed(
-        title=f"{emprego['emoji']} {emprego_nome}",
-        description=acao,
-        color=discord.Color.green()
+    embed_barra = discord.Embed(
+        title=f"{emprego['emoji']} Trabalhando como {emprego_nome}...",
+        description=f"{ctx.author.mention} começou o turno de trabalho.",
+        color=discord.Color.blurple()
     )
-    embed.add_field(name="Salário recebido", value=f"+{salario} Joyens", inline=True)
-    embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
-    embed.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
-    embed.set_footer(text=f"Próximo trabalho em 40 minutos")
+    embed_barra.add_field(name="Progresso", value=_barra_trabalho(0, total_ticks), inline=False)
+    embed_barra.set_footer(text="Tempo total do turno: 20 minutos")
+    mensagem_barra = await ctx.send(embed=embed_barra)
+
+    for tick in range(1, total_ticks + 1):
+        await asyncio.sleep(INTERVALO_BARRA_TRABALHO_SEGUNDOS)
+        embed_barra.set_field_at(0, name="Progresso", value=_barra_trabalho(tick, total_ticks), inline=False)
+        try:
+            await mensagem_barra.edit(embed=embed_barra)
+        except (discord.NotFound, discord.Forbidden):
+            break  # a mensagem da barra sumiu, mas o turno já está salvo no banco — segue o jogo
+
+    # Turno concluído: soma ao salário pendente e dá o XP (o XP não passa pelo resgate, só o salário)
+    xp_ganho = random.randint(50, 100)
+    total_pendente = await asyncio.to_thread(_finalizar_sessao_trabalho_sync, ctx.author.id)
+
     atualizar_contador(ctx.author.id, "trabalhar_semana")
     atualizar_contador(ctx.author.id, "trabalhar_total")
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
-    await ctx.send(embed=embed)
     await adicionar_xp(str(ctx.author.id), xp_ganho, ctx)
+
+    acao = random.choice(emprego["acoes"]).format(salario=salario_sessao)
+    embed_final = discord.Embed(
+        title=f"{emprego['emoji']} Turno finalizado — {emprego_nome}",
+        description=f"{ctx.author.mention} {acao}",
+        color=discord.Color.gold()
+    )
+    embed_final.add_field(name="Salário disponível pra resgate", value=f"{total_pendente} Joyens", inline=True)
+    embed_final.add_field(name="XP ganho", value=f"+{xp_ganho} XP", inline=True)
+    embed_final.add_field(
+        name="ℹ️ Como funciona o resgate",
+        value=(
+            f"Você tem **{JANELA_RESGATE_SALARIO_SEGUNDOS // 60} minutos** pra clicar no botão abaixo e resgatar. "
+            f"Se não conseguir a tempo, não se preocupe: o valor **não é perdido** — fica guardado e é somado "
+            f"automaticamente ao próximo salário que você resgatar depois de trabalhar de novo."
+        ),
+        inline=False
+    )
+
+    view = ViewResgatarSalario(ctx.author.id, total_pendente)
+    mensagem_resgate = await ctx.send(embed=embed_final, view=view)
+    view.mensagem = mensagem_resgate
 
 @bot.command(name="infojob")
 async def infojob(ctx, membro: discord.Member = None):
@@ -8386,7 +8541,7 @@ async def infojob(ctx, membro: discord.Member = None):
         await ctx.send(f"**{membro.display_name}** não tem emprego! Use `!empregos` para escolher um.")
         return
 
-    emprego_nome, vezes_trabalhadas, ultimo_trabalho = emprego_dados
+    emprego_nome, vezes_trabalhadas, ultimo_trabalho, trabalho_ativo_desde, salario_pendente = emprego_dados
     emprego = EMPREGOS.get(emprego_nome)
     if not emprego:
         await ctx.send("<:Atencao:1534592266625093662> Emprego não encontrado no sistema.")
@@ -8406,6 +8561,12 @@ async def infojob(ctx, membro: discord.Member = None):
     embed.add_field(name="Level necessário", value=f"Level {emprego['level_necessario']}", inline=True)
     embed.add_field(name="Vezes trabalhadas", value=str(vezes_trabalhadas), inline=True)
     embed.add_field(name="Próximo trabalho", value=disponivel, inline=True)
+    if salario_pendente:
+        embed.add_field(
+            name="💰 Salário pendente",
+            value=f"{salario_pendente} Joyens ainda não resgatados! Use `!trabalhar` de novo pra resgatar junto do próximo.",
+            inline=False
+        )
     await ctx.send(embed=embed)
 
 class Layout(ui.LayoutView):
