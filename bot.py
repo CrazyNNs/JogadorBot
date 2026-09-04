@@ -325,7 +325,7 @@ RACAS_POR_ESPECIE = {
          "descricao": "Falante e sociável, adora estar por perto do dono."},
         {"nome": "Maine Coon", "emoji": "<:GatoMaineCoonIcon:1542384480231366757>", "preco": 22000, "moeda": "joyens", "raridade": "Comum",
          "descricao": "Gigante, tranquilo e extremamente companheiro."},
-        {"nome": "Persa", "emoji": "🐈", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
+        {"nome": "Persa", "emoji": "<:GatoPersaIcon:1545467293054542006>", "preco": 30000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Tranquilo e elegante, prefere um cantinho quentinho pra dormir."},
         {"nome": "Bengal", "emoji": "🐈", "preco": 38000, "moeda": "joyens", "raridade": "Raro",
          "descricao": "Curioso e energético, parece estar sempre procurando alguma coisa."},
