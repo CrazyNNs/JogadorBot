@@ -6976,30 +6976,16 @@ class SelectCategoriaCatalogo(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         categoria_id = int(self.values[0])
-        
         if categoria_id == 0:
             await interaction.response.send_message("Nenhuma categoria disponível!", ephemeral=True)
             return
-            
-            banners = buscar_banners_categoria_catalogo(categoria_id)
-            
-            if not banners:
-                await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria.", ephemeral=True)
-                return
-                
-                await interaction.response.defer()
-                
-                try:
-                    view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
-                    embed, arquivo = await view.gerar_embed_e_imagem()
-                    
-                    await interaction.edit_original_response(embed=embed, view=view, attachments=[arquivo])
-                
-                except discord.errors.NotFound:
-                    await interaction.followup.send(
-                        "⚠️ A sua interação expirou. Por favor, selecione a categoria novamente.", ephemeral=True)
-                except Exception as e:
-                    await interaction.followup.send(f"Ocorreu um erro ao processar sua escolha: {e}", ephemeral=True)
+        banners = buscar_banners_categoria_catalogo(categoria_id)
+        if not banners:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
+            return
+        view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
+        embed, arquivo = await view.gerar_embed_e_imagem()
+        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
 class ViewMenuCatalogo(discord.ui.View):
     def __init__(self, usuario_id):
