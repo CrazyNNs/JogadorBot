@@ -6975,18 +6975,38 @@ class SelectCategoriaCatalogo(discord.ui.Select):
         super().__init__(placeholder="Escolha uma categoria...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
-        categoria_id = int(self.values[0])
-        if categoria_id == 0:
-            await interaction.response.send_message("Nenhuma categoria disponível!", ephemeral=True)
-            return
-        banners = buscar_banners_categoria_catalogo(categoria_id)
-        if not banners:
-            await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
-            return
+    categoria_id = int(self.values[0])
+    
+    if categoria_id == 0:
+        await interaction.response.send_message("Nenhuma categoria disponível!", ephemeral=True)
+        return
+
+    banners = buscar_banners_categoria_catalogo(categoria_id)
+    
+    if not banners:
+        await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria.", ephemeral=True)
+        return
+
+    # 1. Responder imediatamente para evitar timeout de 3s
+    await interaction.response.defer()
+
+    try:
+        # 2. Processar os dados (gerar embed e arquivo)
         view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
         embed, arquivo = await view.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
 
+        # 3. Editar a mensagem original (após o defer)
+        await interaction.edit_original_response(embed=embed, view=view, attachments=[arquivo])
+
+    except discord.errors.NotFound:
+        # A interação expirou enquanto o arquivo era gerado
+        await interaction.followup.send(
+            "⚠️ A sua interação expirou. Por favor, selecione a categoria novamente.", 
+            ephemeral=True
+        )
+    except Exception as e:
+        # Tratamento genérico para outros erros
+        await interaction.followup.send(f"Ocorreu um erro ao processar sua escolha: {e}", ephemeral=True)
 
 class ViewMenuCatalogo(discord.ui.View):
     def __init__(self, usuario_id):
