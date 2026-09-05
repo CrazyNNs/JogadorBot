@@ -266,6 +266,7 @@ LIMITE_PETS = 3
 # ============================================================
 DIAS_NEGLIGENCIA_PARA_EVENTO = 1          # dias com TODOS os status zerados até rolar o evento
 DIAS_ENTRE_ROLAGENS_NEGLIGENCIA = 1       # se continuar negligenciado e já estiver doente, espera esse tempo pra rolar de novo
+DIAS_ESPERA_ADOCAO = 7                    # dias esperando adoção antes de ser removido definitivamente
 
 DRENO_HP_NEGLIGENCIA_POR_DIA = 10         # HP perdido por dia com todos os status zerados
 DRENO_HP_DOENCA_POR_DIA = 5               # HP perdido por dia estando doente sem tratamento
@@ -1215,6 +1216,7 @@ def iniciar_banco():
         "negligencia_desde TEXT",
         "ultimo_evento_negligencia TEXT",
         "negligencia_estagio INTEGER NOT NULL DEFAULT 0",
+        "disponivel_adocao_desde TEXT",
     ]:
         try:
             cur.execute(f"ALTER TABLE pets ADD COLUMN {coluna}")
@@ -2353,6 +2355,26 @@ async def verificar_negligencia_pets():
         if ultimo_evento and ultimo_evento > limite_reroll:
             continue  # já rolou um evento recentemente pra esse pet, espera o intervalo
         await processar_evento_negligencia(pet_id)
+        
+def _remover_adocoes_expiradas_sync(limite):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "DELETE FROM pets WHERE disponivel_adocao = 1 AND disponivel_adocao_desde IS NOT NULL AND disponivel_adocao_desde <= ?",
+            (limite,)
+        )
+        con.commit()
+        return cur.rowcount
+    finally:
+        con.close()
+
+@tasks.loop(hours=1)
+async def verificar_adocao_expirada():
+    """Remove definitivamente pets que ficaram tempo demais na fila de adoção sem ninguém adotar."""
+    agora = datetime.datetime.now(FUSO_BR)
+    limite = (agora - datetime.timedelta(days=DIAS_ESPERA_ADOCAO)).isoformat()
+    await asyncio.to_thread(_remover_adocoes_expiradas_sync, limite)
 
 # ============================================================
 # SISTEMA DA MOCHILA
@@ -6221,7 +6243,7 @@ class ViewAdocaoPets(ui.LayoutView):
             con = sqlite3.connect("jogadorbot.db")
             cur = con.cursor()
             cur.execute("""
-                UPDATE pets SET usuario_id = ?, disponivel_adocao = 0, ultima_atualizacao = ?
+                UPDATE pets SET usuario_id = ?, disponivel_adocao = 0, disponivel_adocao_desde = NULL, ultima_atualizacao = ?
                 WHERE id = ? AND disponivel_adocao = 1
             """, (str(self.usuario_id), agora, pet_id))
             con.commit()
@@ -6622,9 +6644,9 @@ class ViewConfirmarAdocao(discord.ui.View):
         cur.execute("""
             UPDATE pets SET disponivel_adocao = 1, fome = 100, energia = 100, higiene = 100, felicidade = 100,
                             hp = 100, doenca_id = NULL, negligencia_estagio = 0, negligencia_desde = NULL,
-                            ultimo_evento_negligencia = NULL, ultima_atualizacao = ?
+                            ultimo_evento_negligencia = NULL, ultima_atualizacao = ?, disponivel_adocao_desde = ?
             WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0
-        """, (agora, self.pet_id, str(self.usuario_id)))
+        """, (agora, agora, self.pet_id, str(self.usuario_id)))
         con.commit()
         alterou = cur.rowcount > 0
         con.close()
@@ -8201,6 +8223,7 @@ async def on_ready():
     verificar_reset_semanal.start()
     verificar_missoes_temporarias.start()
     verificar_negligencia_pets.start()
+    verificar_adocao_expirada.start()
     verificar_streak_felicidade_pets.start()
     verificar_drop.start()
     verificar_cobranca_emprestimos.start()
