@@ -2113,7 +2113,7 @@ def atualizar_stats_pet(pet_id):
     cur = con.cursor()
     cur.execute("""
         SELECT fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate,
-               energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde
+               energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde, disponivel_adocao
         FROM pets WHERE id = ?
     """, (pet_id,))
     linha = cur.fetchone()
@@ -2122,7 +2122,12 @@ def atualizar_stats_pet(pet_id):
         return
 
     (fome, energia, higiene, felicidade, dormindo_desde, dormindo_ate,
-     energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde) = linha
+     energia_ao_dormir, ultima_atualizacao, hp, doenca_id, negligencia_desde, disponivel_adocao) = linha
+
+    if disponivel_adocao:
+        # Pet esperando adoção: status ficam pausados, sem decaimento nem dreno de HP.
+        con.close()
+        return
 
     agora = datetime.datetime.now(FUSO_BR)
     ultima = datetime.datetime.fromisoformat(ultima_atualizacao)
@@ -6139,6 +6144,10 @@ class ViewComprarPet(ui.LayoutView):
                 await interaction.response.send_modal(ModalNomearPet(self.usuario_id, especie))
         return callback
 
+    async def abrir_adocao(self, interaction: discord.Interaction):
+        view = ViewAdocaoPets(self.usuario_id)
+        await interaction.response.edit_message(view=view)
+
     def montar(self):
         self.clear_items()
         container = ui.Container()
@@ -6153,6 +6162,14 @@ class ViewComprarPet(ui.LayoutView):
         ))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
+        linha_adocao = ui.ActionRow()
+        botao_adocao = ui.Button(label="Adoção", emoji="🏠", style=discord.ButtonStyle.primary)
+        botao_adocao.callback = self.abrir_adocao
+        linha_adocao.add_item(botao_adocao)
+        container.add_item(linha_adocao)
+        container.add_item(ui.TextDisplay("Veja pets que outros donos colocaram pra adoção — status já vêm restaurados!"))
+        container.add_item(ui.Separator())
+
         for especie, dados in PETS_DISPONIVEIS.items():
             linha = ui.ActionRow()
             botao = ui.Button(label=f"{dados['emoji']} {especie}", style=discord.ButtonStyle.success)
@@ -6163,6 +6180,124 @@ class ViewComprarPet(ui.LayoutView):
 
         self.add_item(container)
 
+class ViewAdocaoPets(ui.LayoutView):
+    ITENS_POR_PAGINA = 5
+
+    def __init__(self, usuario_id, pagina=0):
+        super().__init__(timeout=120)
+        self.usuario_id = usuario_id
+        self.pagina = pagina
+        self.montar()
+
+    async def voltar_pets(self, interaction: discord.Interaction):
+        view = ViewComprarPet(self.usuario_id)
+        await interaction.response.edit_message(view=view)
+
+    async def pagina_anterior(self, interaction: discord.Interaction):
+        self.pagina -= 1
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def proxima_pagina(self, interaction: discord.Interaction):
+        self.pagina += 1
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    def criar_callback_adotar(self, pet_id, nome_pet):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message(
+                    "<:Atencao:1534592266625093662> Essa tela não é sua!", ephemeral=True
+                )
+                return
+            if contar_pets(self.usuario_id) >= LIMITE_PETS:
+                await interaction.response.send_message(
+                    f"<:Atencao:1534592266625093662> Você já tem o máximo de {LIMITE_PETS} pets! Confira com `!pets`.",
+                    ephemeral=True
+                )
+                return
+
+            agora = datetime.datetime.now(FUSO_BR).isoformat()
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("""
+                UPDATE pets SET usuario_id = ?, disponivel_adocao = 0, ultima_atualizacao = ?
+                WHERE id = ? AND disponivel_adocao = 1
+            """, (str(self.usuario_id), agora, pet_id))
+            con.commit()
+            alterou = cur.rowcount > 0
+            con.close()
+
+            if not alterou:
+                self.montar()
+                await interaction.response.edit_message(view=self)
+                await interaction.followup.send(
+                    "<:Atencao:1534592266625093662> Esse pet já foi adotado por outra pessoa!", ephemeral=True
+                )
+                return
+
+            self.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                f"🏠 Parabéns! Você adotou **{nome_pet}**! Use `!pets` para cuidar dele.", ephemeral=True
+            )
+        return callback
+
+    def montar(self):
+        self.clear_items()
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        cur.execute("""
+            SELECT id, especie, raca, nome FROM pets
+            WHERE disponivel_adocao = 1
+            ORDER BY id
+        """)
+        pets_disponiveis = cur.fetchall()
+        con.close()
+
+        total_paginas = max(1, -(-len(pets_disponiveis) // self.ITENS_POR_PAGINA))
+        self.pagina = max(0, min(self.pagina, total_paginas - 1))
+        inicio = self.pagina * self.ITENS_POR_PAGINA
+        pagina_pets = pets_disponiveis[inicio:inicio + self.ITENS_POR_PAGINA]
+
+        container = ui.Container()
+        container.accent_color = discord.Colour.green()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_pets
+        container.add_item(ui.Section(
+            ui.TextDisplay(
+                f"### 🏠 Adoção\n-# Página {self.pagina + 1}/{total_paginas} · {len(pets_disponiveis)} pet(s) esperando um lar"
+            ),
+            accessory=btn_voltar
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        if pagina_pets:
+            for pet_id, especie, raca, nome in pagina_pets:
+                dados_especie = PETS_DISPONIVEIS.get(especie, {})
+                emoji = dados_especie.get("emoji", "🐾")
+                raca_texto = f" ({raca})" if raca else ""
+                linha = ui.ActionRow()
+                botao = ui.Button(label=f"Adotar {nome}", emoji=emoji, style=discord.ButtonStyle.success)
+                botao.callback = self.criar_callback_adotar(pet_id, nome)
+                linha.add_item(botao)
+                container.add_item(linha)
+                container.add_item(ui.TextDisplay(f"{especie}{raca_texto} — status e HP totalmente restaurados"))
+        else:
+            container.add_item(ui.TextDisplay("Nenhum pet disponível para adoção no momento."))
+
+        if len(pets_disponiveis) > self.ITENS_POR_PAGINA:
+            linha_nav = ui.ActionRow()
+            btn_anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=(self.pagina == 0))
+            btn_anterior.callback = self.pagina_anterior
+            btn_proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=(self.pagina >= total_paginas - 1))
+            btn_proximo.callback = self.proxima_pagina
+            linha_nav.add_item(btn_anterior)
+            linha_nav.add_item(btn_proximo)
+            container.add_item(linha_nav)
+
+        self.add_item(container)
 
 class ViewComprarPetisco(ui.LayoutView):
     def __init__(self, usuario_id):
@@ -6481,12 +6616,15 @@ class ViewConfirmarAdocao(discord.ui.View):
 
     @discord.ui.button(label="Confirmar", emoji="✅", style=discord.ButtonStyle.danger)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        agora = datetime.datetime.now(FUSO_BR).isoformat()
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
-        cur.execute(
-            "UPDATE pets SET disponivel_adocao = 1 WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0",
-            (self.pet_id, str(self.usuario_id))
-        )
+        cur.execute("""
+            UPDATE pets SET disponivel_adocao = 1, fome = 100, energia = 100, higiene = 100, felicidade = 100,
+                            hp = 100, doenca_id = NULL, negligencia_estagio = 0, negligencia_desde = NULL,
+                            ultimo_evento_negligencia = NULL, ultima_atualizacao = ?
+            WHERE id = ? AND usuario_id = ? AND disponivel_adocao = 0
+        """, (agora, self.pet_id, str(self.usuario_id)))
         con.commit()
         alterou = cur.rowcount > 0
         con.close()
