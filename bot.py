@@ -5892,7 +5892,6 @@ class ViewMenuPetshop(ui.LayoutView):
             accessory=btn_voltar
         )
         container.add_item(linha_topo)
-        container.add_item(ui.TextDisplay("### 🐾 Animalia\n**Silvia** - Amante de animais? Eu também!"))
         container.add_item(ui.MediaGallery(discord.MediaGalleryItem(
             media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Animalia/AnimaliaSilviaEntrada.png"
         )))
