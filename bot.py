@@ -742,7 +742,9 @@ def rolar_quantidade_drop():
 def _construir_loot_table_sync():
     """Monta a loot table completa: itens de mineração, itens de petshop (sem
     pets) e banners exclusivos (exceto o Sakurai BETA). Cada entrada tem sua
-    própria chance de cair, baseada na raridade — quanto mais raro, menor a chance."""
+    própria chance de cair, baseada na raridade — quanto mais raro, menor a chance.
+    Petiscos e brinquedos são por espécie (não por raça), então sempre usam a
+    chance de "Comum" — intencional, não é bug."""
     itens = []
 
     for nome, dados in ITENS_MINERACAO.items():
@@ -783,13 +785,13 @@ def _construir_loot_table_sync():
         medicamentos = cur.fetchall()
     finally:
         con.close()
-    for nome, emoji, especial in medicamentos:
-        chance = CHANCE_RARIDADE_DROP["Épico"] if especial else CHANCE_RARIDADE_DROP["Raro"]
+    for nome, dados in ITENS_MINERACAO.items():
+        chance = CHANCE_RARIDADE_DROP.get(dados.get("raridade", "Comum"), 0.05)
         itens.append({
             "chance": chance,
             "empilhavel": True,
-            "descricao": f"{emoji} **{nome}**",
-            "conceder": (lambda uid, qtd, n=nome: _dar_medicamento_drop_sync(uid, n, qtd)),
+            "descricao": f"{dados['emoji']} **{nome}**",
+            "conceder": (lambda uid, qtd, n=nome: conceder_item_mineracao(uid, n, qtd)),
         })
 
     # Banners NÃO empilham (é posse, não quantidade) — sempre concede 1.
@@ -3430,6 +3432,40 @@ def remover_item_mineracao(usuario_id, item_nome, qtd=1):
     """, (qtd, str(usuario_id), item_nome))
     con.commit()
     con.close()
+
+def conceder_item_mineracao(usuario_id, item_nome, quantidade=1):
+    """Concede um item de mineração de graça (drop, recompensa, etc.), respeitando
+    onde cada subcategoria realmente é guardada: Ferramentas e Equipamento são
+    unidades individuais nas suas próprias tabelas; Consumíveis empilham normalmente."""
+    item = ITENS_MINERACAO.get(item_nome)
+    if not item:
+        return
+
+    if item["subcategoria"] == "Ferramentas" and "usos" in item:
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        for _ in range(quantidade):
+            cur.execute(
+                "INSERT INTO ferramentas_usuario (usuario_id, item_nome, usos_restantes, equipado) VALUES (?, ?, ?, 0)",
+                (str(usuario_id), item_nome, item["usos"])
+            )
+        con.commit()
+        con.close()
+        return
+
+    if item["subcategoria"] == "Equipamento":
+        con = sqlite3.connect("jogadorbot.db")
+        cur = con.cursor()
+        for _ in range(quantidade):
+            cur.execute(
+                "INSERT INTO equipamentos_usuario (usuario_id, item_nome, durabilidade_atual, equipado) VALUES (?, ?, ?, 0)",
+                (str(usuario_id), item_nome, item.get("durabilidade", 0))
+            )
+        con.commit()
+        con.close()
+        return
+
+    adicionar_item_mineracao(usuario_id, item_nome, quantidade)
 
 def comprar_item_mineracao(usuario_id, item_nome, preco_customizado=None):
     """Compra um item de mineração. Retorna (sucesso, mensagem)."""
