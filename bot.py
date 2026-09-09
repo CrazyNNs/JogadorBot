@@ -5680,11 +5680,14 @@ class ViewMineracao(ui.LayoutView):
                 errou = random.random() < 0.10
                 critico = random.random() < 0.30
 
+                ferramenta_ativa = buscar_ferramenta_ativa(self.usuario_id)
+                dano_picareta = DANO_POR_PICARETA.get(ferramenta_ativa[1], DANO_BASE_MIN) if ferramenta_ativa else DANO_BASE_MIN
+
                 if errou:
                     dano_causado = 0
                     texto_ataque = "Você atacou, mas errou completamente!"
                 else:
-                    dano = random.randint(DANO_BASE_MIN, DANO_BASE_MAX)
+                    dano = dano_picareta
                     if tem_pimenta:
                         dano = int(dano * (1 + BONUS_DANO_PIMENTA))
                     if critico:
@@ -5701,6 +5704,9 @@ class ViewMineracao(ui.LayoutView):
 
                 if self.monstro_hp <= 0:
                     xp_ganho = MONSTROS[self.monstro_atual].get("xp", 0)
+                    stats_brocolis = buscar_stats(self.usuario_id)
+                    if stats_brocolis["brocolis_ativo"] and xp_ganho:
+                        xp_ganho = int(xp_ganho * (1 + BONUS_XP_BROCOLIS))
                     self.texto_status = f"{texto_ataque}\nVocê derrotou o **{self.monstro_atual}**! 🎉 (+{xp_ganho} XP)"
                     self.em_combate = False
                     atualizar_contador(self.usuario_id, "mineracao_monstro", 1)
