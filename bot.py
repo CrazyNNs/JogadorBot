@@ -1800,15 +1800,15 @@ class ViewDrop(discord.ui.View):
             adicionar_chaves(interaction.user.id, 1)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua <:ChaveIcon:1543113835169185912> Chave foi devolvida.",
+                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua <:ChaveIcon:1543113835169185912> **Chave** foi devolvida.",
                 color=discord.Color.greyple()
             )
         else:
             lista_itens = "\n".join(f"> {item}" for item in itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma <:ChaveIcon:1543113835169185912> Chave e encontrou:\n\n{lista_itens}",
-                color=discord.Color.gold()
+                description=f"{interaction.user.mention} usou uma <:ChaveIcon:1543113835169185912> **Chave** e encontrou:\n\n{lista_itens}",
+                color=discord.Color.blurple()
             )
         embed.set_thumbnail(url="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropAbertoIcon.png")
         await interaction.response.edit_message(embed=embed, view=self)
@@ -1842,7 +1842,7 @@ async def spawnar_drop(canal_forcado=None):
 
     embed = discord.Embed(
         title="🎁 Um drop apareceu!",
-        description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1543113835169185912> Chave pra abrir antes que outra pessoa pegue!",
+        description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1543113835169185912> **Chave** pra abrir antes que outra pessoa pegue!",
         color=discord.Color.blurple()
     )
     embed.set_thumbnail(url="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropFechadoIcon.png")
