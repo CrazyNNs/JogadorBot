@@ -526,7 +526,6 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
         "raridade": "Comum",
-        "Picareta Enferrujada": 5,
     },
     "Picareta": {
         "emoji": "<:PicaretaIcon:1532959065641062410>",
@@ -536,7 +535,6 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 20 usos.",
         "usos": 20,
         "raridade": "Raro",
-        "Picareta": 13,
     },
     "Picareta Fortificada": {
         "emoji": "<:PicaretaFortificadaIcon:1532962738257662193>",
@@ -546,7 +544,6 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 35 usos.",
         "usos": 35,
         "raridade": "Épico",
-        "Picareta Fortificada": 26,
     },
     "Dinamite": {
         "emoji": "🧨",
@@ -634,6 +631,12 @@ HP_MAXIMO_BASE = 100
 DANO_BASE_MIN = 15
 DANO_BASE_MAX = 20
 BONUS_DANO_PIMENTA = 0.30
+
+DANO_POR_PICARETA = {
+        "Picareta Enferrujada": 5,
+        "Picareta": 13,
+        "Picareta Fortificada": 26,
+}
 
 # ============================================================
 # INVENTÁRIO — Estrutura de categorias e subcategorias
