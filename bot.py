@@ -1810,6 +1810,7 @@ class ViewDrop(discord.ui.View):
                 description=f"{interaction.user.mention} usou uma <:ChaveIcon:1543113835169185912> Chave e encontrou:\n\n{lista_itens}",
                 color=discord.Color.gold()
             )
+        embed.set_thumbnail(url=https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropAbertoIcon.png)
         await interaction.response.edit_message(embed=embed, view=self)
 
 
@@ -1844,6 +1845,7 @@ async def spawnar_drop(canal_forcado=None):
         description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1543113835169185912> Chave pra abrir antes que outra pessoa pegue!",
         color=discord.Color.blurple()
     )
+    embed.set_thumbnail(url=https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropFechadoIcon.png)
     view = ViewDrop(drop_id)
     mensagem = await canal.send(embed=embed, view=view)
 
