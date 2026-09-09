@@ -518,7 +518,7 @@ VALOR_POR_DIA_EXTRA_EMPRESTIMO = 5000  # a cada 5.000 pedidos, +1 dia até a cob
 # ITENS DE MINERAÇÃO — Loja e sistema de mineração
 # ============================================================
 ITENS_MINERACAO = {
-    "Picareta  Enferrujada": {
+    "Picareta Enferrujada": {
         "emoji": "<:PicaretaEnferrujadaIcon:1532975172359815168>",
         "subcategoria": "Ferramentas",
         "preco": 1000,
@@ -526,6 +526,7 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 10 usos.",
         "usos": 10,
         "raridade": "Comum",
+        "Picareta Enferrujada": 5,
     },
     "Picareta": {
         "emoji": "<:PicaretaIcon:1532959065641062410>",
@@ -535,6 +536,7 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 20 usos.",
         "usos": 20,
         "raridade": "Raro",
+        "Picareta": 13,
     },
     "Picareta Fortificada": {
         "emoji": "<:PicaretaFortificadaIcon:1532962738257662193>",
@@ -544,6 +546,7 @@ ITENS_MINERACAO = {
         "descricao": "Necessária para minerar. Aguenta 35 usos.",
         "usos": 35,
         "raridade": "Épico",
+        "Picareta Fortificada": 26,
     },
     "Dinamite": {
         "emoji": "🧨",
@@ -594,6 +597,14 @@ ITENS_MINERACAO = {
         "preco": 700,
         "moeda": "joyens",
         "descricao": "Aumenta o dano de ataque em 30%.",
+        "raridade": "Comum",
+    },
+    "Brócolis": {
+        "emoji": "🥦",
+        "subcategoria": "Consumíveis",
+        "preco": 700,
+        "moeda": "joyens",
+        "descricao": "Dá 1.5x de XP ao matar monstros por 120 segundos.",
         "raridade": "Comum",
     },
 }
@@ -1281,6 +1292,10 @@ def iniciar_banco():
         pass
     try:
         cur.execute("ALTER TABLE usuario_stats ADD COLUMN pimenta_ativa INTEGER DEFAULT 0")
+    except:
+        pass
+    try:
+        cur.execute("ALTER TABLE usuario_stats ADD COLUMN brocolis_ativo INTEGER DEFAULT 0")
     except:
         pass
 
@@ -3226,14 +3241,15 @@ def buscar_stats(usuario_id):
     garantir_stats(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens, pimenta_ativa FROM usuario_stats WHERE usuario_id = ?",
+    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens, pimenta_ativa, brocolis_ativo FROM usuario_stats WHERE usuario_id = ?",
                 (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
     return {
         "hp_atual": resultado[0], "tem_capacete": resultado[1],
         "picareta_usos": resultado[2], "joyogens": resultado[3],
-        "pimenta_ativa": resultado[4] if len(resultado) > 4 else 0
+        "pimenta_ativa": resultado[4] if len(resultado) > 4 else 0,
+        "brocolis_ativo": resultado[5] if len(resultado) > 5 else 0
     }
 
 def tempo_restante_minerar(usuario_id):
@@ -3552,6 +3568,13 @@ async def expirar_pimenta_depois(usuario_id, segundos):
     con.commit()
     con.close()
 
+async def expirar_brocolis_depois(usuario_id, segundos):
+    await asyncio.sleep(segundos)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET brocolis_ativo = 0 WHERE usuario_id = ?", (str(usuario_id),))
+    con.commit()
+    con.close()
 # ============================================================
 # FUNÇÕES AUXILIARES - Missões Semanais
 # ============================================================
@@ -4978,6 +5001,7 @@ class ViewConsumiveis(ui.LayoutView):
         stats = buscar_stats(self.usuario_id)
         marmita_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Marmita")
         pimenta_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Pimenta")
+        brocolis_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Brócolis")
 
         container.add_item(ui.TextDisplay(
             f"🍱 **Marmita** ({marmita_qtd}x)\n-# Recupera 20 de HP."
@@ -5032,14 +5056,46 @@ class ViewConsumiveis(ui.LayoutView):
             cur.execute("UPDATE usuario_stats SET pimenta_ativa = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
             con.commit()
             con.close()
+            bot.loop.create_task(expirar_pimenta_depois(self.usuario_id, 60))
             self.montar()
             await interaction.response.edit_message(view=self)
-            await interaction.followup.send("🌶️ Você comeu a pimenta! Seu próximo ataque na mineração terá +30% de dano.", ephemeral=True)
+            await interaction.followup.send("🌶️ Você comeu a pimenta! +30% de dano por 60 segundos.", ephemeral=True)
             await self.atualizar_tela_inicial()
 
         btn_pimenta.callback = usar_pimenta
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
+        container.add_item(ui.Separator())
+
+        container.add_item(ui.TextDisplay(
+            f"🥦 **Brócolis** ({brocolis_qtd}x)\n-# Dá 1.5x de XP ao matar monstros por 120 segundos.\n-# ⚠️ Só pode ser usado durante a mineração!"
+        ))
+        linha_brocolis = ui.ActionRow()
+        btn_brocolis = ui.Button(label="Usar Brócolis", style=discord.ButtonStyle.success,
+                                  disabled=brocolis_qtd <= 0 or stats["brocolis_ativo"] == 1)
+
+        async def usar_brocolis(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            if buscar_qtd_item_mineracao(self.usuario_id, "Brócolis") <= 0:
+                await interaction.response.send_message("Você não tem mais brócolis!", ephemeral=True)
+                return
+            remover_item_mineracao(self.usuario_id, "Brócolis", 1)
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("UPDATE usuario_stats SET brocolis_ativo = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+            con.commit()
+            con.close()
+            bot.loop.create_task(expirar_brocolis_depois(self.usuario_id, 120))
+            self.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send("🥦 Você comeu o brócolis! +50% de XP ao matar monstros por 120 segundos.", ephemeral=True)
+            await self.atualizar_tela_inicial()
+
+        btn_brocolis.callback = usar_brocolis
+        linha_brocolis.add_item(btn_brocolis)
+        container.add_item(linha_brocolis)
 
         self.add_item(container)
 
@@ -5126,6 +5182,42 @@ class ViewConsumiveisMineracao(ui.LayoutView):
         btn_pimenta.callback = usar_pimenta
         linha_pimenta.add_item(btn_pimenta)
         container.add_item(linha_pimenta)
+        container.add_item(ui.Separator())
+
+        stats_brocolis = buscar_stats(self.usuario_id)
+        brocolis_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Brócolis")
+        brocolis_status = "🔥 Ativo!" if stats_brocolis["brocolis_ativo"] else "Inativo"
+        container.add_item(ui.TextDisplay(
+            f"🥦 **Brócolis** ({brocolis_qtd}x)\n-# 1.5x de XP ao matar monstros por 120 segundos.\n-# Status: {brocolis_status}"
+        ))
+        linha_brocolis = ui.ActionRow()
+        btn_brocolis = ui.Button(label="Usar Brócolis", style=discord.ButtonStyle.success,
+                                  disabled=brocolis_qtd <= 0 or stats_brocolis["brocolis_ativo"] == 1)
+
+        async def usar_brocolis(interaction):
+            try:
+                if interaction.user.id != self.usuario_id:
+                    await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                    return
+                if buscar_qtd_item_mineracao(self.usuario_id, "Brócolis") <= 0:
+                    await interaction.response.send_message("Você não tem mais brócolis!", ephemeral=True)
+                    return
+                remover_item_mineracao(self.usuario_id, "Brócolis", 1)
+                con = sqlite3.connect("jogadorbot.db")
+                cur = con.cursor()
+                cur.execute("UPDATE usuario_stats SET brocolis_ativo = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+                con.commit()
+                con.close()
+                bot.loop.create_task(expirar_brocolis_depois(self.usuario_id, 120))
+                await interaction.response.send_message("🥦 Brócolis ativado! +50% de XP ao matar monstros por 120 segundos.", ephemeral=True)
+                self.view_mineracao.montar()
+                await self.view_mineracao.atualizar_mensagem()
+            except Exception as e:
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
+
+        btn_brocolis.callback = usar_brocolis
+        linha_brocolis.add_item(btn_brocolis)
+        container.add_item(linha_brocolis)
 
         self.add_item(container)
 
