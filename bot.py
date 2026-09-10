@@ -593,15 +593,15 @@ ITENS_MINERACAO = {
         "subcategoria": "Consumíveis",
         "preco": 700,
         "moeda": "joyens",
-        "descricao": "Aumenta o dano de ataque em 30%.",
+        "descricao": "Aumenta o dano de ataque em 30% por 1 minutos.",
         "raridade": "Comum",
     },
     "Brócolis": {
         "emoji": "🥦",
         "subcategoria": "Consumíveis",
-        "preco": 700,
+        "preco": 1000,
         "moeda": "joyens",
-        "descricao": "Dá 1.5x de XP ao matar monstros por 120 segundos.",
+        "descricao": "Dá 1.5x de XP ao matar monstros por 2 minutos.",
         "raridade": "Comum",
     },
 }
