@@ -7943,7 +7943,7 @@ class LayoutEmpregos(ui.LayoutView):
             cadeado = "" if pode else " - 🔒 Bloqueado "
             linhas_texto.append(
                 f"{dados['emoji']} **{nome}{cadeado}**\n"
-                f""{dados['descricao']}"\n"
+                f"{dados['descricao']}\n"
                 f"<:JoyensIcon:1536254492797050880>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
             opcoes.append(discord.SelectOption(
