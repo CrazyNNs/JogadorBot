@@ -7930,37 +7930,41 @@ class LayoutEmpregos(ui.LayoutView):
         level_usuario, _ = buscar_level(usuario_id)
 
         container = ui.Container(
-            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nEscolha um emprego abaixo! Empregos com ❌ precisam de level maior.")
+            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nVeja as opções abaixo e escolha um emprego no menu — empregos com 🔒 precisam de level maior.")
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
+        linhas_texto = []
+        opcoes = []
         for nome, dados in EMPREGOS.items():
             level_req = dados["level_necessario"]
             pode = level_usuario >= level_req
-
-            texto = (
-                f"{dados['emoji']} **{nome}**\n"
+            cadeado = "" if pode else "🔒 "
+            linhas_texto.append(
+                f"{dados['emoji']} **{cadeado}{nome}**\n"
                 f"{dados['descricao']}\n"
                 f"<:JoyensIcon:1536254492797050880>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
+            opcoes.append(discord.SelectOption(
+                label=nome,
+                description=f"{'🔒 Bloqueado — ' if not pode else ''}Level {level_req} • {dados['salario_min']}-{dados['salario_max']} Joyens"[:100]
+            ))
 
-            botao = ui.Button(
-                label="✅ Escolher" if pode else "❌ Escolher",
-                style=discord.ButtonStyle.success if pode else discord.ButtonStyle.danger
-            )
-            botao.callback = self.criar_callback(nome)
+        container.add_item(ui.TextDisplay("\n\n".join(linhas_texto)))
+        container.add_item(ui.Separator())
 
-            sessao = ui.Section(ui.TextDisplay(texto), accessory=botao)
-            container.add_item(sessao)
-            container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        select = ui.Select(placeholder="Escolha um emprego...", options=opcoes[:25])
+
+        async def selecionar_emprego(interaction: discord.Interaction):
+            await self.escolher_emprego(interaction, select.values[0])
+        select.callback = selecionar_emprego
+
+        linha_select = ui.ActionRow()
+        linha_select.add_item(select)
+        container.add_item(linha_select)
 
         self.add_item(container)
-
-    def criar_callback(self, emprego_nome):
-        async def callback(interaction: discord.Interaction):
-            await self.escolher_emprego(interaction, emprego_nome)
-        return callback
 
     async def escolher_emprego(self, interaction: discord.Interaction, emprego_nome):
         emprego = EMPREGOS[emprego_nome]
