@@ -184,6 +184,18 @@ EMPREGOS = {
             "Você limpou a praça principal e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
+    "Repositor": {
+        "salario_min": 1250,
+        "salario_max": 1550,
+        "level_necessario": 3,
+        "emoji": "📦",
+        "descricao": "Reabastece prateleiras de produtos no mercado.",
+        "acoes": [
+            "Você reabasteceu a prateleira de energetico e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "O cliente não pôde pagar, então você devolveu o produto para a prateleira certa e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você organizou as prateleiras e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
     "Fotografo": {
         "salario_min": 1600,
         "salario_max": 1800,
@@ -194,6 +206,30 @@ EMPREGOS = {
             "Você fotografou um casamento e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
             "Você fez um ensaio fotográfico e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
             "Você fotografou um evento corporativo e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
+    "Recepcionista": {
+        "salario_min": 1700,
+        "salario_max": 1900,
+        "level_necessario": 7,
+        "emoji": "🛎",
+        "descricao": "Recebe os hóspedes com sorriso no rosto.",
+        "acoes": [
+            "Você xingou um hóspede babaca e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você registrou novos hóspedes e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você teve um dia de fila cheia e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
+    "Cozinheiro": {
+        "salario_min": 1800,
+        "salario_max": 2000,
+        "level_necessario": 9,
+        "emoji": "🍳",
+        "descricao": "Prepara pratos como um artista dos alimentos.",
+        "acoes": [
+            "Você cozinhou uma carne folhada a ouro e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você preparou um Baião de Dois e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você preparou um jantar tamanho família e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
     "Barman": {
@@ -208,6 +244,30 @@ EMPREGOS = {
             "Você criou um novo drink especial e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
+    "Garçom": {
+        "salario_min": 2200,
+        "salario_max": 2300,
+        "level_necessario": 12,
+        "emoji": "🍽",
+        "descricao": "Serve as mesas com os pratos e bebidas requiridas.",
+        "acoes": [
+            "Você serviu a mesa de uma família e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você serviu a mesa de um casal e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "O cliente reclamou da temperatura do prato e você devolveu para a cozinha e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
+    "Mecânico": {
+        "salario_min": 2300,
+        "salario_max": 2500,
+        "level_necessario": 14,
+        "emoji": "🔧",
+        "descricao": "Conserta os veículos de toda a cidade na sua oficina.",
+        "acoes": [
+            "Você trocou o pneu de um Fusca e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você retirou um amaçado na traseira de um Uno e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "O cliente achou o conserto caro, mas pagou e você ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
     "Motorista Particular": {
         "salario_min": 2500,
         "salario_max": 2800,
@@ -218,6 +278,30 @@ EMPREGOS = {
             "Você dirigiu ao shooping e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
             "Você deixou seu cliente em casa e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
             "Você passeou de carro com o cliente e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
+    "Caixa Bancário": {
+        "salario_min": 2700,
+        "salario_max": 3000,
+        "level_necessario": 18,
+        "emoji": "🏦",
+        "descricao": "Faz saques, depositos e transações bancárias.",
+        "acoes": [
+            "Você depositou o dinheiro do cliente e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você fez um emprestimo para o cliente e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "O cliente pagou o que devia ao banco e você ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+        ]
+    },
+    "Eletricista": {
+        "salario_min": 3000,
+        "salario_max": 3400,
+        "level_necessario": 20,
+        "emoji": "⚡",
+        "descricao": "Instala e repara a rede elétrica de toda a cidade.",
+        "acoes": [
+            "Você removeu um gato ilegal e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "Você instalou novos contadores e ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
+            "O cliente contratou você para trocar os fios antigos e você ganhou <:JoyensIcon:1536254492797050880>{salario}Joyens!",
         ]
     },
 }
