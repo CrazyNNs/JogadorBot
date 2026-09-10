@@ -7940,10 +7940,10 @@ class LayoutEmpregos(ui.LayoutView):
         for nome, dados in EMPREGOS.items():
             level_req = dados["level_necessario"]
             pode = level_usuario >= level_req
-            cadeado = "" if pode else "🔒 "
+            cadeado = "" if pode else " - 🔒 Bloqueado "
             linhas_texto.append(
-                f"{dados['emoji']} **{cadeado}{nome}**\n"
-                f"{dados['descricao']}\n"
+                f"{dados['emoji']} **{nome}{cadeado}**\n"
+                f""{dados['descricao']}"\n"
                 f"<:JoyensIcon:1536254492797050880>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
             opcoes.append(discord.SelectOption(
