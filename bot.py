@@ -792,7 +792,7 @@ def girar_double():
 DOUBLE_JANELA = 9          # quantas casas aparecem na tela por vez (ímpar, pra ter um meio exato)
 DOUBLE_SETA_INDICE = 4     # posição fixa do "alvo" dentro da janela (0-indexado; 4 = a 5ª casa)
 DOUBLE_FRAMES = 10         # quantos "quadros" de deslizamento até parar
-DOUBLE_ATRASOS = [0.15, 0.15, 0.15, 0.2, 0.2, 0.25, 0.3, 0.4, 0.55, 0.75]  # vai desacelerando
+DOUBLE_ATRASOS = [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15]
 
 def montar_esteira_double(emoji_resultado):
     """Monta a esteira decorativa (alterna vermelho/preto, com só 1 branco) e fixa o
