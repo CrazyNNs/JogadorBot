@@ -787,6 +787,25 @@ def girar_double():
     """Sorteia uma fatia da roleta Double (7 vermelho, 7 preto, 1 branco) e devolve (cor, emoji)."""
     fatia = random.choice(DOUBLE_FATIAS)
     return fatia["cor"], fatia["emoji"]
+
+# Configuração da animação da roleta
+DOUBLE_JANELA = 9          # quantas casas aparecem na tela por vez (ímpar, pra ter um meio exato)
+DOUBLE_SETA_INDICE = 4     # posição fixa da seta dentro da janela (0-indexado; 4 = a 5ª casa)
+DOUBLE_FRAMES = 10         # quantos "quadros" de deslizamento até parar
+DOUBLE_ATRASOS = [0.15, 0.15, 0.15, 0.2, 0.2, 0.25, 0.3, 0.4, 0.55, 0.75]  # vai desacelerando
+
+def montar_esteira_double(emoji_resultado):
+    """Monta a esteira de emojis que desliza até parar com o resultado embaixo da seta."""
+    tamanho = DOUBLE_FRAMES - 1 + DOUBLE_JANELA
+    esteira = [random.choice(DOUBLE_FATIAS)["emoji"] for _ in range(tamanho)]
+    indice_final = DOUBLE_FRAMES - 1 + DOUBLE_SETA_INDICE
+    esteira[indice_final] = emoji_resultado
+    return esteira
+
+def montar_linha_seta():
+    """Linha fixa com a seta sempre na mesma posição, usando espaços em branco (Braille) para alinhar com os quadrados."""
+    vazio = "⠀"
+    return vazio * DOUBLE_SETA_INDICE + "🔻" + vazio * (DOUBLE_JANELA - 1 - DOUBLE_SETA_INDICE)
     
 # ============================================================
 # LOOT TABLE DO DROP — Mineração + Petshop (sem pets) + Banners exclusivos
@@ -8729,16 +8748,27 @@ async def double(ctx, quantidade: int = None, cor: str = None):
         await ctx.send(f"{ctx.author.mention} Você não tem Joyens suficientes! Seu saldo é de **{saldo} Joyens**.")
         return
 
+    cor_sorteada, emoji_sorteado = girar_double()
+    esteira = montar_esteira_double(emoji_sorteado)
+    linha_seta = montar_linha_seta()
+
     embed = discord.Embed(
         title="🎡 Double",
-        description="Girando a roleta...\n⬜🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛",
+        description=f"Girando a roleta...\n{linha_seta}\n{''.join(esteira[0:DOUBLE_JANELA])}",
         color=discord.Color.blurple()
     )
     embed.set_footer(text=f"Aposta de {ctx.author.display_name} em {cor_escolhida}")
     mensagem = await ctx.send(embed=embed)
-    await asyncio.sleep(2)
 
-    cor_sorteada, emoji_sorteado = girar_double()
+    for frame in range(1, DOUBLE_FRAMES):
+        await asyncio.sleep(DOUBLE_ATRASOS[frame - 1])
+        janela = esteira[frame:frame + DOUBLE_JANELA]
+        embed.description = f"Girando a roleta...\n{linha_seta}\n{''.join(janela)}"
+        await mensagem.edit(embed=embed)
+
+    await asyncio.sleep(DOUBLE_ATRASOS[-1])
+
+    janela_final = esteira[DOUBLE_FRAMES - 1:DOUBLE_FRAMES - 1 + DOUBLE_JANELA]
     multiplicador = DOUBLE_MULTIPLICADORES[cor_sorteada]
     ganhou = cor_escolhida == cor_sorteada
 
@@ -8748,7 +8778,7 @@ async def double(ctx, quantidade: int = None, cor: str = None):
         novo_saldo = buscar_joyens(ctx.author.id)
         embed = discord.Embed(
             title=f"{emoji_sorteado} Deu {cor_sorteada}! Você ganhou!",
-            description=f"Sua aposta em **{cor_escolhida}** pagou {multiplicador}x!",
+            description=f"{linha_seta}\n{''.join(janela_final)}\n\nSua aposta em **{cor_escolhida}** pagou {multiplicador}x!",
             color=discord.Color.green()
         )
         embed.add_field(name="Ganho", value=f"+{lucro} Joyens", inline=True)
@@ -8758,7 +8788,7 @@ async def double(ctx, quantidade: int = None, cor: str = None):
         novo_saldo = buscar_joyens(ctx.author.id)
         embed = discord.Embed(
             title=f"{emoji_sorteado} Deu {cor_sorteada}! Você perdeu!",
-            description=f"Sua aposta era em **{cor_escolhida}**. Mais sorte na próxima!",
+            description=f"{linha_seta}\n{''.join(janela_final)}\n\nSua aposta era em **{cor_escolhida}**. Mais sorte na próxima!",
             color=discord.Color.red()
         )
         embed.add_field(name="Perda", value=f"-{quantidade} Joyens", inline=True)
