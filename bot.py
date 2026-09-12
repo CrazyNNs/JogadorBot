@@ -768,7 +768,7 @@ INVENTARIO_ESTRUTURA = {
 DOUBLE_FATIAS = (
     [{"cor": "vermelho", "emoji": "🟥"}] * 7 +
     [{"cor": "preto", "emoji": "⬛"}] * 7 +
-    [{"cor": "branco", "emoji": "⬜"}]
+    [{"cor": "branco", "emoji": "⬜"}] * 7 +
 )
 
 DOUBLE_MULTIPLICADORES = {
