@@ -827,8 +827,8 @@ def montar_quadro_double(janela):
 # ============================================================
 RANK_TIPOS = {
     "joyens": {
-        "titulo": "<:BolsaJoyensIcon:1525729605724405781> Ranking de Joyens",
-        "emoji": "<:BolsaJoyensIcon:1525729605724405781>",
+        "titulo": "<:JoyensIcon:1536254492797050880> Ranking de Joyens",
+        "emoji": "<:JoyensIcon:1536254492797050880>",
         "sufixo": "Joyens",
         "label": "Joyens",
         "descricao": "Ranking de quem tem mais Joyens na carteira",
