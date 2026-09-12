@@ -823,6 +823,32 @@ def montar_quadro_double(janela):
     return "".join(partes)
     
 # ============================================================
+# RANK - Joyens, Joyogens e Level
+# ============================================================
+RANK_TIPOS = {
+    "joyens": {
+        "titulo": "<:BolsaJoyensIcon:1525729605724405781> Ranking de Joyens",
+        "emoji": "<:BolsaJoyensIcon:1525729605724405781>",
+        "sufixo": "Joyens",
+        "label": "Joyens",
+        "descricao": "Ranking de quem tem mais Joyens na carteira",
+    },
+    "joyogens": {
+        "titulo": "<:JoyogensIcon:1536254582362210334> Ranking de Joyogens",
+        "emoji": "<:JoyogensIcon:1536254582362210334>",
+        "sufixo": "Joyogens",
+        "label": "Joyogens",
+        "descricao": "Ranking de quem tem mais Joyogens",
+    },
+    "level": {
+        "titulo": "⭐ Ranking de Level",
+        "emoji": "⭐",
+        "sufixo": "Level",
+        "label": "Level",
+        "descricao": "Ranking de quem tem o maior nível",
+    },
+}
+# ============================================================
 # LOOT TABLE DO DROP — Mineração + Petshop (sem pets) + Banners exclusivos
 # ============================================================
 # Depois que um item já caiu, essa é a chance de vir +1 unidade (25%), depois
@@ -1538,6 +1564,99 @@ def iniciar_banco():
     
     con.commit()
     con.close()
+
+# ============================================================
+# FUNÇÕES AUXILIARES - Sistema de Ranking
+# ============================================================
+def buscar_ranking_dados(tipo):
+    """Busca os 10 primeiros colocados do tipo de ranking pedido."""
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    if tipo == "joyens":
+        cur.execute("SELECT usuario_id, joyens FROM economia ORDER BY joyens DESC LIMIT 10")
+    elif tipo == "joyogens":
+        cur.execute("SELECT usuario_id, joyogens FROM usuario_stats ORDER BY joyogens DESC LIMIT 10")
+    else:
+        cur.execute("SELECT usuario_id, level, xp FROM level_usuarios ORDER BY level DESC, xp DESC LIMIT 10")
+    resultados = cur.fetchall()
+    con.close()
+    return resultados
+
+async def montar_layout_rank(guild, tipo):
+    """Monta a LayoutView do ranking pro tipo escolhido. Devolve None se não houver dados."""
+    info = RANK_TIPOS[tipo]
+    resultados = buscar_ranking_dados(tipo)
+    if not resultados:
+        return None
+
+    medalhas = ["🥇", "🥈", "🥉"]
+    layout = ui.LayoutView()
+    container = ui.Container()
+    container.accent_color = discord.Colour.gold()
+    container.add_item(ui.TextDisplay(f"# {info['titulo']}"))
+    container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+    for i, dados in enumerate(resultados):
+        usuario_id = dados[0]
+        valor = dados[1]
+        posicao = i + 1
+
+        try:
+            membro = guild.get_member(int(usuario_id)) or await guild.fetch_member(int(usuario_id))
+            nome = membro.display_name
+            avatar_url = str(membro.display_avatar.url)
+        except:
+            nome = f"Usuário desconhecido"
+            avatar_url = None
+
+        if posicao <= 3:
+            medalha = medalhas[i]
+            texto = f"**{medalha} {posicao}º — {nome}**\n{info['emoji']} {valor:,} {info['sufixo']}"
+            if avatar_url:
+                thumbnail = ui.Thumbnail(avatar_url)
+                secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
+            else:
+                secao = ui.Section(ui.TextDisplay(texto))
+            container.add_item(secao)
+            container.add_item(ui.Separator())
+        else:
+            container.add_item(ui.TextDisplay(f"**{posicao}º — {nome}** • {valor:,} {info['sufixo']}"))
+
+    view = ViewSelecaoRank(tipo)
+    layout.add_item(container)
+    layout.add_item(view.action_row)
+    return layout
+
+class ViewSelecaoRank(ui.LayoutView):
+    def __init__(self, tipo_atual):
+        super().__init__(timeout=120)
+        self.tipo_atual = tipo_atual
+
+        select = ui.Select(
+            placeholder=f"📊 Ver ranking de: {RANK_TIPOS[tipo_atual]['label']}",
+            options=[
+                discord.SelectOption(
+                    label=info["label"],
+                    value=chave,
+                    description=info["descricao"],
+                    emoji=info["emoji"] if not info["emoji"].startswith("<") else None,
+                    default=(chave == tipo_atual),
+                )
+                for chave, info in RANK_TIPOS.items()
+            ],
+        )
+        select.callback = self.selecionar
+        self.action_row = ui.ActionRow(select)
+
+    async def selecionar(self, interaction: discord.Interaction):
+        tipo_escolhido = interaction.data["values"][0]
+        layout = await montar_layout_rank(interaction.guild, tipo_escolhido)
+        if layout is None:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Nenhum dado encontrado para esse ranking!", ephemeral=True
+            )
+            return
+        await interaction.response.edit_message(view=layout)
 # ============================================================
 # FUNÇÕES AUXILIARES - Sistema NeoTrabalhar
 # ============================================================
@@ -9126,65 +9245,15 @@ class Layout(ui.LayoutView):
 async def rank(ctx, tipo: str = "joyens"):
     try:
         tipo = tipo.lower()
-        if tipo not in ["joyens", "level"]:
-            await ctx.send("<:Atencao:1534592266625093662> Tipo inválido! Use `!rank joyens` ou `!rank level`.")
+        if tipo not in RANK_TIPOS:
+            await ctx.send("<:Atencao:1534592266625093662> Tipo inválido! Use `!rank joyens`, `!rank joyogens` ou `!rank level`.")
             return
 
-        con = sqlite3.connect("jogadorbot.db")
-        cur = con.cursor()
-
-        if tipo == "joyens":
-            cur.execute("SELECT usuario_id, joyens FROM economia ORDER BY joyens DESC LIMIT 10")
-            titulo = "<:BolsaJoyensIcon:1525729605724405781> Ranking de Joyens"
-            emoji_tipo = "<:BolsaJoyensIcon:1525729605724405781>"
-            sufixo = "Joyens"
-        else:
-            cur.execute("SELECT usuario_id, level, xp FROM level_usuarios ORDER BY level DESC, xp DESC LIMIT 10")
-            titulo = "⭐ Ranking de Level"
-            emoji_tipo = "⭐"
-            sufixo = "Level"
-
-        resultados = cur.fetchall()
-        con.close()
-
-        if not resultados:
+        layout = await montar_layout_rank(ctx.guild, tipo)
+        if layout is None:
             await ctx.send("<:Atencao:1534592266625093662> Nenhum dado encontrado para o ranking!")
             return
 
-        medalhas = ["🥇", "🥈", "🥉"]
-        layout = ui.LayoutView()
-        container = ui.Container()
-        container.accent_color = discord.Colour.gold()
-        container.add_item(ui.TextDisplay(f"# {titulo}"))
-        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-
-        for i, dados in enumerate(resultados):
-            usuario_id = dados[0]
-            valor = dados[1]
-            posicao = i + 1
-
-            try:
-                membro = ctx.guild.get_member(int(usuario_id)) or await ctx.guild.fetch_member(int(usuario_id))
-                nome = membro.display_name
-                avatar_url = str(membro.display_avatar.url)
-            except:
-                nome = f"Usuário desconhecido"
-                avatar_url = None
-
-            if posicao <= 3:
-                medalha = medalhas[i]
-                texto = f"**{medalha} {posicao}º — {nome}**\n{emoji_tipo} {valor:,} {sufixo}"
-                if avatar_url:
-                    thumbnail = ui.Thumbnail(avatar_url)
-                    secao = ui.Section(ui.TextDisplay(texto), accessory=thumbnail)
-                else:
-                    secao = ui.Section(ui.TextDisplay(texto))
-                container.add_item(secao)
-                container.add_item(ui.Separator())
-            else:
-                container.add_item(ui.TextDisplay(f"**{posicao}º — {nome}** • {valor:,} {sufixo}"))
-
-        layout.add_item(container)
         await ctx.send(view=layout)
 
     except Exception as e:
