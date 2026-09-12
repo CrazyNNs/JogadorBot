@@ -556,6 +556,10 @@ CONDICOES_MISSAO = {
     "apostar_total":             {"categoria": "Economia", "nome": "Vezes que usou !apostar (total)"},
     "apostar_quantidade_semana": {"categoria": "Economia", "nome": "Joyens apostados (na semana)"},
     "apostar_quantidade_total":  {"categoria": "Economia", "nome": "Joyens apostados (total)"},
+    "double_semana":              {"categoria": "Economia", "nome": "Vezes que usou !double (na semana)"},
+    "double_total":               {"categoria": "Economia", "nome": "Vezes que usou !double (total)"},
+    "double_quantidade_semana":   {"categoria": "Economia", "nome": "Joyens apostados no double (na semana)"},
+    "double_quantidade_total":    {"categoria": "Economia", "nome": "Joyens apostados no double (total)"},
     "diario_semana":              {"categoria": "Economia", "nome": "Vezes que usou !diario (na semana)"},
     "diario_total":               {"categoria": "Economia", "nome": "Vezes que usou !diario (total)"},
     "diario_seguidos":            {"categoria": "Economia", "nome": "Dias seguidos usando !diario"},
@@ -757,7 +761,33 @@ INVENTARIO_ESTRUTURA = {
         }
     },
 }
+# ============================================================
+# DOUBLE - Variaveis de aposta
+# ============================================================
+# --- Sistema de aposta Double ---
+DOUBLE_FATIAS = (
+    [{"cor": "vermelho", "emoji": "🟥"}] * 7 +
+    [{"cor": "preto", "emoji": "⬛"}] * 7 +
+    [{"cor": "branco", "emoji": "⬜"}]
+)
 
+DOUBLE_MULTIPLICADORES = {
+    "vermelho": 2,
+    "preto": 2,
+    "branco": 14,
+}
+
+DOUBLE_APELIDOS = {
+    "vermelho": "vermelho", "vermelha": "vermelho", "v": "vermelho", "red": "vermelho",
+    "preto": "preto", "preta": "preto", "p": "preto", "black": "preto",
+    "branco": "branco", "branca": "branco", "b": "branco", "white": "branco",
+}
+
+def girar_double():
+    """Sorteia uma fatia da roleta Double (7 vermelho, 7 preto, 1 branco) e devolve (cor, emoji)."""
+    fatia = random.choice(DOUBLE_FATIAS)
+    return fatia["cor"], fatia["emoji"]
+    
 # ============================================================
 # LOOT TABLE DO DROP — Mineração + Petshop (sem pets) + Banners exclusivos
 # ============================================================
@@ -1191,6 +1221,10 @@ def iniciar_banco():
         "pimenta_consumir INTEGER DEFAULT 0",
         "marmita_consumir INTEGER DEFAULT 0",
         "pet_fullfelicidade_dias INTEGER DEFAULT 0",
+        "double_semana INTEGER DEFAULT 0",
+        "double_total INTEGER DEFAULT 0",
+        "double_quantidade_semana INTEGER DEFAULT 0",
+        "double_quantidade_total INTEGER DEFAULT 0",
     ]:
         try:
             cur.execute(f"ALTER TABLE contadores_usuarios ADD COLUMN {coluna}")
@@ -8099,6 +8133,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}moeda`", value="Joga uma moeda (cara ou coroa)", inline=False)
         embed.add_field(name=f"`{PREFIX}enquete [pergunta]`", value="Cria uma enquete com ✅ e <:Atencao:1534592266625093662>", inline=False)
         embed.add_field(name=f"`{PREFIX}apostar [quantidade]`", value="Aposta Joyens com 50% de chance de ganhar", inline=False)
+        embed.add_field(name=f"`{PREFIX}double [quantidade] [cor]`", value="Aposta na roleta Double: vermelho/preto pagam 2x, branco paga 14x", inline=False)
         embed.add_field(name=f"`{PREFIX}minerar`", value="Minera Joyogens e minérios raros", inline=False)
         embed.set_footer(text="🎮 Diversão • Sakurai")
         return embed
@@ -8670,6 +8705,72 @@ async def apostar(ctx, quantidade: int):
     atualizar_contador(ctx.author.id, "apostar_total")
     atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
     atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
+
+    atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
+    await verificar_missoes_usuario(str(ctx.author.id), ctx)
+@bot.command(name="double")
+async def double(ctx, quantidade: int = None, cor: str = None):
+    if quantidade is None or cor is None:
+        await ctx.send(f"<:Atencao:1534592266625093662> Uso correto: `!double [quantidade] [vermelho/preto/branco]`")
+        return
+
+    if quantidade <= 0:
+        await ctx.send(f"{ctx.author.mention} tá liso? Dorme. Não dá para apostar 0 Joyens!")
+        return
+
+    cor_escolhida = DOUBLE_APELIDOS.get(cor.lower())
+    if cor_escolhida is None:
+        await ctx.send(f"{ctx.author.mention} Cor inválida! Escolha **vermelho**, **preto** ou **branco**.")
+        return
+
+    saldo = buscar_joyens(ctx.author.id)
+    if quantidade > saldo:
+        await ctx.send(f"{ctx.author.mention} Você não tem Joyens suficientes! Seu saldo é de **{saldo} Joyens**.")
+        return
+
+    embed = discord.Embed(
+        title="🎡 Double",
+        description="Girando a roleta...\n⬜🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛🟥⬛",
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text=f"Aposta de {ctx.author.display_name} em {cor_escolhida}")
+    mensagem = await ctx.send(embed=embed)
+    await asyncio.sleep(2)
+
+    cor_sorteada, emoji_sorteado = girar_double()
+    multiplicador = DOUBLE_MULTIPLICADORES[cor_sorteada]
+    ganhou = cor_escolhida == cor_sorteada
+
+    if ganhou:
+        lucro = quantidade * (multiplicador - 1)
+        adicionar_joyens(ctx.author.id, lucro)
+        novo_saldo = buscar_joyens(ctx.author.id)
+        embed = discord.Embed(
+            title=f"{emoji_sorteado} Deu {cor_sorteada}! Você ganhou!",
+            description=f"Sua aposta em **{cor_escolhida}** pagou {multiplicador}x!",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Ganho", value=f"+{lucro} Joyens", inline=True)
+        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
+    else:
+        remover_joyens(ctx.author.id, quantidade)
+        novo_saldo = buscar_joyens(ctx.author.id)
+        embed = discord.Embed(
+            title=f"{emoji_sorteado} Deu {cor_sorteada}! Você perdeu!",
+            description=f"Sua aposta era em **{cor_escolhida}**. Mais sorte na próxima!",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Perda", value=f"-{quantidade} Joyens", inline=True)
+        embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
+
+    embed.set_footer(text=f"Aposta de {ctx.author.display_name}")
+    await mensagem.edit(embed=embed)
+
+    atualizar_contador(ctx.author.id, "double_semana")
+    atualizar_contador(ctx.author.id, "double_total")
+    atualizar_contador(ctx.author.id, "double_quantidade_semana", quantidade)
+    atualizar_contador(ctx.author.id, "double_quantidade_total", quantidade)
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
 
 @bot.command(name="catalogo")
