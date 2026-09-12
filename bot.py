@@ -768,7 +768,7 @@ INVENTARIO_ESTRUTURA = {
 DOUBLE_FATIAS = (
     [{"cor": "vermelho", "emoji": "🟥"}] * 7 +
     [{"cor": "preto", "emoji": "⬛"}] * 7 +
-    [{"cor": "branco", "emoji": "⬜"}]
+    [{"cor": "branco", "emoji": "⬜"}] * 2 +
 )
 
 DOUBLE_MULTIPLICADORES = {
@@ -784,7 +784,7 @@ DOUBLE_APELIDOS = {
 }
 
 def girar_double():
-    """Sorteia uma fatia da roleta Double (7 vermelho, 7 preto, 1 branco) e devolve (cor, emoji)."""
+    """Sorteia uma fatia da roleta Double (7 vermelho, 7 preto, 2 branco) e devolve (cor, emoji)."""
     fatia = random.choice(DOUBLE_FATIAS)
     return fatia["cor"], fatia["emoji"]
 
