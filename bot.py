@@ -1014,6 +1014,7 @@ def sortear_e_conceder_drop_sync(usuario_id):
             sufixo = f" x{quantidade}" if quantidade > 1 else ""
             itens_dropados.append(f"{item['descricao']}{sufixo}")
     return itens_dropados
+    
 # ============================================================
 # Login Diário
 # ============================================================
@@ -1026,6 +1027,14 @@ RECOMPENSAS_LOGIN_DIARIO = {
     6: {"tipo": "chave", "quantidade": 1},
     7: {"tipo": "item_aleatorio"},
 }
+
+# ============================================================
+# BANCO — configuração de investimentos
+# ============================================================
+PAC_BLOCO_VALOR = 3000            # cada bloco de 3.000 investidos...
+PAC_PERCENTUAL_POR_BLOCO = 5      # ...dá +5% de retorno semanal
+PAC_VALOR_MAXIMO = 24000          # teto de investimento (= 40% de retorno, 8 blocos)
+
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
@@ -1564,6 +1573,21 @@ def iniciar_banco():
     
     con.commit()
     con.close()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS investimentos_pac (
+            usuario_id TEXT PRIMARY KEY,
+            valor_investido INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS pac_estado (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            perdas_semana INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    cur.execute("INSERT OR IGNORE INTO pac_estado (id, perdas_semana) VALUES (1, 0)")
+    con.commit()
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Sistema de Ranking
@@ -2223,8 +2247,99 @@ def sacar_do_banco_sync(usuario_id, valor):
         con.close()
     adicionar_joyens(usuario_id, valor)
 
-# --- Banco: empréstimos ---
+# ===========================================================================================================================
+# --- Banco: investimentos (PAC) ---
 
+def calcular_percentual_pac(valor_investido):
+    """A cada PAC_BLOCO_VALOR investido, +PAC_PERCENTUAL_POR_BLOCO% de retorno, até 40%."""
+    blocos = valor_investido // PAC_BLOCO_VALOR
+    return min(40, blocos * PAC_PERCENTUAL_POR_BLOCO)
+
+def buscar_investimento_pac(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT valor_investido FROM investimentos_pac WHERE usuario_id = ?", (str(usuario_id),))
+        resultado = cur.fetchone()
+        return (resultado[0] if resultado else 0) or 0
+    finally:
+        con.close()
+
+def investir_pac_sync(usuario_id, valor_adicional):
+    """Soma valor_adicional ao investimento atual do usuário no PAC."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO investimentos_pac (usuario_id, valor_investido) VALUES (?, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET valor_investido = valor_investido + ?
+        """, (str(usuario_id), valor_adicional, valor_adicional))
+        con.commit()
+    finally:
+        con.close()
+
+def sacar_pac_sync(usuario_id):
+    """Retira TODO o investimento do PAC e devolve pra carteira. O rendimento
+    da semana em andamento é perdido (só quem estiver investido na virada de
+    semana recebe o pagamento). Devolve o valor retirado."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT valor_investido FROM investimentos_pac WHERE usuario_id = ?", (str(usuario_id),))
+        resultado = cur.fetchone()
+        valor = (resultado[0] if resultado else 0) or 0
+        cur.execute("DELETE FROM investimentos_pac WHERE usuario_id = ?", (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
+    if valor > 0:
+        adicionar_joyens(usuario_id, valor)
+    return valor
+
+def registrar_perda_aposta(quantidade):
+    """Chamado toda vez que alguém PERDE uma aposta (!apostar, !double, etc.) —
+    acumula pro pagamento semanal de quem tem investimento no PAC."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE pac_estado SET perdas_semana = perdas_semana + ? WHERE id = 1", (quantidade,))
+        con.commit()
+    finally:
+        con.close()
+
+def _pagar_pac_semanal_sync():
+    """Roda toda virada de semana: paga cada investidor do PAC com base na %
+    dele sobre o total perdido em apostas na semana, e zera o acumulador de
+    perdas pra próxima semana. Devolve a lista de pagamentos feitos."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT perdas_semana FROM pac_estado WHERE id = 1")
+        resultado = cur.fetchone()
+        perdas_semana = (resultado[0] if resultado else 0) or 0
+
+        cur.execute("SELECT usuario_id, valor_investido FROM investimentos_pac WHERE valor_investido > 0")
+        investidores = cur.fetchall()
+
+        cur.execute("UPDATE pac_estado SET perdas_semana = 0 WHERE id = 1")
+        con.commit()
+    finally:
+        con.close()
+
+    pagamentos = []
+    if perdas_semana > 0:
+        for usuario_id, valor_investido in investidores:
+            percentual = calcular_percentual_pac(valor_investido)
+            if percentual <= 0:
+                continue
+            pagamento = int(perdas_semana * percentual / 100)
+            if pagamento > 0:
+                adicionar_joyens(usuario_id, pagamento)
+                pagamentos.append((usuario_id, pagamento, percentual))
+    return pagamentos
+    
+# ===========================================================================================================================
+# --- Banco: empréstimos ---
 def calcular_dias_emprestimo(valor):
     """3 dias mínimo, +1 dia a cada 5.000 pedidos, até o teto de 30 dias (1 mês)."""
     dias = DIAS_MINIMOS_EMPRESTIMO + (valor // VALOR_POR_DIA_EXTRA_EMPRESTIMO)
@@ -3038,6 +3153,17 @@ async def verificar_reset_semanal():
     agora = datetime.datetime.now()
     if agora.weekday() == 0 and agora.hour == 0:
         await asyncio.to_thread(_resetar_contadores_semanais_sync)
+
+        pagamentos_pac = await asyncio.to_thread(_pagar_pac_semanal_sync)
+        for usuario_id, pagamento, percentual in pagamentos_pac:
+            try:
+                usuario = await bot.fetch_user(int(usuario_id))
+                await usuario.send(
+                    f"📈 Seu investimento no **PAC** rendeu **{pagamento} Joyens** essa semana "
+                    f"({percentual}% do total perdido pelos apostadores)!"
+                )
+            except:
+                pass
 
         canal = bot.get_channel(CANAL_NOTIFICACOES_ID)
         if canal:
@@ -7965,6 +8091,146 @@ class ViewEmprestimoMenu(ui.LayoutView):
 
         self.add_item(container)
 
+class ModalInvestirPAC(discord.ui.Modal, title="Investir no PAC"):
+    quantidade = discord.ui.TextInput(
+        label="Quantidade de Joyens pra investir",
+        placeholder=f"Múltiplo de {PAC_BLOCO_VALOR}, até {PAC_VALOR_MAXIMO} no total",
+        max_length=6,
+        min_length=1
+    )
+
+    def __init__(self, usuario_id, view_investimentos):
+        super().__init__()
+        self.usuario_id = usuario_id
+        self.view_investimentos = view_investimentos
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.quantidade.value.strip().replace(".", "").replace(",", "")
+        if not texto.isdigit() or int(texto) <= 0:
+            await interaction.response.send_message("<:Atencao:1534592266625093662> Digite um número inteiro maior que 0!", ephemeral=True)
+            return
+        valor = int(texto)
+
+        if valor % PAC_BLOCO_VALOR != 0:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> O valor precisa ser um múltiplo de **{PAC_BLOCO_VALOR}** (ex: {PAC_BLOCO_VALOR}, {PAC_BLOCO_VALOR*2}, {PAC_BLOCO_VALOR*3}...).",
+                ephemeral=True
+            )
+            return
+
+        atual = await asyncio.to_thread(buscar_investimento_pac, self.usuario_id)
+        if atual + valor > PAC_VALOR_MAXIMO:
+            disponivel = PAC_VALOR_MAXIMO - atual
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Isso passaria do teto de **{PAC_VALOR_MAXIMO} Joyens**! "
+                f"Você já tem {atual} investidos, então só pode adicionar até **{disponivel}**.",
+                ephemeral=True
+            )
+            return
+
+        saldo = buscar_joyens(self.usuario_id)
+        if valor > saldo:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você só tem **{saldo} Joyens** na carteira!", ephemeral=True
+            )
+            return
+
+        remover_joyens(self.usuario_id, valor)
+        await asyncio.to_thread(investir_pac_sync, self.usuario_id, valor)
+
+        self.view_investimentos.montar()
+        await interaction.response.edit_message(view=self.view_investimentos)
+        novo_total = atual + valor
+        novo_percentual = calcular_percentual_pac(novo_total)
+        await interaction.followup.send(
+            f"✅ Você investiu **{valor} Joyens** no PAC! Total investido: **{novo_total}** ({novo_percentual}% de retorno por semana).",
+            ephemeral=True
+        )
+
+class ViewInvestimentos(ui.LayoutView):
+    def __init__(self, usuario: discord.Member, view_banco):
+        super().__init__(timeout=180)
+        self.usuario = usuario
+        self.view_banco = view_banco
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold()
+
+        investido = buscar_investimento_pac(self.usuario.id)
+        percentual = calcular_percentual_pac(investido)
+
+        texto = (
+            f"### 📈 Investimentos\n"
+            f"-# {self.usuario.display_name}\n\n"
+            f"**🎰 PAC — Parceiro de Apostas do Cassino**\n"
+            f"Você empresta Joyens pro cassino e recebe de volta uma % de tudo que os "
+            f"apostadores perderem na semana, toda segunda-feira à meia-noite.\n"
+            f"-# A cada {PAC_BLOCO_VALOR} Joyens investidos: +{PAC_PERCENTUAL_POR_BLOCO}% de retorno (teto de 40% com {PAC_VALOR_MAXIMO} investidos).\n\n"
+        )
+        if investido > 0:
+            texto += f"💰 **Seu investimento atual:** {investido} Joyens ({percentual}% de retorno por semana)"
+        else:
+            texto += "Você ainda não tem nada investido no PAC."
+
+        container.add_item(ui.TextDisplay(texto))
+        container.add_item(ui.Separator())
+
+        opcoes = [
+            discord.SelectOption(
+                label="PAC — Parceiro de Apostas do Cassino",
+                value="pac",
+                description=(f"{percentual}% de retorno atual" if investido > 0 else "Disponível pra investir")[:100],
+                emoji="🎰"
+            )
+        ]
+        select = ui.Select(placeholder="Escolha um investimento...", options=opcoes)
+
+        async def selecionar(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            if select.values[0] == "pac":
+                await interaction.response.send_modal(ModalInvestirPAC(self.usuario.id, self))
+
+        select.callback = selecionar
+        linha_select = ui.ActionRow()
+        linha_select.add_item(select)
+        container.add_item(linha_select)
+
+        linha_botoes = ui.ActionRow()
+        btn_sacar = ui.Button(label="Sacar do PAC", emoji="💸", style=discord.ButtonStyle.danger, disabled=investido <= 0)
+        btn_voltar = ui.Button(label="Voltar", emoji="◀️", style=discord.ButtonStyle.secondary)
+
+        async def sacar_cb(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            valor_sacado = await asyncio.to_thread(sacar_pac_sync, self.usuario.id)
+            self.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                f"✅ Você retirou **{valor_sacado} Joyens** do PAC. O rendimento dessa semana foi perdido, mas o valor investido voltou pra sua carteira.",
+                ephemeral=True
+            )
+
+        async def voltar_cb(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            self.view_banco.montar()
+            await interaction.response.edit_message(view=self.view_banco)
+
+        btn_sacar.callback = sacar_cb
+        btn_voltar.callback = voltar_cb
+        linha_botoes.add_item(btn_sacar)
+        linha_botoes.add_item(btn_voltar)
+        container.add_item(linha_botoes)
+
+        self.add_item(container)
+
 class ViewBanco(ui.LayoutView):
     def __init__(self, usuario: discord.Member):
         super().__init__(timeout=180)
@@ -7992,7 +8258,7 @@ class ViewBanco(ui.LayoutView):
         btn_depositar = ui.Button(label="Depositar", emoji="💰", style=discord.ButtonStyle.success)
         btn_sacar = ui.Button(label="Sacar", emoji="💵", style=discord.ButtonStyle.primary)
         btn_emprestimo = ui.Button(label="Empréstimo", emoji="🏦", style=discord.ButtonStyle.secondary)
-        btn_investir = ui.Button(label="Investir", emoji="📈", style=discord.ButtonStyle.secondary, disabled=True)
+        btn_investir = ui.Button(label="Investir", emoji="📈", style=discord.ButtonStyle.secondary)
 
         async def depositar_cb(interaction):
             if interaction.user.id != self.usuario.id:
@@ -8013,9 +8279,17 @@ class ViewBanco(ui.LayoutView):
             view = ViewEmprestimoMenu(self.usuario, self)
             await interaction.response.edit_message(view=view)
 
+        async def investir_cb(interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message("Esse banco não é seu!", ephemeral=True)
+                return
+            view = ViewInvestimentos(self.usuario, self)
+            await interaction.response.edit_message(view=view)
+
         btn_depositar.callback = depositar_cb
         btn_sacar.callback = sacar_cb
         btn_emprestimo.callback = emprestimo_cb
+        btn_investir.callback = investir_cb
 
         linha.add_item(btn_depositar)
         linha.add_item(btn_sacar)
@@ -8872,6 +9146,7 @@ async def apostar(ctx, quantidade: int):
         embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
     else:
         remover_joyens(ctx.author.id, quantidade)
+        registrar_perda_aposta(quantidade)
         novo_saldo = buscar_joyens(ctx.author.id)
         embed = discord.Embed(
             title="🎰 Você perdeu!",
@@ -8900,9 +9175,7 @@ async def apostar(ctx, quantidade: int):
     atualizar_contador(ctx.author.id, "apostar_quantidade_semana", quantidade)
     atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
     await verificar_missoes_usuario(str(ctx.author.id), ctx)
-
-    atualizar_contador(ctx.author.id, "apostar_quantidade_total", quantidade)
-    await verificar_missoes_usuario(str(ctx.author.id), ctx)
+    
 @bot.command(name="double")
 async def double(ctx, quantidade: int = None, cor: str = None):
     if quantidade is None or cor is None:
@@ -8959,6 +9232,7 @@ async def double(ctx, quantidade: int = None, cor: str = None):
         embed.add_field(name="Novo saldo", value=f"{novo_saldo} Joyens", inline=True)
     else:
         remover_joyens(ctx.author.id, quantidade)
+        registrar_perda_aposta(quantidade)
         novo_saldo = buscar_joyens(ctx.author.id)
         embed = discord.Embed(
             title=f"{emoji_sorteado} Deu {cor_sorteada}! Você perdeu!",
