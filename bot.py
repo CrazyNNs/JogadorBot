@@ -692,6 +692,14 @@ ITENS_MINERACAO = {
         "descricao": "Dá 1.5x de XP ao matar monstros por 2 minutos.",
         "raridade": "Comum",
     },
+    "Café": {
+        "emoji": "☕",
+        "subcategoria": "Consumíveis",
+        "preco": 200,
+        "moeda": "joyens",
+        "descricao": "Dá +2 segundos para atacar durante 2 minutos.",
+        "raridade": "Comum",
+    },
 }
 
 SUBCATEGORIAS_MINERACAO = ["Ferramentas", "Equipamento", "Consumíveis"]
@@ -719,6 +727,9 @@ HP_MAXIMO_BASE = 100
 DANO_BASE_MIN = 15
 DANO_BASE_MAX = 20
 BONUS_DANO_PIMENTA = 0.30
+BONUS_XP_BROCOLIS = 0.50
+BONUS_SEGUNDOS_CAFE = 2
+DURACAO_CAFE_SEGUNDOS = 120
 
 DANO_POR_PICARETA = {
         "Picareta Enferrujada": 5,
@@ -1486,6 +1497,10 @@ def iniciar_banco():
         pass
     try:
         cur.execute("ALTER TABLE usuario_stats ADD COLUMN brocolis_ativo INTEGER DEFAULT 0")
+    except:
+        pass
+    try:
+        cur.execute("ALTER TABLE usuario_stats ADD COLUMN cafe_ativo INTEGER DEFAULT 0")
     except:
         pass
 
@@ -3641,7 +3656,7 @@ def buscar_stats(usuario_id):
     garantir_stats(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
-    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens, pimenta_ativa, brocolis_ativo FROM usuario_stats WHERE usuario_id = ?",
+    cur.execute("SELECT hp_atual, tem_capacete, picareta_usos, joyogens, pimenta_ativa, brocolis_ativo, cafe_ativo FROM usuario_stats WHERE usuario_id = ?",
                 (str(usuario_id),))
     resultado = cur.fetchone()
     con.close()
@@ -3649,7 +3664,8 @@ def buscar_stats(usuario_id):
         "hp_atual": resultado[0], "tem_capacete": resultado[1],
         "picareta_usos": resultado[2], "joyogens": resultado[3],
         "pimenta_ativa": resultado[4] if len(resultado) > 4 else 0,
-        "brocolis_ativo": resultado[5] if len(resultado) > 5 else 0
+        "brocolis_ativo": resultado[5] if len(resultado) > 5 else 0,
+        "cafe_ativo": resultado[6] if len(resultado) > 6 else 0
     }
 
 def tempo_restante_minerar(usuario_id):
@@ -3973,6 +3989,14 @@ async def expirar_brocolis_depois(usuario_id, segundos):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
     cur.execute("UPDATE usuario_stats SET brocolis_ativo = 0 WHERE usuario_id = ?", (str(usuario_id),))
+    con.commit()
+    con.close()
+
+async def expirar_cafe_depois(usuario_id, segundos):
+    await asyncio.sleep(segundos)
+    con = sqlite3.connect("jogadorbot.db")
+    cur = con.cursor()
+    cur.execute("UPDATE usuario_stats SET cafe_ativo = 0 WHERE usuario_id = ?", (str(usuario_id),))
     con.commit()
     con.close()
 # ============================================================
@@ -5496,6 +5520,41 @@ class ViewConsumiveis(ui.LayoutView):
         btn_brocolis.callback = usar_brocolis
         linha_brocolis.add_item(btn_brocolis)
         container.add_item(linha_brocolis)
+        container.add_item(ui.Separator())
+
+        cafe_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Café")
+        container.add_item(ui.TextDisplay(
+            f"☕ **Café** ({cafe_qtd}x)\n-# +{BONUS_SEGUNDOS_CAFE} segundos para atacar por {DURACAO_CAFE_SEGUNDOS} segundos.\n-# ⚠️ Só pode ser usado durante a mineração!"
+        ))
+        linha_cafe = ui.ActionRow()
+        btn_cafe = ui.Button(label="Usar Café", style=discord.ButtonStyle.success,
+                              disabled=cafe_qtd <= 0 or stats["cafe_ativo"] == 1)
+
+        async def usar_cafe(interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            if buscar_qtd_item_mineracao(self.usuario_id, "Café") <= 0:
+                await interaction.response.send_message("Você não tem mais café!", ephemeral=True)
+                return
+            remover_item_mineracao(self.usuario_id, "Café", 1)
+            con = sqlite3.connect("jogadorbot.db")
+            cur = con.cursor()
+            cur.execute("UPDATE usuario_stats SET cafe_ativo = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+            con.commit()
+            con.close()
+            bot.loop.create_task(expirar_cafe_depois(self.usuario_id, DURACAO_CAFE_SEGUNDOS))
+            self.montar()
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                f"☕ Você tomou o café! +{BONUS_SEGUNDOS_CAFE} segundos para atacar por {DURACAO_CAFE_SEGUNDOS} segundos.",
+                ephemeral=True
+            )
+            await self.atualizar_tela_inicial()
+
+        btn_cafe.callback = usar_cafe
+        linha_cafe.add_item(btn_cafe)
+        container.add_item(linha_cafe)
 
         self.add_item(container)
 
@@ -5618,6 +5677,45 @@ class ViewConsumiveisMineracao(ui.LayoutView):
         btn_brocolis.callback = usar_brocolis
         linha_brocolis.add_item(btn_brocolis)
         container.add_item(linha_brocolis)
+        container.add_item(ui.Separator())
+
+        stats_cafe = buscar_stats(self.usuario_id)
+        cafe_qtd = buscar_qtd_item_mineracao(self.usuario_id, "Café")
+        cafe_status = "🔥 Ativo!" if stats_cafe["cafe_ativo"] else "Inativo"
+        container.add_item(ui.TextDisplay(
+            f"☕ **Café** ({cafe_qtd}x)\n-# +{BONUS_SEGUNDOS_CAFE} segundos para atacar por {DURACAO_CAFE_SEGUNDOS} segundos.\n-# Status: {cafe_status}"
+        ))
+        linha_cafe = ui.ActionRow()
+        btn_cafe = ui.Button(label="Usar Café", style=discord.ButtonStyle.success,
+                              disabled=cafe_qtd <= 0 or stats_cafe["cafe_ativo"] == 1)
+
+        async def usar_cafe(interaction):
+            try:
+                if interaction.user.id != self.usuario_id:
+                    await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                    return
+                if buscar_qtd_item_mineracao(self.usuario_id, "Café") <= 0:
+                    await interaction.response.send_message("Você não tem mais café!", ephemeral=True)
+                    return
+                remover_item_mineracao(self.usuario_id, "Café", 1)
+                con = sqlite3.connect("jogadorbot.db")
+                cur = con.cursor()
+                cur.execute("UPDATE usuario_stats SET cafe_ativo = 1 WHERE usuario_id = ?", (str(self.usuario_id),))
+                con.commit()
+                con.close()
+                bot.loop.create_task(expirar_cafe_depois(self.usuario_id, DURACAO_CAFE_SEGUNDOS))
+                await interaction.response.send_message(
+                    f"☕ Café ativado! +{BONUS_SEGUNDOS_CAFE} segundos para atacar por {DURACAO_CAFE_SEGUNDOS} segundos.",
+                    ephemeral=True
+                )
+                self.view_mineracao.montar()
+                await self.view_mineracao.atualizar_mensagem()
+            except Exception as e:
+                await interaction.response.send_message(f"<:Atencao:1534592266625093662> Erro: `{e}`", ephemeral=True)
+
+        btn_cafe.callback = usar_cafe
+        linha_cafe.add_item(btn_cafe)
+        container.add_item(linha_cafe)
 
         self.add_item(container)
 
@@ -6042,7 +6140,8 @@ class ViewMineracao(ui.LayoutView):
         self.imagem_atual = monstro["imagem"]
         self.texto_status = f"{monstro['mensagem']}\n**{tipo}** apareceu com {monstro['hp']} HP! Ataque antes que ele te acerte!"
         self.btn_atacar.disabled = False
-        self.btn_atacar.label = "⚔️ Atacar (5s)"
+        segundos_iniciais = 5 + (BONUS_SEGUNDOS_CAFE if buscar_stats(self.usuario_id)["cafe_ativo"] else 0)
+        self.btn_atacar.label = f"⚔️ Atacar ({segundos_iniciais}s)"
         await self.atualizar_mensagem()
         bot.loop.create_task(self.loop_combate())
 
@@ -6051,7 +6150,13 @@ class ViewMineracao(ui.LayoutView):
             self.ataque_event.clear()
             atacou_a_tempo = False
 
-            for restante in [5, 4, 3, 2, 1]:
+            # Café dá +2s de janela para atacar (rechecado a cada rodada, pois pode
+            # ser usado/expirar no meio do combate)
+            segundos_ataque = 5
+            if buscar_stats(self.usuario_id)["cafe_ativo"]:
+                segundos_ataque += BONUS_SEGUNDOS_CAFE
+
+            for restante in range(segundos_ataque, 0, -1):
                 if self.finalizado or not self.em_combate:
                     return
                 self.btn_atacar.label = f"⚔️ Atacar ({restante}s)"
@@ -6314,7 +6419,7 @@ class ViewMineracao(ui.LayoutView):
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
         penalidade_ate = (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
-        cur.execute("UPDATE usuario_stats SET penalidade_ate = ?, pimenta_ativa = 0, hp_atual = ? WHERE usuario_id = ?",
+        cur.execute("UPDATE usuario_stats SET penalidade_ate = ?, pimenta_ativa = 0, cafe_ativo = 0, hp_atual = ? WHERE usuario_id = ?",
                     (penalidade_ate, hp_recuperado, str(self.usuario_id)))
         con.commit()
         con.close()
@@ -6358,7 +6463,7 @@ class ViewMineracao(ui.LayoutView):
 
         con2 = sqlite3.connect("jogadorbot.db")
         cur2 = con2.cursor()
-        cur2.execute("UPDATE usuario_stats SET pimenta_ativa = 0 WHERE usuario_id = ?", (str(self.usuario_id),))
+        cur2.execute("UPDATE usuario_stats SET pimenta_ativa = 0, cafe_ativo = 0 WHERE usuario_id = ?", (str(self.usuario_id),))
         con2.commit()
         con2.close()
         
