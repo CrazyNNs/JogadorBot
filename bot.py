@@ -8111,47 +8111,88 @@ class ViewPagamento(discord.ui.View):
 # V2 VIEW (BOTÕES) - Comando de !empregos
 # ============================================================
 class LayoutEmpregos(ui.LayoutView):
-    def __init__(self, usuario_id):
+    EMPREGOS_POR_PAGINA = 6
+
+    def __init__(self, usuario_id, pagina=0):
         super().__init__(timeout=120)
         self.usuario_id = usuario_id
-        level_usuario, _ = buscar_level(usuario_id)
+        self.pagina = pagina
+        self.lista_empregos = list(EMPREGOS.items())
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        level_usuario, _ = buscar_level(self.usuario_id)
+
+        total_paginas = max(1, -(-len(self.lista_empregos) // self.EMPREGOS_POR_PAGINA))  # arredonda pra cima
+        self.pagina = max(0, min(self.pagina, total_paginas - 1))
+
+        inicio = self.pagina * self.EMPREGOS_POR_PAGINA
+        fim = inicio + self.EMPREGOS_POR_PAGINA
+        pagina_empregos = self.lista_empregos[inicio:fim]
 
         container = ui.Container(
-            ui.TextDisplay("<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\nVeja as opções abaixo e escolha um emprego no menu — empregos com 🔒 precisam de level maior.")
+            ui.TextDisplay(
+                f"<:EmpregosIcon:1525710982364532890> **Menu de Empregos**\n"
+                f"Escolha um emprego abaixo! Empregos com ❌ precisam de level maior.\n"
+                f"-# Página {self.pagina + 1}/{total_paginas}"
+            )
         )
         container.accent_color = discord.Colour.blue()
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        linhas_texto = []
-        opcoes = []
-        for nome, dados in EMPREGOS.items():
+        for nome, dados in pagina_empregos:
             level_req = dados["level_necessario"]
             pode = level_usuario >= level_req
-            cadeado = "" if pode else " - 🔒 Bloqueado "
-            linhas_texto.append(
-                f"{dados['emoji']} **{nome}{cadeado}**\n"
+
+            texto = (
+                f"{dados['emoji']} **{nome}**\n"
                 f"{dados['descricao']}\n"
                 f"<:JoyensIcon:1536254492797050880>{dados['salario_min']}-{dados['salario_max']} Joyens | Level {level_req}"
             )
-            opcoes.append(discord.SelectOption(
-                label=nome,
-                description=f"{'🔒 Bloqueado — ' if not pode else ''}Level {level_req} • {dados['salario_min']}-{dados['salario_max']} Joyens"[:100]
-            ))
 
-        container.add_item(ui.TextDisplay("\n\n".join(linhas_texto)))
-        container.add_item(ui.Separator())
+            botao = ui.Button(
+                label="✅ Escolher" if pode else "❌ Escolher",
+                style=discord.ButtonStyle.success if pode else discord.ButtonStyle.danger
+            )
+            botao.callback = self.criar_callback(nome)
 
-        select = ui.Select(placeholder="Escolha um emprego...", options=opcoes[:25])
+            sessao = ui.Section(ui.TextDisplay(texto), accessory=botao)
+            container.add_item(sessao)
+            container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        async def selecionar_emprego(interaction: discord.Interaction):
-            await self.escolher_emprego(interaction, select.values[0])
-        select.callback = selecionar_emprego
+        linha_nav = ui.ActionRow()
+        btn_anterior = ui.Button(label="◄ Anterior", style=discord.ButtonStyle.secondary, disabled=self.pagina <= 0)
+        btn_proxima = ui.Button(label="Próxima ►", style=discord.ButtonStyle.secondary, disabled=self.pagina >= total_paginas - 1)
 
-        linha_select = ui.ActionRow()
-        linha_select.add_item(select)
-        container.add_item(linha_select)
+        async def ir_anterior(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            self.pagina -= 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
+
+        async def ir_proxima(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario_id:
+                await interaction.response.send_message("Isso não é seu!", ephemeral=True)
+                return
+            self.pagina += 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
+
+        btn_anterior.callback = ir_anterior
+        btn_proxima.callback = ir_proxima
+        linha_nav.add_item(btn_anterior)
+        linha_nav.add_item(btn_proxima)
+        container.add_item(linha_nav)
 
         self.add_item(container)
+
+    def criar_callback(self, emprego_nome):
+        async def callback(interaction: discord.Interaction):
+            await self.escolher_emprego(interaction, emprego_nome)
+        return callback
 
     async def escolher_emprego(self, interaction: discord.Interaction, emprego_nome):
         emprego = EMPREGOS[emprego_nome]
