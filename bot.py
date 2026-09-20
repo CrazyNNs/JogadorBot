@@ -1572,7 +1572,6 @@ def iniciar_banco():
     """)
     
     con.commit()
-    con.close()
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS investimentos_pac (
@@ -1588,6 +1587,7 @@ def iniciar_banco():
     """)
     cur.execute("INSERT OR IGNORE INTO pac_estado (id, perdas_semana) VALUES (1, 0)")
     con.commit()
+    con.close()
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Sistema de Ranking
