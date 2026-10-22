@@ -1070,6 +1070,14 @@ def iniciar_banco():
         )
     """)
 
+    # Título equipado (conquista exibida ao lado do nome no perfil)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS titulos_usuarios (
+            usuario_id TEXT PRIMARY KEY,
+            conquista_nome TEXT NOT NULL
+        )
+    """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS economia (
             usuario_id TEXT PRIMARY KEY,
@@ -2032,6 +2040,44 @@ def buscar_conquistas_usuario(usuario_id):
     resultado = cur.fetchall()
     con.close()
     return resultado
+
+def buscar_titulo_equipado(usuario_id):
+    """Devolve (nome, emoji) da conquista equipada como título, ou None.
+    Só vale se o usuário ainda possui a conquista."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT c.nome, c.emoji
+            FROM titulos_usuarios tu
+            JOIN conquistas c ON c.nome = tu.conquista_nome
+            JOIN conquistas_usuarios cu ON cu.conquista_id = c.id AND cu.usuario_id = tu.usuario_id
+            WHERE tu.usuario_id = ?
+        """, (str(usuario_id),))
+        return cur.fetchone()
+    finally:
+        con.close()
+
+def equipar_titulo(usuario_id, conquista_nome):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO titulos_usuarios (usuario_id, conquista_nome) VALUES (?, ?)
+            ON CONFLICT(usuario_id) DO UPDATE SET conquista_nome = excluded.conquista_nome
+        """, (str(usuario_id), conquista_nome))
+        con.commit()
+    finally:
+        con.close()
+
+def desequipar_titulo(usuario_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("DELETE FROM titulos_usuarios WHERE usuario_id = ?", (str(usuario_id),))
+        con.commit()
+    finally:
+        con.close()
 
 def buscar_todas_conquistas():
     con = sqlite3.connect("jogadorbot.db")
@@ -4491,11 +4537,13 @@ class ViewPerfil(discord.ui.LayoutView):
             xp_texto = "**XP**\n🏆 Level máximo atingido!"
 
         nome_exibido = perfil_custom.get("nome_personalizado") or membro.display_name
+        titulo_equipado = buscar_titulo_equipado(membro.id)
+        titulo_texto = f" • {titulo_equipado[1]} *{titulo_equipado[0]}*" if titulo_equipado else ""
         descricao_texto = f"\n> **{perfil_custom['descricao']}**" if perfil_custom.get("descricao") else ""
 
         info_discord = (
             f"# Perfil — Lvl.``{level}``\n"
-            f"## {nome_exibido}\n"
+            f"## {nome_exibido}{titulo_texto}\n"
             f"> {membro.name}\n"
             f"**ID:** ``{membro.id}``"
             f"{descricao_texto}"
@@ -4596,9 +4644,25 @@ class ViewConquistas(discord.ui.LayoutView):
         self.usuario = usuario
         self.conquistas = conquistas
         self.pagina = pagina
-        self.por_pagina = 10
+        self.por_pagina = 8
         self.total_paginas = max(1, -(-len(conquistas) // self.por_pagina))
         self.montar()
+
+    def criar_callback_titulo(self, nome_conquista, equipado):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user.id != self.usuario.id:
+                await interaction.response.send_message(
+                    "<:Atencao:1534592266625093662> Você só pode equipar títulos no seu próprio perfil!",
+                    ephemeral=True
+                )
+                return
+            if equipado:
+                desequipar_titulo(self.usuario.id)
+            else:
+                equipar_titulo(self.usuario.id, nome_conquista)
+            self.montar()
+            await interaction.response.edit_message(view=self)
+        return callback
 
     def montar(self):
         self.clear_items()
@@ -4617,9 +4681,19 @@ class ViewConquistas(discord.ui.LayoutView):
         container.add_item(discord.ui.Section(discord.ui.TextDisplay(titulo), accessory=thumbnail))
         container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
 
+        titulo_equipado = buscar_titulo_equipado(self.usuario.id)
+        nome_equipado = titulo_equipado[0] if titulo_equipado else None
+
         if pagina_conquistas:
             for nome, descricao, emoji, data in pagina_conquistas:
-                container.add_item(discord.ui.TextDisplay(f"{emoji} **{nome}**\n{descricao}\n📅 {data}"))
+                texto = f"{emoji} **{nome}**\n{descricao}\n📅 {data}"
+                equipado = (nome == nome_equipado)
+                botao_titulo = discord.ui.Button(
+                    label="Desequipar" if equipado else "Usar",
+                    style=discord.ButtonStyle.danger if equipado else discord.ButtonStyle.success,
+                )
+                botao_titulo.callback = self.criar_callback_titulo(nome, equipado)
+                container.add_item(discord.ui.Section(discord.ui.TextDisplay(texto), accessory=botao_titulo))
         else:
             container.add_item(discord.ui.TextDisplay("Nenhuma conquista nesta página."))
 
