@@ -8769,8 +8769,8 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
         embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
         embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
-        embed.add_field(name=f"`{PREFIX}presentear @usuario`", value="Envia itens da sua mochila num presente na DM da pessoa", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
+        embed.add_field(name=f"`{PREFIX}presentear @usuario`", value="Envia itens da sua mochila num presente na DM do destinatário", inline=False)
         embed.set_footer(text="<:BolsaJoyensIcon:1525729605724405781> Economia • Sakurai")
         return embed
 
@@ -8837,6 +8837,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name="`/rotacao forcar`", value="Força uma nova rotação imediatamente", inline=False)
         embed.add_field(name="`/adminbot gerenciar`", value="Adiciona ou remove um admin", inline=False)
         embed.add_field(name="`/adminbot lista`", value="Lista todos os admins ativos", inline=False)
+        embed.add_field(name=f"`/presentear ADM @usuario`", value="Envia itens num presente na DM do destinatário", inline=False)
         embed.set_footer(text="⚙️ Slash • Sakurai")
         return embed
 
