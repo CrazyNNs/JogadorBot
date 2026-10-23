@@ -1597,6 +1597,26 @@ def iniciar_banco():
     con.commit()
 
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS presentes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL,
+            remetente_id TEXT NOT NULL,
+            remetente_nome TEXT NOT NULL,
+            destinatario_id TEXT NOT NULL,
+            destinatario_nome TEXT NOT NULL,
+            itens TEXT NOT NULL,
+            mensagem TEXT,
+            status TEXT NOT NULL DEFAULT 'pendente',
+            criado_ts INTEGER NOT NULL,
+            expira_ts INTEGER NOT NULL,
+            resolvido_ts INTEGER,
+            dm_canal_id TEXT,
+            dm_mensagem_id TEXT
+        )
+    """)
+    con.commit()
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS investimentos_pac (
             usuario_id TEXT PRIMARY KEY,
             valor_investido INTEGER NOT NULL DEFAULT 0
@@ -8749,6 +8769,7 @@ class ViewAjuda(discord.ui.View):
         embed.add_field(name=f"`{PREFIX}trabalhar`", value="Trabalha e ganha Joyens", inline=False)
         embed.add_field(name=f"`{PREFIX}diario`", value="Coleta seus Joyens diários", inline=False)
         embed.add_field(name=f"`{PREFIX}pagar @usuario quantidade`", value="Envia Joyens para outro usuário", inline=False)
+        embed.add_field(name=f"`{PREFIX}presentear @usuario`", value="Envia itens da sua mochila num presente na DM da pessoa", inline=False)
         embed.add_field(name=f"`{PREFIX}vender (categoria) (nome)`", value="Vende um produto pela metade do preço", inline=False)
         embed.set_footer(text="<:BolsaJoyensIcon:1525729605724405781> Economia • Sakurai")
         return embed
@@ -9123,6 +9144,1030 @@ class ViewMissoesCustomizadas(ui.LayoutView):
         container.add_item(linha)
 
         self.add_item(container)
+
+# ============================================================
+# SISTEMA DE PRESENTES (ADM e Civil)
+# ============================================================
+import json
+import re
+
+PRESENTE_DURACAO_HORAS = 12          # tempo que o presente fica liberado para aceitar
+PRESENTE_MAX_ITENS = 5               # itens diferentes dentro de um mesmo presente
+PRESENTE_MAX_PENDENTES_DUPLA = 3     # presentes civis pendentes do mesmo remetente para a mesma pessoa
+PRESENTE_MAX_MENSAGEM = 150
+PRESENTE_MAX_QTD_ITEM = 9999
+PRESENTE_MAX_QTD_MOEDA = 1_000_000_000
+
+PRESENTE_CATEGORIAS = {
+    "moedas":       {"emoji": "💰", "nome": "Moedas e chaves"},
+    "mineracao":    {"emoji": "⛏️", "nome": "Mineração"},
+    "ferramentas":  {"emoji": "⚒️", "nome": "Ferramentas"},
+    "equipamentos": {"emoji": "🛡️", "nome": "Equipamentos"},
+    "minerios":     {"emoji": "💎", "nome": "Minérios"},
+    "pets":         {"emoji": "🐾", "nome": "Pets"},
+    "medicamentos": {"emoji": "💊", "nome": "Medicamentos"},
+    "banners":      {"emoji": "🖼️", "nome": "Banners"},
+}
+
+# Onde cada tipo de item realmente é guardado no banco.
+# Pilhas: (tabela, coluna do nome, coluna da quantidade) — uma linha por usuário + item.
+_PRESENTE_PILHAS = {
+    "mineracao":   ("itens_usuarios_mineracao", "item_nome", "quantidade"),
+    "minerio":     ("minerios_usuarios", "minerio", "quantidade"),
+    "petisco":     ("pets_petiscos", "tipo", "quantidade"),
+    "medicamento": ("medicamentos_usuarios", "nome", "quantidade"),
+}
+# Únicos: (tabela, coluna) — uma linha por usuário.
+_PRESENTE_UNICOS = {
+    "joyens":   ("economia", "joyens"),
+    "joyogens": ("usuario_stats", "joyogens"),
+    "chaves":   ("chaves_usuario", "quantidade"),
+    "sabonete": ("pets_sabonete", "quantidade"),
+}
+# Unidades: cada item é uma linha própria com seu desgaste (tabela, coluna do desgaste).
+_PRESENTE_UNIDADES = {
+    "ferramenta":  ("ferramentas_usuario", "usos_restantes"),
+    "equipamento": ("equipamentos_usuario", "durabilidade_atual"),
+}
+
+_PRESENTE_COLUNAS = (
+    "id", "tipo", "remetente_id", "remetente_nome", "destinatario_id", "destinatario_nome",
+    "itens", "mensagem", "status", "criado_ts", "expira_ts", "resolvido_ts",
+    "dm_canal_id", "dm_mensagem_id",
+)
+
+
+class PresenteErro(Exception):
+    """Erro de regra de negócio (mostrado ao usuário). Desfaz a transação inteira."""
+
+
+def _p_fmt(n):
+    return f"{n:,}".replace(",", ".")
+
+
+def _p_agora():
+    return int(datetime.datetime.now(FUSO_BR).timestamp())
+
+
+def _p_tipo(chave):
+    if ":" in chave:
+        tipo, nome = chave.split(":", 1)
+        return tipo, nome
+    return chave, None
+
+
+def _p_ident(entrada):
+    return (entrada["chave"], (entrada.get("dados") or {}).get("id"))
+
+
+def _p_emoji_select(emoji):
+    """Só devolve emojis que o Discord aceita num menu (customizado ou unicode curto)."""
+    if not emoji:
+        return None
+    if re.fullmatch(r"<a?:\w+:\d+>", emoji):
+        return emoji
+    if len(emoji) <= 8 and not emoji.isascii():
+        return emoji
+    return None
+
+
+# ------------------------------------------------------------
+# Catálogo: tudo que pode ir dentro de um presente
+# ------------------------------------------------------------
+def presente_catalogo_sync():
+    """Catálogo de itens que podem entrar em presentes.
+    civil=False -> só a administração pode enviar (ex.: moedas).
+    Para liberar mais um item no futuro, é só adicionar uma linha de add() aqui
+    (e, se for um tipo novo de armazenamento, ensinar _p_estoque/_p_remover/_p_conceder)."""
+    catalogo = {}
+
+    def add(chave, nome, emoji, categoria, modo="pilha", civil=True, maximo=PRESENTE_MAX_QTD_ITEM):
+        catalogo[chave] = {
+            "chave": chave, "nome": nome, "emoji": emoji, "categoria": categoria,
+            "modo": modo, "civil": civil, "maximo": maximo,
+        }
+
+    add("joyens", "Joyens", "<:JoyensIcon:1536254492797050880>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
+    add("joyogens", "Joyogens", "<:JoyogensIcon:1536254582362210334>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
+    add("chaves", "Chave de Drop", "🔑", "moedas")
+
+    for nome, item in ITENS_MINERACAO.items():
+        if item["subcategoria"] == "Ferramentas" and "usos" in item:
+            add(f"ferramenta:{nome}", nome, item["emoji"], "ferramentas", modo="unidade")
+        elif item["subcategoria"] == "Equipamento":
+            add(f"equipamento:{nome}", nome, item["emoji"], "equipamentos", modo="unidade")
+        else:
+            add(f"mineracao:{nome}", nome, item["emoji"], "mineracao")
+
+    for nome, dados in MINERIOS.items():
+        add(f"minerio:{nome}", nome, dados["emoji"], "minerios")
+
+    for dados in PETS_DISPONIVEIS.values():
+        add(f"petisco:{dados['petisco_nome']}", dados["petisco_nome"], "🍖", "pets")
+        # Brinquedo guarda "usos" (não unidades), então por enquanto só a ADM envia.
+        add(f"brinquedo:{dados['brinquedo_nome']}", dados["brinquedo_nome"], "🧸", "pets", civil=False)
+    add("sabonete", SABONETE_NOME, "🧼", "pets")
+
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT nome, emoji FROM medicamentos ORDER BY nome")
+        for nome, emoji in cur.fetchall():
+            add(f"medicamento:{nome}", nome, emoji or "💊", "medicamentos")
+        cur.execute("SELECT nome FROM banners ORDER BY nome")
+        for (nome,) in cur.fetchall():
+            add(f"banner:{nome}", nome, "🖼️", "banners", modo="posse", maximo=1)
+    finally:
+        con.close()
+    return catalogo
+
+
+# ------------------------------------------------------------
+# Operações no inventário (sempre dentro de uma transação aberta)
+# ------------------------------------------------------------
+def _p_estoque(cur, usuario_id, chave):
+    """Quantos itens empilháveis o usuário tem."""
+    tipo, nome = _p_tipo(chave)
+    if tipo in _PRESENTE_PILHAS:
+        tabela, col_nome, col_qtd = _PRESENTE_PILHAS[tipo]
+        cur.execute(f"SELECT {col_qtd} FROM {tabela} WHERE usuario_id = ? AND {col_nome} = ?", (usuario_id, nome))
+    elif tipo in _PRESENTE_UNICOS:
+        tabela, coluna = _PRESENTE_UNICOS[tipo]
+        cur.execute(f"SELECT {coluna} FROM {tabela} WHERE usuario_id = ?", (usuario_id,))
+    else:
+        return 0
+    linha = cur.fetchone()
+    return linha[0] if linha and linha[0] else 0
+
+
+def _p_remover(cur, usuario_id, e):
+    """Tira o item do inventário. Devolve False (sem mexer em nada) se o usuário não tiver."""
+    tipo, nome = _p_tipo(e["chave"])
+    qtd = e["qtd"]
+    if tipo in _PRESENTE_PILHAS:
+        tabela, col_nome, col_qtd = _PRESENTE_PILHAS[tipo]
+        cur.execute(
+            f"UPDATE {tabela} SET {col_qtd} = {col_qtd} - ? WHERE usuario_id = ? AND {col_nome} = ? AND {col_qtd} >= ?",
+            (qtd, usuario_id, nome, qtd)
+        )
+        return cur.rowcount > 0
+    if tipo in _PRESENTE_UNICOS:
+        tabela, coluna = _PRESENTE_UNICOS[tipo]
+        cur.execute(
+            f"UPDATE {tabela} SET {coluna} = {coluna} - ? WHERE usuario_id = ? AND {coluna} >= ?",
+            (qtd, usuario_id, qtd)
+        )
+        return cur.rowcount > 0
+    if tipo in _PRESENTE_UNIDADES:
+        tabela, _ = _PRESENTE_UNIDADES[tipo]
+        unidade_id = (e.get("dados") or {}).get("id")
+        if unidade_id is None:
+            return False
+        cur.execute(
+            f"DELETE FROM {tabela} WHERE id = ? AND usuario_id = ? AND item_nome = ? AND equipado = 0",
+            (unidade_id, usuario_id, nome)
+        )
+        return cur.rowcount > 0
+    if tipo == "banner":
+        cur.execute("SELECT id FROM banners WHERE nome = ?", (nome,))
+        linha = cur.fetchone()
+        if not linha:
+            return False
+        cur.execute("DELETE FROM banners_usuarios WHERE usuario_id = ? AND banner_id = ?", (usuario_id, linha[0]))
+        if cur.rowcount == 0:
+            return False
+        cur.execute("DELETE FROM banner_ativo WHERE usuario_id = ? AND banner_id = ?", (usuario_id, linha[0]))
+        return True
+    return False  # tipo não suportado (ex.: brinquedo) -> nunca sai do inventário
+
+
+def _p_conceder(cur, usuario_id, e):
+    """Coloca o item no inventário. Devolve False se não foi possível entregar
+    (ex.: o destinatário já tem aquele banner)."""
+    tipo, nome = _p_tipo(e["chave"])
+    qtd = e["qtd"]
+    dados = e.get("dados") or {}
+
+    if tipo in _PRESENTE_PILHAS:
+        tabela, col_nome, col_qtd = _PRESENTE_PILHAS[tipo]
+        cur.execute(
+            f"INSERT INTO {tabela} (usuario_id, {col_nome}, {col_qtd}) VALUES (?, ?, ?) "
+            f"ON CONFLICT(usuario_id, {col_nome}) DO UPDATE SET {col_qtd} = {col_qtd} + ?",
+            (usuario_id, nome, qtd, qtd)
+        )
+        return True
+
+    if tipo in _PRESENTE_UNICOS:
+        tabela, coluna = _PRESENTE_UNICOS[tipo]
+        cur.execute(
+            f"INSERT INTO {tabela} (usuario_id, {coluna}) VALUES (?, ?) "
+            f"ON CONFLICT(usuario_id) DO UPDATE SET {coluna} = {coluna} + ?",
+            (usuario_id, qtd, qtd)
+        )
+        # Mantém os acumuladores de missão iguais aos dos comandos que já existem.
+        if tipo in ("joyens", "joyogens"):
+            cur.execute("INSERT OR IGNORE INTO contadores_usuarios (usuario_id) VALUES (?)", (usuario_id,))
+            cur.execute(
+                f"UPDATE contadores_usuarios SET {tipo}_acumulados = {tipo}_acumulados + ? WHERE usuario_id = ?",
+                (qtd, usuario_id)
+            )
+        return True
+
+    if tipo in _PRESENTE_UNIDADES:
+        tabela, coluna = _PRESENTE_UNIDADES[tipo]
+        item = ITENS_MINERACAO.get(nome, {})
+        padrao = item.get("usos" if tipo == "ferramenta" else "durabilidade", 0)
+        desgaste = dados.get("restante", padrao)
+        for _ in range(qtd):
+            cur.execute(
+                f"INSERT INTO {tabela} (usuario_id, item_nome, {coluna}, equipado) VALUES (?, ?, ?, 0)",
+                (usuario_id, nome, desgaste)
+            )
+        return True
+
+    if tipo == "brinquedo":
+        usos = 0
+        for especie in PETS_DISPONIVEIS.values():
+            if especie["brinquedo_nome"] == nome:
+                usos = especie["brinquedo_usos"]
+        usos_totais = usos * qtd
+        cur.execute(
+            "INSERT INTO pets_brinquedos (usuario_id, tipo, usos_restantes) VALUES (?, ?, ?) "
+            "ON CONFLICT(usuario_id, tipo) DO UPDATE SET usos_restantes = usos_restantes + ?",
+            (usuario_id, nome, usos_totais, usos_totais)
+        )
+        return True
+
+    if tipo == "banner":
+        cur.execute("SELECT id FROM banners WHERE nome = ?", (nome,))
+        linha = cur.fetchone()
+        if not linha:
+            return False
+        cur.execute("INSERT OR IGNORE INTO banners_usuarios (usuario_id, banner_id) VALUES (?, ?)", (usuario_id, linha[0]))
+        if cur.rowcount == 0:
+            return False  # já tinha o banner
+        cur.execute("DELETE FROM banners_favoritos WHERE usuario_id = ? AND banner_id = ?", (usuario_id, linha[0]))
+        return True
+
+    return False
+
+# ------------------------------------------------------------
+# Banco: tabela, transações e estados do presente
+# ------------------------------------------------------------
+def _p_transacao(func):
+    """Roda func(cur) numa transação exclusiva: ou tudo acontece, ou nada."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        try:
+            resultado = func(cur)
+        except BaseException:
+            con.rollback()
+            raise
+        con.commit()
+        return resultado
+    finally:
+        con.close()
+
+
+def _p_carregar(cur, presente_id):
+    cur.execute(f"SELECT {', '.join(_PRESENTE_COLUNAS)} FROM presentes WHERE id = ?", (presente_id,))
+    linha = cur.fetchone()
+    if not linha:
+        return None
+    presente = dict(zip(_PRESENTE_COLUNAS, linha))
+    presente["itens"] = json.loads(presente["itens"])
+    return presente
+
+
+def _p_devolver(cur, presente, itens=None):
+    """Devolve ao remetente (só presentes civis — os itens da ADM não saíram de inventário nenhum)."""
+    if presente["tipo"] != "civil":
+        return
+    for e in (presente["itens"] if itens is None else itens):
+        _p_conceder(cur, presente["remetente_id"], e)
+
+
+def _p_encerrar(cur, presente, status, agora):
+    """Move o presente de 'pendente' para um estado final e devolve os itens ao remetente.
+    O UPDATE condicional garante que só UM caminho (aceitar/recusar/expirar) vença uma disputa."""
+    cur.execute(
+        "UPDATE presentes SET status = ?, resolvido_ts = ? WHERE id = ? AND status = 'pendente'",
+        (status, agora, presente["id"])
+    )
+    if cur.rowcount != 1:
+        return False
+    presente["status"] = status
+    _p_devolver(cur, presente)
+    return True
+
+
+def presente_criar_sync(tipo, remetente_id, remetente_nome, destinatario_id, destinatario_nome, itens, mensagem):
+    """Reserva os itens (tirando da mochila no caso civil) e registra o presente. Devolve (ok, id_ou_erro)."""
+    remetente_id = str(remetente_id)
+    destinatario_id = str(destinatario_id)
+
+    def op(cur):
+        if tipo == "civil":
+            cur.execute(
+                "SELECT COUNT(*) FROM presentes WHERE tipo = 'civil' AND status = 'pendente' "
+                "AND remetente_id = ? AND destinatario_id = ?",
+                (remetente_id, destinatario_id)
+            )
+            if cur.fetchone()[0] >= PRESENTE_MAX_PENDENTES_DUPLA:
+                raise PresenteErro(
+                    f"Você já tem {PRESENTE_MAX_PENDENTES_DUPLA} presentes aguardando essa pessoa. "
+                    f"Espere ela aceitar/recusar ou o prazo acabar."
+                )
+        for e in itens:
+            tipo_item, nome_item = _p_tipo(e["chave"])
+            if tipo_item == "banner":
+                cur.execute(
+                    "SELECT 1 FROM banners_usuarios bu JOIN banners b ON b.id = bu.banner_id "
+                    "WHERE bu.usuario_id = ? AND b.nome = ?",
+                    (destinatario_id, nome_item)
+                )
+                if cur.fetchone():
+                    raise PresenteErro(f"{destinatario_nome} já possui o banner **{nome_item}**.")
+            if tipo == "civil" and not _p_remover(cur, remetente_id, e):
+                raise PresenteErro(f"Você não tem mais **{e['nome']}** disponível na mochila.")
+        agora = _p_agora()
+        cur.execute(
+            "INSERT INTO presentes (tipo, remetente_id, remetente_nome, destinatario_id, destinatario_nome, "
+            "itens, mensagem, status, criado_ts, expira_ts) VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?)",
+            (tipo, remetente_id, remetente_nome, destinatario_id, destinatario_nome,
+             json.dumps(itens, ensure_ascii=False), mensagem or None, agora, agora + PRESENTE_DURACAO_HORAS * 3600)
+        )
+        return cur.lastrowid
+
+    try:
+        return True, _p_transacao(op)
+    except PresenteErro as erro:
+        return False, str(erro)
+
+
+def presente_buscar_sync(presente_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        return _p_carregar(con.cursor(), presente_id)
+    finally:
+        con.close()
+
+
+def presente_registrar_dm_sync(presente_id, canal_id, mensagem_id):
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        con.execute("UPDATE presentes SET dm_canal_id = ?, dm_mensagem_id = ? WHERE id = ?",
+                    (str(canal_id), str(mensagem_id), presente_id))
+        con.commit()
+    finally:
+        con.close()
+
+
+def presente_listar_pendentes_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT id FROM presentes WHERE status = 'pendente'")
+        ids = [linha[0] for linha in cur.fetchall()]
+        return [_p_carregar(cur, i) for i in ids]
+    finally:
+        con.close()
+
+
+def presente_listar_vencidos_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT id FROM presentes WHERE status = 'pendente' AND expira_ts <= ?", (_p_agora(),))
+        return [linha[0] for linha in cur.fetchall()]
+    finally:
+        con.close()
+
+
+def presente_aceitar_sync(presente_id, usuario_id):
+    usuario_id = str(usuario_id)
+
+    def op(cur):
+        p = _p_carregar(cur, presente_id)
+        if not p:
+            return {"resultado": "inexistente"}
+        if p["destinatario_id"] != usuario_id:
+            return {"resultado": "nao_destinatario", "presente": p}
+        if p["status"] != "pendente":
+            return {"resultado": "nao_pendente", "presente": p}
+        agora = _p_agora()
+        if agora >= p["expira_ts"]:
+            _p_encerrar(cur, p, "expirado", agora)
+            return {"resultado": "expirado", "presente": p}
+        cur.execute(
+            "UPDATE presentes SET status = 'aceito', resolvido_ts = ? WHERE id = ? AND status = 'pendente'",
+            (agora, presente_id)
+        )
+        if cur.rowcount != 1:
+            return {"resultado": "nao_pendente", "presente": p}
+        p["status"] = "aceito"
+        nao_entregues = [e for e in p["itens"] if not _p_conceder(cur, usuario_id, e)]
+        if nao_entregues:
+            _p_devolver(cur, p, nao_entregues)
+        return {"resultado": "aceito", "presente": p, "nao_entregues": nao_entregues}
+
+    return _p_transacao(op)
+
+
+def presente_recusar_sync(presente_id, usuario_id):
+    usuario_id = str(usuario_id)
+
+    def op(cur):
+        p = _p_carregar(cur, presente_id)
+        if not p:
+            return {"resultado": "inexistente"}
+        if p["destinatario_id"] != usuario_id:
+            return {"resultado": "nao_destinatario", "presente": p}
+        if p["status"] != "pendente":
+            return {"resultado": "nao_pendente", "presente": p}
+        agora = _p_agora()
+        if agora >= p["expira_ts"]:
+            _p_encerrar(cur, p, "expirado", agora)
+            return {"resultado": "expirado", "presente": p}
+        _p_encerrar(cur, p, "recusado", agora)
+        return {"resultado": "recusado", "presente": p}
+
+    return _p_transacao(op)
+
+
+def presente_expirar_sync(presente_id):
+    """Chamado pela rotina automática. Devolve o presente se ele acabou de expirar, senão None."""
+    def op(cur):
+        p = _p_carregar(cur, presente_id)
+        agora = _p_agora()
+        if not p or p["status"] != "pendente" or agora < p["expira_ts"]:
+            return None
+        return p if _p_encerrar(cur, p, "expirado", agora) else None
+
+    return _p_transacao(op)
+
+
+def presente_cancelar_sync(presente_id):
+    """Usado quando a DM não pôde ser enviada: cancela e devolve os itens ao remetente."""
+    def op(cur):
+        p = _p_carregar(cur, presente_id)
+        if not p:
+            return None
+        return p if _p_encerrar(cur, p, "cancelado", _p_agora()) else None
+
+    return _p_transacao(op)
+
+
+def presente_opcoes_sync(modo, usuario_id, categoria):
+    """Opções do menu de itens. ADM: o catálogo inteiro. Civil: só o que a pessoa tem e pode doar."""
+    usuario_id = str(usuario_id)
+    catalogo = presente_catalogo_sync()
+    opcoes = []
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        for chave, info in catalogo.items():
+            if info["categoria"] != categoria:
+                continue
+            base = {
+                "chave": chave, "nome": info["nome"], "emoji": info["emoji"], "modo": info["modo"],
+                "maximo": info["maximo"], "estoque": None, "dados": {},
+            }
+            if modo == "adm":
+                descricao = "Banner único" if info["modo"] == "posse" else "Quantidade livre"
+                opcoes.append({**base, "value": chave, "label": info["nome"], "descricao": descricao})
+                continue
+            if not info["civil"]:
+                continue
+            tipo, nome = _p_tipo(chave)
+            if info["modo"] == "pilha":
+                n = _p_estoque(cur, usuario_id, chave)
+                if n > 0:
+                    opcoes.append({**base, "value": chave, "label": info["nome"],
+                                   "descricao": f"Você tem {_p_fmt(n)}", "estoque": n})
+            elif info["modo"] == "unidade":
+                tabela, coluna = _PRESENTE_UNIDADES[tipo]
+                cur.execute(
+                    f"SELECT id, {coluna} FROM {tabela} WHERE usuario_id = ? AND item_nome = ? AND equipado = 0 ORDER BY id",
+                    (usuario_id, nome)
+                )
+                chave_total = "usos" if tipo == "ferramenta" else "durabilidade"
+                for unidade_id, restante in cur.fetchall():
+                    total = ITENS_MINERACAO.get(nome, {}).get(chave_total, restante)
+                    sufixo = "usos" if tipo == "ferramenta" else "de durabilidade"
+                    opcoes.append({
+                        **base, "value": f"{chave}#{unidade_id}", "label": f"{info['nome']} #{unidade_id}",
+                        "descricao": f"{restante}/{total} {sufixo}", "estoque": 1,
+                        "dados": {"id": unidade_id, "restante": restante, "total": total},
+                    })
+            elif info["modo"] == "posse":
+                cur.execute(
+                    "SELECT 1 FROM banners_usuarios bu JOIN banners b ON b.id = bu.banner_id "
+                    "WHERE bu.usuario_id = ? AND b.nome = ?",
+                    (usuario_id, nome)
+                )
+                if cur.fetchone():
+                    opcoes.append({**base, "value": chave, "label": info["nome"],
+                                   "descricao": "Da sua coleção", "estoque": 1})
+    finally:
+        con.close()
+    opcoes.sort(key=lambda o: (o["nome"].lower(), o["dados"].get("id", 0)))
+    return opcoes
+
+# ------------------------------------------------------------
+# Textos e views do presente (a parte que o destinatário vê na DM)
+# ------------------------------------------------------------
+def presente_formatar_itens(itens):
+    linhas = []
+    for e in itens:
+        qtd = f" ×{_p_fmt(e['qtd'])}" if e["qtd"] > 1 else ""
+        dados = e.get("dados") or {}
+        detalhe = ""
+        if "restante" in dados:
+            sufixo = "usos" if e["chave"].startswith("ferramenta:") else "de durabilidade"
+            detalhe = f" *({dados['restante']}/{dados['total']} {sufixo})*"
+        linhas.append(f"{e['emoji']} **{e['nome']}**{qtd}{detalhe}")
+    return "\n".join(linhas)
+
+
+def presente_view_simples(texto, cor=None):
+    """View só com um texto (sem botões) — usada para encerrar mensagens."""
+    view = ui.LayoutView()
+    container = ui.Container(ui.TextDisplay(texto))
+    container.accent_color = cor or discord.Colour.dark_grey()
+    view.add_item(container)
+    return view
+
+
+class ViewPresente(ui.LayoutView):
+    """Presente na DM do destinatário. Persistente: os botões continuam funcionando
+    mesmo se o bot reiniciar (as views são recriadas no on_ready)."""
+
+    def __init__(self, presente):
+        super().__init__(timeout=None)
+        self.presente = presente
+        self.presente_id = presente["id"]
+        self.montar()
+
+    def montar(self):
+        p = self.presente
+        adm = p["tipo"] == "adm"
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold() if adm else discord.Colour.pink()
+
+        if adm:
+            cabecalho = "### 🛡️ Presente da Administração\n**De:** Administração do Sakurai"
+        else:
+            cabecalho = f"### 🎁 Você recebeu um presente!\n**De:** {p['remetente_nome']}"
+        if p["mensagem"]:
+            cabecalho += f"\n> {p['mensagem']}"
+        container.add_item(ui.TextDisplay(cabecalho))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.TextDisplay("**Dentro do presente:**\n" + presente_formatar_itens(p["itens"])))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        if adm:
+            consequencia = "Se recusar ou deixar o prazo acabar, o presente é perdido."
+        else:
+            consequencia = "Se recusar ou deixar o prazo acabar, os itens voltam para quem enviou."
+        container.add_item(ui.TextDisplay(
+            f"⏰ Aceite até <t:{p['expira_ts']}:f> (<t:{p['expira_ts']}:R>).\n-# {consequencia}"
+        ))
+
+        botao_aceitar = ui.Button(label="Aceitar", emoji="🎁", style=discord.ButtonStyle.success,
+                                  custom_id=f"presente:aceitar:{self.presente_id}")
+        botao_aceitar.callback = self.aceitar
+        botao_recusar = ui.Button(label="Recusar", emoji="✖️", style=discord.ButtonStyle.danger,
+                                  custom_id=f"presente:recusar:{self.presente_id}")
+        botao_recusar.callback = self.recusar
+        container.add_item(ui.ActionRow(botao_aceitar, botao_recusar))
+        self.add_item(container)
+
+    async def aceitar(self, interaction: discord.Interaction):
+        resultado = await executar_db(presente_aceitar_sync, self.presente_id, interaction.user.id)
+        await presente_tratar_resultado(interaction, resultado)
+
+    async def recusar(self, interaction: discord.Interaction):
+        resultado = await executar_db(presente_recusar_sync, self.presente_id, interaction.user.id)
+        await presente_tratar_resultado(interaction, resultado)
+
+
+def presente_view_resolvida(presente, status, nao_entregues=None):
+    """Como a mensagem do presente fica depois de aceita, recusada, expirada ou cancelada."""
+    civil = presente["tipo"] == "civil"
+    itens = presente_formatar_itens(presente["itens"])
+    if status == "aceito":
+        texto = f"### 🎉 Presente aberto!\n{itens}"
+        if nao_entregues:
+            texto += (f"\n\n⚠️ Você já tinha:\n{presente_formatar_itens(nao_entregues)}"
+                      + ("\nEsses itens voltaram para quem enviou." if civil else ""))
+        cor = discord.Colour.green()
+    elif status == "recusado":
+        volta = "Os itens voltaram para quem enviou." if civil else "O presente foi perdido."
+        texto = f"### ✖️ Presente recusado\n{itens}\n\n-# {volta}"
+        cor = discord.Colour.red()
+    elif status == "expirado":
+        volta = "Os itens voltaram para quem enviou." if civil else "O presente foi perdido."
+        texto = (f"### ⏰ Presente expirado\nO prazo de {PRESENTE_DURACAO_HORAS}h acabou e o presente foi bloqueado.\n"
+                 f"{itens}\n\n-# {volta}")
+        cor = discord.Colour.dark_grey()
+    else:
+        texto = f"### 🚫 Presente cancelado\n{itens}"
+        cor = discord.Colour.dark_grey()
+    return presente_view_simples(texto, cor)
+
+
+async def presente_avisar_remetente(presente, status, nao_entregues=None):
+    """Avisa o remetente por DM sobre o destino do presente."""
+    civil = presente["tipo"] == "civil"
+    destino = presente["destinatario_nome"]
+    itens = presente_formatar_itens(presente["itens"])
+    if status == "aceito":
+        texto = f"🎁 **{destino}** aceitou o presente que você enviou!\n{itens}"
+        if nao_entregues and civil:
+            texto += f"\n\n⚠️ {destino} já tinha estes itens, então eles voltaram para a sua mochila:\n{presente_formatar_itens(nao_entregues)}"
+    elif status == "recusado":
+        texto = f"✖️ **{destino}** recusou o presente.\n{itens}"
+        texto += "\n\nOs itens voltaram para a sua mochila." if civil else ""
+    elif status == "expirado":
+        texto = f"⏰ O presente para **{destino}** expirou sem ser aceito.\n{itens}"
+        texto += "\n\nOs itens voltaram para a sua mochila." if civil else ""
+    else:
+        return
+    try:
+        usuario = bot.get_user(int(presente["remetente_id"])) or await bot.fetch_user(int(presente["remetente_id"]))
+        await usuario.send(texto)
+    except Exception:
+        pass  # DM fechada: o aviso é só cortesia, os itens já foram devolvidos no banco
+
+
+async def presente_editar_dm(presente, status, nao_entregues=None):
+    """Troca a mensagem da DM do destinatário pela versão final (sem botões)."""
+    if not presente.get("dm_canal_id") or not presente.get("dm_mensagem_id"):
+        return
+    try:
+        canal = bot.get_channel(int(presente["dm_canal_id"])) or await bot.fetch_channel(int(presente["dm_canal_id"]))
+        mensagem = await canal.fetch_message(int(presente["dm_mensagem_id"]))
+        await mensagem.edit(view=presente_view_resolvida(presente, status, nao_entregues))
+    except Exception:
+        pass
+
+
+async def presente_tratar_resultado(interaction, resultado):
+    """Resposta aos botões Aceitar/Recusar."""
+    tipo_resultado = resultado["resultado"]
+    if tipo_resultado in ("inexistente", "nao_destinatario"):
+        await interaction.response.send_message(
+            "<:Atencao:1534592266625093662> Esse presente não é seu ou não existe mais.", ephemeral=True
+        )
+        return
+    presente = resultado["presente"]
+    if tipo_resultado == "nao_pendente":
+        # Já foi resolvido (ex.: clique duplo ou expirou enquanto a mensagem estava aberta).
+        await interaction.response.edit_message(view=presente_view_resolvida(presente, presente["status"]))
+        return
+    nao_entregues = resultado.get("nao_entregues")
+    await interaction.response.edit_message(view=presente_view_resolvida(presente, tipo_resultado, nao_entregues))
+    await presente_avisar_remetente(presente, tipo_resultado, nao_entregues)
+
+
+async def presentes_registrar_views():
+    """Reativa os botões dos presentes que ainda estão pendentes (chamado no on_ready)."""
+    pendentes = await executar_db(presente_listar_pendentes_sync)
+    for presente in pendentes:
+        if presente:
+            bot.add_view(ViewPresente(presente))
+
+
+@tasks.loop(minutes=1)
+async def verificar_presentes_expirados():
+    """Bloqueia presentes que passaram do prazo e devolve os itens ao remetente."""
+    try:
+        ids = await executar_db(presente_listar_vencidos_sync)
+    except Exception:
+        traceback.print_exc()
+        return
+    for presente_id in ids:
+        try:
+            presente = await executar_db(presente_expirar_sync, presente_id)
+            if presente:
+                await presente_editar_dm(presente, "expirado")
+                await presente_avisar_remetente(presente, "expirado")
+        except Exception:
+            traceback.print_exc()
+
+# ------------------------------------------------------------
+# Montagem do presente (menu interativo de quem envia)
+# ------------------------------------------------------------
+class ModalQuantidadePresente(ui.Modal, title="Quantidade"):
+    def __init__(self, montador, opcao, maximo):
+        super().__init__()
+        self.montador = montador
+        self.opcao = opcao
+        self.campo = ui.TextInput(label=f"Quantidade (máximo {_p_fmt(maximo)})", default="1",
+                                  max_length=13, required=True)
+        self.add_item(self.campo)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        texto = self.campo.value.strip().replace(".", "").replace(",", "")
+        if not texto.isdigit() or int(texto) < 1:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Digite um número inteiro maior que zero.", ephemeral=True
+            )
+            return
+        erro = self.montador.adicionar(self.opcao, int(texto))
+        if erro:
+            await interaction.response.send_message(f"<:Atencao:1534592266625093662> {erro}", ephemeral=True)
+            return
+        self.montador.montar()
+        await interaction.response.edit_message(view=self.montador)
+
+
+class ModalMensagemPresente(ui.Modal, title="Mensagem do presente"):
+    def __init__(self, montador):
+        super().__init__()
+        self.montador = montador
+        self.campo = ui.TextInput(label="Mensagem (opcional)", style=discord.TextStyle.paragraph,
+                                  required=False, max_length=PRESENTE_MAX_MENSAGEM,
+                                  default=montador.mensagem or "")
+        self.add_item(self.campo)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.montador.mensagem = self.campo.value.strip()
+        self.montador.montar()
+        await interaction.response.edit_message(view=self.montador)
+
+
+class ViewMontarPresente(ui.LayoutView):
+    """Menu para montar e enviar o presente. modo="civil" usa itens da mochila de quem envia;
+    modo="adm" usa o catálogo inteiro (itens criados pela administração)."""
+
+    def __init__(self, autor, destinatario, modo):
+        super().__init__(timeout=600)
+        self.autor = autor
+        self.destinatario = destinatario
+        self.modo = modo
+        self.categoria = None
+        self.opcoes = []
+        self.pagina = 0
+        self.carrinho = []
+        self.mensagem = ""
+        self.enviando = False
+        self.montar()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.autor.id:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Só quem iniciou o presente pode mexer nele.", ephemeral=True
+            )
+            return False
+        return True
+
+    # --- estado do presente ---
+    def maximo_para(self, opcao):
+        ident = (opcao["chave"], (opcao.get("dados") or {}).get("id"))
+        ja_no_presente = sum(e["qtd"] for e in self.carrinho if _p_ident(e) == ident)
+        base = opcao["estoque"] if self.modo == "civil" else opcao["maximo"]
+        return (base or 0) - ja_no_presente
+
+    def adicionar(self, opcao, qtd):
+        """Devolve uma mensagem de erro, ou None se adicionou."""
+        if self.maximo_para(opcao) < qtd:
+            return "Você já colocou tudo que pode desse item no presente."
+        ident = (opcao["chave"], (opcao.get("dados") or {}).get("id"))
+        existente = next((e for e in self.carrinho if _p_ident(e) == ident), None)
+        if existente:
+            existente["qtd"] += qtd
+            return None
+        if len(self.carrinho) >= PRESENTE_MAX_ITENS:
+            return f"Um presente comporta no máximo {PRESENTE_MAX_ITENS} itens diferentes."
+        self.carrinho.append({
+            "chave": opcao["chave"], "nome": opcao["nome"], "emoji": opcao["emoji"],
+            "qtd": qtd, "dados": dict(opcao.get("dados") or {}),
+        })
+        return None
+
+    # --- visual ---
+    def montar(self):
+        self.clear_items()
+        adm = self.modo == "adm"
+        container = ui.Container()
+        container.accent_color = discord.Colour.gold() if adm else discord.Colour.pink()
+
+        if adm:
+            aviso = "Itens criados pela administração — não saem de nenhum inventário."
+        else:
+            aviso = "Os itens saem da sua mochila ao enviar e voltam se a pessoa recusar ou o prazo acabar."
+        container.add_item(ui.TextDisplay(
+            f"### {'🛡️ Presente ADM' if adm else '🎁 Presente'} para {self.destinatario.display_name}\n"
+            f"-# {aviso} Prazo para aceitar: {PRESENTE_DURACAO_HORAS}h."
+        ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        conteudo = presente_formatar_itens(self.carrinho) if self.carrinho else "*Nenhum item adicionado ainda.*"
+        texto = f"**Dentro do presente** ({len(self.carrinho)}/{PRESENTE_MAX_ITENS})\n{conteudo}"
+        if self.mensagem:
+            texto += f"\n\n💬 {self.mensagem}"
+        container.add_item(ui.TextDisplay(texto))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        seletor_categoria = ui.Select(
+            placeholder="Escolha uma categoria",
+            options=[
+                discord.SelectOption(label=c["nome"], value=chave, emoji=c["emoji"], default=(chave == self.categoria))
+                for chave, c in PRESENTE_CATEGORIAS.items()
+            ],
+        )
+        seletor_categoria.callback = self.escolher_categoria
+        container.add_item(ui.ActionRow(seletor_categoria))
+
+        if self.categoria:
+            fatia = self.opcoes[self.pagina * 25:(self.pagina + 1) * 25]
+            if fatia:
+                seletor_item = ui.Select(
+                    placeholder="Escolha um item para adicionar",
+                    options=[
+                        discord.SelectOption(
+                            label=o["label"][:100], value=o["value"][:100],
+                            description=o["descricao"][:100] if o["descricao"] else None,
+                            emoji=_p_emoji_select(o["emoji"]),
+                        )
+                        for o in fatia
+                    ],
+                )
+                seletor_item.callback = self.escolher_item
+                container.add_item(ui.ActionRow(seletor_item))
+                if len(self.opcoes) > 25:
+                    total_paginas = -(-len(self.opcoes) // 25)
+                    anterior = ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=(self.pagina == 0))
+                    anterior.callback = self.pagina_anterior
+                    indicador = ui.Button(label=f"{self.pagina + 1}/{total_paginas}",
+                                          style=discord.ButtonStyle.secondary, disabled=True)
+                    proximo = ui.Button(label="▶", style=discord.ButtonStyle.secondary,
+                                        disabled=(self.pagina >= total_paginas - 1))
+                    proximo.callback = self.pagina_proxima
+                    container.add_item(ui.ActionRow(anterior, indicador, proximo))
+            else:
+                vazio = ("Nenhum item disponível nesta categoria." if adm else
+                         "Você não tem itens nessa categoria que possam ser presenteados "
+                         "(só itens guardados, não equipados).")
+                container.add_item(ui.TextDisplay(f"*{vazio}*"))
+
+        botao_mensagem = ui.Button(label="Mensagem", emoji="💬", style=discord.ButtonStyle.secondary)
+        botao_mensagem.callback = self.editar_mensagem
+        botao_limpar = ui.Button(label="Limpar", emoji="🗑️", style=discord.ButtonStyle.secondary,
+                                 disabled=not self.carrinho)
+        botao_limpar.callback = self.limpar
+        botao_enviar = ui.Button(label="Enviar", emoji="🎁", style=discord.ButtonStyle.success,
+                                 disabled=not self.carrinho)
+        botao_enviar.callback = self.enviar
+        botao_cancelar = ui.Button(label="Cancelar", style=discord.ButtonStyle.danger)
+        botao_cancelar.callback = self.cancelar
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+        container.add_item(ui.ActionRow(botao_mensagem, botao_limpar, botao_enviar, botao_cancelar))
+        self.add_item(container)
+
+    # --- callbacks ---
+    async def escolher_categoria(self, interaction: discord.Interaction):
+        self.categoria = interaction.data["values"][0]
+        self.pagina = 0
+        self.opcoes = await executar_db(presente_opcoes_sync, self.modo, self.autor.id, self.categoria)
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def pagina_anterior(self, interaction: discord.Interaction):
+        self.pagina = max(0, self.pagina - 1)
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def pagina_proxima(self, interaction: discord.Interaction):
+        self.pagina += 1
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def escolher_item(self, interaction: discord.Interaction):
+        valor = interaction.data["values"][0]
+        opcao = next((o for o in self.opcoes if o["value"] == valor), None)
+        if opcao is None:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Item não encontrado, escolha a categoria de novo.", ephemeral=True
+            )
+            return
+        precisa_quantidade = opcao["modo"] == "pilha" or (self.modo == "adm" and opcao["modo"] == "unidade")
+        if precisa_quantidade:
+            maximo = self.maximo_para(opcao)
+            if maximo < 1:
+                await interaction.response.send_message(
+                    "<:Atencao:1534592266625093662> Você já colocou tudo que pode desse item no presente.", ephemeral=True
+                )
+                return
+            await interaction.response.send_modal(ModalQuantidadePresente(self, opcao, maximo))
+            return
+        erro = self.adicionar(opcao, 1)
+        if erro:
+            await interaction.response.send_message(f"<:Atencao:1534592266625093662> {erro}", ephemeral=True)
+            return
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def editar_mensagem(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ModalMensagemPresente(self))
+
+    async def limpar(self, interaction: discord.Interaction):
+        self.carrinho = []
+        self.montar()
+        await interaction.response.edit_message(view=self)
+
+    async def cancelar(self, interaction: discord.Interaction):
+        self.stop()
+        await interaction.response.edit_message(view=presente_view_simples("### 🚫 Presente cancelado\nNada saiu da sua mochila."))
+
+    async def enviar(self, interaction: discord.Interaction):
+        if self.enviando:
+            await interaction.response.send_message("Já estou enviando esse presente...", ephemeral=True)
+            return
+        if not self.carrinho:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Adicione pelo menos um item ao presente.", ephemeral=True
+            )
+            return
+        self.enviando = True
+        await interaction.response.defer()
+
+        presente_id = None
+        try:
+            ok, resultado = await executar_db(
+                presente_criar_sync, self.modo, self.autor.id, self.autor.display_name,
+                self.destinatario.id, self.destinatario.display_name, self.carrinho, self.mensagem
+            )
+            if not ok:
+                self.enviando = False
+                await interaction.followup.send(f"<:Atencao:1534592266625093662> {resultado}", ephemeral=True)
+                return
+            presente_id = resultado
+            presente = await executar_db(presente_buscar_sync, presente_id)
+            mensagem_dm = await self.destinatario.send(view=ViewPresente(presente))
+            await executar_db(presente_registrar_dm_sync, presente_id, mensagem_dm.channel.id, mensagem_dm.id)
+        except discord.HTTPException:
+            # DM fechada (ou falha do Discord): cancela e devolve tudo ao remetente.
+            if presente_id is not None:
+                await executar_db(presente_cancelar_sync, presente_id)
+            self.enviando = False
+            await interaction.followup.send(
+                f"<:Atencao:1534592266625093662> Não consegui enviar a DM para {self.destinatario.display_name} "
+                f"(as mensagens diretas dele(a) estão fechadas). Nada saiu da sua mochila.", ephemeral=True
+            )
+            return
+        except Exception:
+            traceback.print_exc()
+            if presente_id is not None:
+                await executar_db(presente_cancelar_sync, presente_id)
+            self.enviando = False
+            await interaction.followup.send(
+                "<:Atencao:1534592266625093662> Deu erro ao enviar o presente. Nada saiu da sua mochila.", ephemeral=True
+            )
+            return
+
+        expira_ts = presente["expira_ts"]
+        volta = ("Se não for aceito, os itens voltam para você."
+                 if self.modo == "civil" else "O presente ADM não devolve itens se expirar.")
+        texto = (f"### ✅ Presente enviado para {self.destinatario.display_name}!\n"
+                 f"{presente_formatar_itens(self.carrinho)}\n\n"
+                 f"⏰ Ele tem até <t:{expira_ts}:f> (<t:{expira_ts}:R>) para aceitar.\n-# {volta}")
+        self.stop()
+        await interaction.edit_original_response(view=presente_view_simples(texto, discord.Colour.green()))
+
+# ------------------------------------------------------------
+# Comandos
+# ------------------------------------------------------------
+@bot.command(name="presentear")
+async def presentear(ctx, membro: discord.Member = None):
+    if membro is None:
+        await ctx.send("<:Atencao:1534592266625093662> Uso correto: `!presentear @usuário`")
+        return
+    if membro.bot:
+        await ctx.send("<:Atencao:1534592266625093662> Bots não aceitam presentes!")
+        return
+    if membro.id == ctx.author.id:
+        await ctx.send("<:Atencao:1534592266625093662> Você não pode presentear a si mesmo!")
+        return
+    await ctx.send(view=ViewMontarPresente(ctx.author, membro, "civil"))
+
+
+presente_group = app_commands.Group(name="presente", description="Sistema de presentes")
+
+@presente_group.command(name="adm", description="Monta um Presente ADM e envia na DM de um usuário (admin)")
+@app_commands.describe(membro="Quem vai receber o presente")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def presente_adm(interaction: discord.Interaction, membro: discord.Member):
+    if membro.bot:
+        await interaction.response.send_message(
+            "<:Atencao:1534592266625093662> Bots não aceitam presentes!", ephemeral=True
+        )
+        return
+    await interaction.response.send_message(view=ViewMontarPresente(interaction.user, membro, "adm"), ephemeral=True)
 # ============================================================
 # EVENTOS
 # ============================================================
@@ -9139,6 +10184,12 @@ async def on_ready():
     verificar_drop.start()
     verificar_cobranca_emprestimos.start()
     verificar_login_diario.start()
+    try:
+        await presentes_registrar_views()
+    except Exception:
+        traceback.print_exc()
+    if not verificar_presentes_expirados.is_running():
+        verificar_presentes_expirados.start()
     await bot.tree.sync()
     print(f"✅ Bot conectado como: {bot.user}")
     print(f"Servidores: {len(bot.guilds)}")
@@ -10727,6 +11778,8 @@ bot.tree.add_command(banner_group)
 bot.tree.add_command(drop_group)
 
 bot.tree.add_command(conquista_group)
+
+bot.tree.add_command(presente_group)
 
 # ============================================================
 # EVENTOS DE CALL E MENSAGENS
