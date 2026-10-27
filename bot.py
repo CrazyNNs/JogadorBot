@@ -107,6 +107,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 # Canais de notificação
 CANAL_CONQUISTAS_ID = 1517028501356806144
 CANAL_NOTIFICACOES_ID = 1520676033425313885
+CARGO_ATUALIZACAO_LOJA_ID = 1564129769292042291  # cargo mencionado quando a loja é atualizada
 
 # Rotação da loja
 DURACAO_ROTACAO_HORAS = 5
@@ -3172,7 +3173,11 @@ async def verificar_rotacao():
             color=discord.Color.yellow()
         )
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
-        await canal.send(embed=embed)
+        await canal.send(
+            content=f"<@&{CARGO_ATUALIZACAO_LOJA_ID}>",
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(roles=[discord.Object(id=CARGO_ATUALIZACAO_LOJA_ID)])
+        )
         verificar_favoritos_rotacao.start()
 
 def _buscar_favoritos_disponiveis_sync():
@@ -11468,7 +11473,11 @@ async def rotacao_forcar(interaction: discord.Interaction):
         for nome, raridade in banners:
             embed.add_field(name=nome, value=f"Raridade: **{raridade}**", inline=True)
         embed.set_footer(text=f"Próxima rotação: {expira_dt.strftime('%d/%m/%Y às %H:%M')}")
-        await canal.send(embed=embed)
+        await canal.send(
+            content=f"<@&{CARGO_ATUALIZACAO_LOJA_ID}>",
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(roles=[discord.Object(id=CARGO_ATUALIZACAO_LOJA_ID)])
+        )
     await interaction.followup.send("✅ Nova rotação forçada com sucesso!", ephemeral=True)
 
 # ============================================================
