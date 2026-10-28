@@ -2163,7 +2163,7 @@ class ViewDrop(discord.ui.View):
         chaves = buscar_chaves(interaction.user.id)
         if chaves <= 0:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Você não tem nenhuma <:ChaveIcon:1543113835169185912> Chave para abrir este drop!",
+                "<:Atencao:1534592266625093662> Você não tem nenhuma <:ChaveIcon:1564804190184935444> Chave para abrir este drop!",
                 ephemeral=True
             )
             return
@@ -2199,14 +2199,14 @@ class ViewDrop(discord.ui.View):
             adicionar_chaves(interaction.user.id, 1)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua <:ChaveIcon:1543113835169185912> **Chave** foi devolvida.",
+                description=f"{interaction.user.mention} abriu o baú, mas não achou nada dessa vez! Sua <:ChaveIcon:1564804190184935444> **Chave** foi devolvida.",
                 color=discord.Color.greyple()
             )
         else:
             lista_itens = "\n".join(f"> {item}" for item in itens_dropados)
             embed = discord.Embed(
                 title="🎁 Drop Aberto!",
-                description=f"{interaction.user.mention} usou uma <:ChaveIcon:1543113835169185912> **Chave** e encontrou:\n\n{lista_itens}",
+                description=f"{interaction.user.mention} usou uma <:ChaveIcon:1564804190184935444> **Chave** e encontrou:\n\n{lista_itens}",
                 color=discord.Color.blurple()
             )
         embed.set_thumbnail(url="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropAbertoIcon.png")
@@ -2241,7 +2241,7 @@ async def spawnar_drop(canal_forcado=None):
 
     embed = discord.Embed(
         title="🎁 Um drop apareceu!",
-        description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1543113835169185912> **Chave** pra abrir antes que outra pessoa pegue!",
+        description="Alguém deixou um baú por aqui... Use uma <:ChaveIcon:1564804190184935444> **Chave** pra abrir antes que outra pessoa pegue!",
         color=discord.Color.blurple()
     )
     embed.set_thumbnail(url="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/DropFechadoIcon.png")
@@ -4363,7 +4363,7 @@ def texto_recompensa(tipo_recompensa, qtd_recompensa, recompensa_extra=None):
     if tipo_recompensa == "joyogens":
         return f"{qtd_recompensa} Joyogens"
     if tipo_recompensa == "petalas":
-        return f"{qtd_recompensa} <:PetalasIcon:1564674289758638280> Pétalas"
+        return f"{qtd_recompensa} <:PetalaIcon:1564803824906932385> Pétalas"
     if tipo_recompensa == "xp":
         return f"{qtd_recompensa} XP"
     if tipo_recompensa == "banner":
@@ -4414,7 +4414,7 @@ async def formatar_e_dar_recompensa(usuario_id, tipo_recompensa, qtd_recompensa,
 
     if tipo_recompensa == "petalas":
         await asyncio.to_thread(adicionar_petalas, usuario_id, qtd_recompensa)
-        return f"**+{qtd_recompensa} <:PetalasIcon:1564674289758638280> Pétalas**"
+        return f"**+{qtd_recompensa} <:PetalaIcon:1564803824906932385> Pétalas**"
 
     if tipo_recompensa == "xp":
         if canal_xp:
@@ -9299,8 +9299,8 @@ def presente_catalogo_sync():
 
     add("joyens", "Joyens", "<:JoyensIcon:1536254492797050880>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
     add("joyogens", "Joyogens", "<:JoyogensIcon:1536254582362210334>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
-    add("petalas", "Pétalas", "<:PetalasIcon:1564674289758638280>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
-    add("chaves", "Chave de Drop", "🔑", "moedas")
+    add("petalas", "Pétalas", "<:PetalaIcon:1564803824906932385>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
+    add("chaves", "Chave de Drop", "<:ChaveIcon:1564804190184935444>", "moedas")
 
     for nome, item in ITENS_MINERACAO.items():
         if item["subcategoria"] == "Ferramentas" and "usos" in item:
@@ -10393,8 +10393,8 @@ async def saldo(ctx, membro: discord.Member = None):
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
     embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1536254492797050880>``{joyens}``", inline=True)
     embed.add_field(name="__Joyogens__", value=f"<:JoyogensIcon:1536254582362210334>``{joyogens}``", inline=True)
-    embed.add_field(name="__Pétalas__", value=f"<:PetalasIcon:1564674289758638280>``{petalas}``", inline=True)
-    embed.add_field(name="__Chaves__", value=f"<:ChaveIcon:1543113835169185912>``{chaves}``", inline=False)
+    embed.add_field(name="__Pétalas__", value=f"<:PetalaIcon:1564803824906932385>``{petalas}``", inline=True)
+    embed.add_field(name="__Chaves__", value=f"<:ChaveIcon:1564804190184935444>``{chaves}``", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="addjoyens")
@@ -11023,7 +11023,7 @@ async def drop_chave_dar(interaction: discord.Interaction, membro: discord.Membe
     novo_total = buscar_chaves(membro.id)
 
     embed = discord.Embed(
-        title="<:ChaveIcon:1543113835169185912> Chaves Concedidas!",
+        title="<:ChaveIcon:1564804190184935444> Chaves Concedidas!",
         description=f"{membro.mention} recebeu **{quantidade} Chave(s)**!",
         color=discord.Color.gold()
     )
