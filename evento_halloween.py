@@ -36,7 +36,7 @@ HALLOWEEN_CONQUISTAS = {
 }
 
 HALLOWEEN_LOJA = {
-    "banner_aboboras": {"nome": "Abóboras", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["aboboras"], "preco": 30, "emoji": "🎃", "descricao": "Abobóras atrás de doces... ou travessuras."},
+    "banner_aboboras": {"nome": "Abóboras Animadas", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["aboboras"], "preco": 30, "emoji": "🎃", "descricao": "Abobóras atrás de doces... ou travessuras."},
     "banner_morcegos": {"nome": "Morcegos", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["morcegos"], "preco": 30, "emoji": "🦇", "descricao": "Melhor manter o pescoço protegido... eles estão com fome."},
     "banner_sakura": {"nome": "Sakura Sombria", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["sakura"], "preco": 70, "emoji": "🌸", "descricao": "Suas pétalas possuem escuridão."},
     "titulo_fantasma": {"nome": "Fantasminha Camarada", "tipo": "conquista", "alvo": "Fantasminha Camarada", "preco": 20, "emoji": "👻", "descricao": "Desbloqueia a conquista: Fantasminha Camarada."},
