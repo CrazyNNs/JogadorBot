@@ -58,9 +58,9 @@ INTERVALO_CACA_SEGUNDOS = 10
 PAUSA_CACA_SEGUNDOS = 600
 
 HALLOWEEN_MISSOES = {
-    "mensagens": {"nome": "💬 Vozes na Névoa", "descricao": "Envie 20 mensagens depois de abrir o painel do evento.", "contador": "msg_total", "meta": 20, "chaves": 2},
-    "trabalho": {"nome": "🧹 Trabalho Sob a Lua", "descricao": "Trabalhe 2 vezes depois de iniciar sua participação no evento.", "contador": "trabalhar_total", "meta": 2, "chaves": 2},
     "diario": {"nome": "📅 Visita à Cidade Assombrada", "descricao": "Use !diario uma vez depois de iniciar sua participação no evento.", "contador": "diario_total", "meta": 1, "chaves": 1},
+    "mensagens": {"nome": "💬 Vozes na Névoa", "descricao": "Envie 40 mensagens depois de abrir o painel do evento.", "contador": "msg_total", "meta": 40, "chaves": 2},
+    "trabalho": {"nome": "🧹 Trabalho Sob a Lua", "descricao": "Trabalhe 20 vezes depois de iniciar sua participação no evento.", "contador": "trabalhar_total", "meta": 20, "chaves": 2},
 }
 
 CENARIOS_FANTASMAS = [
