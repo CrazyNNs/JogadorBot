@@ -1512,6 +1512,10 @@ def iniciar_banco():
         cur.execute("ALTER TABLE usuario_stats ADD COLUMN cafe_ativo INTEGER DEFAULT 0")
     except:
         pass
+    try:
+        cur.execute("ALTER TABLE usuario_stats ADD COLUMN petalas INTEGER DEFAULT 0")
+    except:
+        pass
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS equipamentos_usuario (
@@ -3909,6 +3913,39 @@ def remover_joyogens(usuario_id, quantidade):
     con.commit()
     con.close()
 
+def buscar_petalas(usuario_id):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT petalas FROM usuario_stats WHERE usuario_id = ?", (str(usuario_id),))
+        resultado = cur.fetchone()
+        return (resultado[0] or 0) if resultado else 0
+    finally:
+        con.close()
+
+def adicionar_petalas(usuario_id, quantidade):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE usuario_stats SET petalas = COALESCE(petalas, 0) + ? WHERE usuario_id = ?",
+                    (quantidade, str(usuario_id)))
+        con.commit()
+    finally:
+        con.close()
+
+def remover_petalas(usuario_id, quantidade):
+    garantir_stats(usuario_id)
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE usuario_stats SET petalas = MAX(0, COALESCE(petalas, 0) - ?) WHERE usuario_id = ?",
+                    (quantidade, str(usuario_id)))
+        con.commit()
+    finally:
+        con.close()
+
 def buscar_qtd_item_mineracao(usuario_id, item_nome):
     con = sqlite3.connect("jogadorbot.db")
     cur = con.cursor()
@@ -4325,6 +4362,8 @@ def texto_recompensa(tipo_recompensa, qtd_recompensa, recompensa_extra=None):
         return f"{qtd_recompensa} Joyens"
     if tipo_recompensa == "joyogens":
         return f"{qtd_recompensa} Joyogens"
+    if tipo_recompensa == "petalas":
+        return f"{qtd_recompensa} <:PetalasIcon:1564674289758638280> Pétalas"
     if tipo_recompensa == "xp":
         return f"{qtd_recompensa} XP"
     if tipo_recompensa == "banner":
@@ -4372,6 +4411,10 @@ async def formatar_e_dar_recompensa(usuario_id, tipo_recompensa, qtd_recompensa,
     if tipo_recompensa == "joyogens":
         await asyncio.to_thread(adicionar_joyogens, usuario_id, qtd_recompensa)
         return f"**+{qtd_recompensa} Joyogens**"
+
+    if tipo_recompensa == "petalas":
+        await asyncio.to_thread(adicionar_petalas, usuario_id, qtd_recompensa)
+        return f"**+{qtd_recompensa} <:PetalasIcon:1564674289758638280> Pétalas**"
 
     if tipo_recompensa == "xp":
         if canal_xp:
@@ -9031,7 +9074,7 @@ class ViewMissoesSemanais(ui.LayoutView):
             progresso = min(progresso, meta)
             porcentagem = int((progresso / meta) * 100)
             barra = "█" * (porcentagem // 10) + "░" * (10 - porcentagem // 10)
-            recompensa = f"+{missao['quantidade_recompensa']} {'Joyens' if missao['tipo_recompensa'] == 'joyens' else 'XP'}"
+            recompensa = f"+{texto_recompensa(missao['tipo_recompensa'], missao['quantidade_recompensa'])}"
             status = "✅ Concluída!" if completada else f"`{barra}` {progresso}/{meta}"
             container.add_item(ui.TextDisplay(
                 f"**{missao['nome']}**\n-# {missao['descricao']}\n{status}\n-# 🎁 Recompensa: {recompensa}"
@@ -9187,6 +9230,7 @@ _PRESENTE_PILHAS = {
 _PRESENTE_UNICOS = {
     "joyens":   ("economia", "joyens"),
     "joyogens": ("usuario_stats", "joyogens"),
+    "petalas":  ("usuario_stats", "petalas"),
     "chaves":   ("chaves_usuario", "quantidade"),
     "sabonete": ("pets_sabonete", "quantidade"),
 }
@@ -9255,6 +9299,7 @@ def presente_catalogo_sync():
 
     add("joyens", "Joyens", "<:JoyensIcon:1536254492797050880>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
     add("joyogens", "Joyogens", "<:JoyogensIcon:1536254582362210334>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
+    add("petalas", "Pétalas", "<:PetalasIcon:1564674289758638280>", "moedas", civil=False, maximo=PRESENTE_MAX_QTD_MOEDA)
     add("chaves", "Chave de Drop", "🔑", "moedas")
 
     for nome, item in ITENS_MINERACAO.items():
@@ -10343,9 +10388,13 @@ async def saldo(ctx, membro: discord.Member = None):
         membro = ctx.author
     joyens = buscar_joyens(membro.id)
     joyogens = buscar_stats(membro.id)["joyogens"]
+    petalas = buscar_petalas(membro.id)
+    chaves = buscar_chaves(membro.id)
     embed = discord.Embed(title=f"<:BolsaJoyensIcon:1525729605724405781> Saldo de {membro.display_name}", color=discord.Color.gold())
     embed.add_field(name="__Joyens__", value=f"<:JoyensIcon:1536254492797050880>``{joyens}``", inline=True)
     embed.add_field(name="__Joyogens__", value=f"<:JoyogensIcon:1536254582362210334>``{joyogens}``", inline=True)
+    embed.add_field(name="__Pétalas__", value=f"<:PetalasIcon:1564674289758638280>``{petalas}``", inline=True)
+    embed.add_field(name="__Chaves__", value=f"<:ChaveIcon:1543113835169185912>``{chaves}``", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name="addjoyens")
@@ -11580,7 +11629,7 @@ missao_group = app_commands.Group(name="missao", description="Gerenciamento de m
     descricao="Descrição da missão",
     tipo="permanente ou temporaria",
     condicoes="Condições separadas por vírgula, cada uma já com sua meta. Ex: trabalhar_total:50 ou null. Veja /missao condicoes",
-    tipo_recompensa="joyens, xp, joyogens, banner ou pet",
+    tipo_recompensa="joyens, xp, joyogens, petalas, banner ou pet",
     quantidade_recompensa="Quantidade da recompensa (pra banner/pet, coloque 1)",
     meta="Só informativo pro admin — deixe 0. O progresso real usa a meta de cada condição (campo acima)",
     recompensa_extra="Só pra banner (nome exato) ou pet (espécie, ou 'Espécie|Raça')",
@@ -11605,9 +11654,10 @@ async def missao_criar(
         return
 
     tipo_recompensa = tipo_recompensa.lower()
-    if tipo_recompensa not in ["joyens", "xp", "joyogens", "banner", "pet"]:
+    tipo_recompensa = {"pétalas": "petalas", "pétala": "petalas", "petala": "petalas"}.get(tipo_recompensa, tipo_recompensa)
+    if tipo_recompensa not in ["joyens", "xp", "joyogens", "petalas", "banner", "pet"]:
         await interaction.response.send_message(
-            "<:Atencao:1534592266625093662> Tipo de recompensa inválido! Use `joyens`, `xp`, `joyogens`, `banner` ou `pet`.", ephemeral=True
+            "<:Atencao:1534592266625093662> Tipo de recompensa inválido! Use `joyens`, `xp`, `joyogens`, `petalas`, `banner` ou `pet`.", ephemeral=True
         )
         return
 
