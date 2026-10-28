@@ -22,7 +22,7 @@ FUSO = datetime.timezone(datetime.timedelta(hours=-3))
 
 # Os nomes precisam existir exatamente assim no catálogo de banners do bot.
 HALLOWEEN_BANNERS = {
-    "aboboras": "Abóboras",
+    "aboboras": "Abóboras Animadas",
     "sakura": "Sakura Sombria",
     "morcegos": "Morcegos",
 }
@@ -36,17 +36,17 @@ HALLOWEEN_CONQUISTAS = {
 }
 
 HALLOWEEN_LOJA = {
-    "banner_aboboras": {"nome": "Banner Abóboras", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["aboboras"], "preco": 30, "emoji": "🎃", "descricao": "Um banner decorado com abóboras de Halloween."},
-    "banner_morcegos": {"nome": "Banner Morcegos", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["morcegos"], "preco": 30, "emoji": "🦇", "descricao": "Um banner com morcegos e sombras."},
-    "banner_sakura": {"nome": "Banner Sakura Sombria", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["sakura"], "preco": 70, "emoji": "🌸", "descricao": "O banner raro das cerejeiras sombrias."},
-    "titulo_fantasma": {"nome": "Fantasminha Camarada", "tipo": "conquista", "alvo": "Fantasminha Camarada", "preco": 20, "emoji": "👻", "descricao": "Desbloqueia a conquista/título Fantasminha Camarada."},
-    "titulo_sangue": {"nome": "Fome de Sangue", "tipo": "conquista", "alvo": "Fome de Sangue", "preco": 35, "emoji": "🩸", "descricao": "Desbloqueia a conquista/título Fome de Sangue."},
-    "pet_dullahan": {"nome": "Cão Dullahan", "tipo": "pet", "alvo": "Cão Dullahan", "preco": 120, "emoji": "🐕‍🦺", "descricao": "Um pet especial e exclusivo do Halloween."},
+    "banner_aboboras": {"nome": "Abóboras", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["Abóboras Animadas"], "preco": 30, "emoji": "🎃", "descricao": "Abobóras atrás de doces... ou travessuras."},
+    "banner_morcegos": {"nome": "Morcegos", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["Morcegos"], "preco": 30, "emoji": "🦇", "descricao": "Melhor manter o pescoço protegido... eles estão com fome."},
+    "banner_sakura": {"nome": "Sakura Sombria", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["Sakura Sombria"], "preco": 70, "emoji": "🌸", "descricao": "Suas pétalas possuem escuridão."},
+    "titulo_fantasma": {"nome": "Fantasminha Camarada", "tipo": "conquista", "alvo": "Fantasminha Camarada", "preco": 20, "emoji": "👻", "descricao": "Desbloqueia a conquista: Fantasminha Camarada."},
+    "titulo_sangue": {"nome": "Fome de Sangue", "tipo": "conquista", "alvo": "Fome de Sangue", "preco": 35, "emoji": "🩸", "descricao": "Desbloqueia a conquista: Fome de Sangue."},
+    "pet_dullahan": {"nome": "Cão Dullahan", "tipo": "pet", "alvo": "Cão Dullahan", "preco": 120, "emoji": "🐕‍🦺", "descricao": "O amigo do homem, ás vezes, perde a cabeça por ai."},
 }
 
 HALLOWEEN_CAIXAS = {
-    "assombrada": {"nome": "Caixa Assombrada", "emoji": "🎃", "preco_chaves": 1, "imagem": "caixaassombrada.png", "descricao": "Receba doces garantidos e tenha a chance de encontrar um banner temático, a conquista Halloween 26 ou itens aleatórios do Sakurai."},
-    "sakura": {"nome": "Caixa da Sakura Sombria", "emoji": "🌸", "preco_chaves": 2, "imagem": "caixasakura.png", "descricao": "Uma caixa rara que concede mais doces e 2–3 Pétalas, com chances de obter o banner raro e as conquistas exclusivas."},
+    "assombrada": {"nome": "Caixa Assombrada", "emoji": "🎃", "preco_chaves": 1, "imagem": "caixaassombrada.png", "descricao": "Doces | 1 Pétala | Banner Exclusivo | Conquista exclusiva | Itens aleatórios."},
+    "sakura": {"nome": "Caixa da Sakura Sombria", "emoji": "🌸", "preco_chaves": 2, "imagem": "caixasakura.png", "descricao": "Mais doces | 2-3 Pétalas | Banners Exclusivos | Conquistas exclusivas."},
 }
 
 HALLOWEEN_DOCES_CAIXA_ASSOMBRADA = (12, 22)
@@ -437,7 +437,7 @@ def configurar_halloween(bot, ns):
         row = ui.ActionRow()
         row.add_item(_btn("Hallobox", lambda i: _open_hallobox(i, uid), emoji="🎁"))
         row.add_item(_btn("Lembrancinhas", lambda i: _open_shop(i, uid), style=discord.ButtonStyle.success, emoji="🛍️"))
-        row.add_item(_btn("Missões", lambda i: _open_missions(i, uid), style=discord.ButtonStyle.secondary, emoji="🗝️"))
+        row.add_item(_btn("Missões", lambda i: _open_missions(i, uid), style=discord.ButtonStyle.secondary, emoji="🎃"))
         c.add_item(row)
         huntrow = ui.ActionRow()
         huntrow.add_item(_btn(hunt_label, lambda i: _start_hunt(i, uid), style=discord.ButtonStyle.primary, emoji="👻", disabled=hunt_disabled))
