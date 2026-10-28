@@ -23,8 +23,8 @@ FUSO = datetime.timezone(datetime.timedelta(hours=-3))
 # Os nomes precisam existir exatamente assim no catálogo de banners do bot.
 HALLOWEEN_BANNERS = {
     "aboboras": "Abóboras Animadas",
-    "sakura": "Sakura Sombria",
     "morcegos": "Morcegos",
+    "sakura": "Sakura Sombria",
 }
 
 HALLOWEEN_CONQUISTAS = {
