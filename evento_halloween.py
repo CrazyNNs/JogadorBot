@@ -110,6 +110,12 @@ def _criar_tabelas():
             usuario_id TEXT PRIMARY KEY, durabilidade INTEGER NOT NULL DEFAULT 0)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS halloween_caca_estado (
             usuario_id TEXT PRIMARY KEY, cooldown_ate TEXT, ultimo_resultado INTEGER NOT NULL DEFAULT 0)""")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS halloween_fantasmas (
+                usuario_id TEXT PRIMARY KEY,
+                quantidade INTEGER NOT NULL DEFAULT 0
+            )
+        """)
         con.commit()
     finally:
         con.close()
@@ -168,7 +174,56 @@ def _gastar_doces(usuario_id, qtd):
     with _db() as con:
         cur = con.execute("UPDATE halloween_usuarios SET doces = doces - ? WHERE usuario_id = ? AND doces >= ?", (int(qtd), str(usuario_id), int(qtd)))
         return cur.rowcount == 1
+        
+def _fantasmas_capturados(usuario_id):
+    with _db() as con:
+        row = con.execute(
+            "SELECT quantidade FROM halloween_fantasmas WHERE usuario_id = ?",
+            (str(usuario_id),)
+        ).fetchone()
 
+        return int(row[0]) if row else 0
+
+
+def _registrar_fantasma(usuario_id):
+    with _db() as con:
+        con.execute("""
+            INSERT INTO halloween_fantasmas (usuario_id, quantidade)
+            VALUES (?, 1)
+            ON CONFLICT(usuario_id)
+            DO UPDATE SET quantidade = quantidade + 1
+        """, (str(usuario_id),))
+
+
+def _adoçar_fantasmas(usuario_id):
+    _garantir_usuario(usuario_id)
+
+    with _db() as con:
+        # Impede duas conversões simultâneas de usarem os mesmos fantasmas.
+        con.execute("BEGIN IMMEDIATE")
+
+        row = con.execute(
+            "SELECT quantidade FROM halloween_fantasmas WHERE usuario_id = ?",
+            (str(usuario_id),)
+        ).fetchone()
+
+        quantidade = int(row[0]) if row else 0
+
+        if quantidade <= 0:
+            return 0
+
+        # Consome os fantasmas e adiciona a mesma quantidade de doces.
+        con.execute(
+            "UPDATE halloween_fantasmas SET quantidade = 0 WHERE usuario_id = ?",
+            (str(usuario_id),)
+        )
+
+        con.execute(
+            "UPDATE halloween_usuarios SET doces = doces + ? WHERE usuario_id = ?",
+            (quantidade, str(usuario_id))
+        )
+
+        return quantidade
 
 def _conquista(usuario_id, nome):
     emoji, descricao = HALLOWEEN_CONQUISTAS.get(nome, ("🎃", "Recompensa especial do evento de Halloween."))
@@ -277,48 +332,83 @@ def _chaves_gastar(usuario_id, qtd):
 
 def _loot_caixa(ns, usuario_id, tipo):
     out = []
-    if tipo == "assombrada":
-        doces = random.randint(*HALLOWEEN_DOCES_CAIXA_ASSOMBRADA)
-        _adicionar_doces(usuario_id, doces)
-        out.append(f"🍬 **+{doces} doces**")
-        if random.random() < 0.22:
-            nome = random.choice([HALLOWEEN_BANNERS["aboboras"], HALLOWEEN_BANNERS["morcegos"]])
-            ok, motivo = _dar_banner(usuario_id, nome)
-            if ok: out.append(f"🖼️ Banner **{nome}**")
-            elif motivo == "duplicado":
-                _adicionar_doces(usuario_id, 8); out.append("🍬 Banner repetido convertido em **+8 doces**")
-            else: out.append(f"⚠️ Banner **{nome}** não está cadastrado.")
-        if random.random() < 0.16:
-            if _conquista(usuario_id, "Halloween 26"): out.append("🏆 Conquista **Halloween 26**")
-            else:
-                _adicionar_doces(usuario_id, 6); out.append("🍬 Conquista repetida convertida em **+6 doces**")
-        if random.random() < 0.38:
-            try: out.append(f"🎁 Item aleatório: {ns['sortear_item_aleatorio_mineracao_petshop_sync'](usuario_id)}")
-            except Exception as e:
-                print(f"[Halloween] Erro no item aleatório: {e}"); out.append("⚠️ Não foi possível entregar o item aleatório.")
-    else:
-        doces = random.randint(*HALLOWEEN_DOCES_CAIXA_SAKURA)
-        petalas = random.randint(2, 3)
-        _adicionar_doces(usuario_id, doces)
-        ns["adicionar_petalas"](usuario_id, petalas)
-        out.extend([f"🍬 **+{doces} doces**", f"🌸 **+{petalas} Pétalas**"])
-        if random.random() < 0.38:
-            ok, motivo = _dar_banner(usuario_id, HALLOWEEN_BANNERS["sakura"])
-            if ok: out.append(f"🖼️ Banner raro **{HALLOWEEN_BANNERS['sakura']}**")
-            elif motivo == "duplicado":
-                _adicionar_doces(usuario_id, 15); out.append("🍬 Banner repetido convertido em **+15 doces**")
-            else: out.append("⚠️ O banner Sakura Sombria não está cadastrado.")
-        for nome, chance, compensacao in [("Criatura da Noite", .30, 10), ("Guardião das Cerejeiras Sombria", .18, 12)]:
-            if random.random() < chance:
-                if _conquista(usuario_id, nome): out.append(f"🏆 Conquista **{nome}**")
-                else:
-                    _adicionar_doces(usuario_id, compensacao); out.append(f"🍬 Conquista repetida convertida em **+{compensacao} doces**")
-        if random.random() < .25:
-            try: out.append(f"🎁 Item aleatório: {ns['sortear_item_aleatorio_mineracao_petshop_sync'](usuario_id)}")
-            except Exception as e:
-                print(f"[Halloween] Erro no item aleatório: {e}"); out.append("⚠️ Não foi possível entregar o item aleatório.")
-    return out
 
+    if tipo == "assombrada":
+        if random.random() < 0.22:
+            nome = random.choice([
+                HALLOWEEN_BANNERS["aboboras"],
+                HALLOWEEN_BANNERS["morcegos"]
+            ])
+
+            ok, motivo = _dar_banner(usuario_id, nome)
+
+            if ok:
+                out.append(f"🖼️ Banner **{nome}**")
+            elif motivo == "duplicado":
+                out.append(f"🖼️ Você já possuía o banner **{nome}**.")
+            else:
+                out.append(f"⚠️ Banner **{nome}** não está cadastrado.")
+
+        if random.random() < 0.16:
+            if _conquista(usuario_id, "Halloween 26"):
+                out.append("🏆 Conquista **Halloween 26**")
+            else:
+                out.append("🏆 Você já possuía a conquista **Halloween 26**.")
+
+        if random.random() < 0.38:
+            try:
+                item = ns["sortear_item_aleatorio_mineracao_petshop_sync"](
+                    usuario_id
+                )
+                out.append(f"🎁 Item aleatório: {item}")
+            except Exception as e:
+                print(f"[Halloween] Erro no item aleatório: {e}")
+                out.append("⚠️ Não foi possível entregar o item aleatório.")
+
+    else:
+        petalas = random.randint(2, 3)
+        ns["adicionar_petalas"](usuario_id, petalas)
+        out.append(f"🌸 **+{petalas} Pétalas**")
+
+        if random.random() < 0.38:
+            ok, motivo = _dar_banner(
+                usuario_id,
+                HALLOWEEN_BANNERS["sakura"]
+            )
+
+            if ok:
+                out.append(
+                    f"🖼️ Banner raro **{HALLOWEEN_BANNERS['sakura']}**"
+                )
+            elif motivo == "duplicado":
+                out.append(
+                    f"🖼️ Você já possuía o banner "
+                    f"**{HALLOWEEN_BANNERS['sakura']}**."
+                )
+            else:
+                out.append("⚠️ O banner Sakura Sombria não está cadastrado.")
+
+        for nome, chance in [
+            ("Criatura da Noite", 0.30),
+            ("Guardião das Cerejeiras Sombria", 0.18)
+        ]:
+            if random.random() < chance:
+                if _conquista(usuario_id, nome):
+                    out.append(f"🏆 Conquista **{nome}**")
+                else:
+                    out.append(f"🏆 Você já possuía a conquista **{nome}**.")
+
+        if random.random() < 0.25:
+            try:
+                item = ns["sortear_item_aleatorio_mineracao_petshop_sync"](
+                    usuario_id
+                )
+                out.append(f"🎁 Item aleatório: {item}")
+            except Exception as e:
+                print(f"[Halloween] Erro no item aleatório: {e}")
+                out.append("⚠️ Não foi possível entregar o item aleatório.")
+
+    return out
 
 def _status_missoes(usuario_id):
     _garantir_usuario(usuario_id)
@@ -432,7 +522,41 @@ def configurar_halloween(bot, ns):
             hunt_label, hunt_disabled = "Caçar Fantasmas", net <= 0
         c.add_item(ui.TextDisplay("# 🎃 Halloween do Sakurai\n## Festival das Pétalas Perdidas\nA névoa roxa cobre a cidade. Complete missões, capture fantasmas e troque doces por lembranças exclusivas."))
         c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        c.add_item(ui.TextDisplay(f"### 💰 Seus recursos\n🗝️ **Chaves:** {keys}\n🍬 **Doces:** {sweets}\n🌸 **Pétalas:** {petals}\n👻 **Rede de Fantasmas:** {net}/{DURABILIDADE_REDE_FANTASMAS} capturas\n💵 **Joyens:** {_saldo_joyens(uid):,}"))
+        fantasmas = _fantasmas_capturados(uid)
+
+        c.add_item(ui.TextDisplay(
+            f"### 💰 Seus recursos\n"
+            f"🗝️ **Chaves:** {keys}\n"
+            f"🍬 **Doces:** {sweets}\n"
+            f"🌸 **Pétalas:** {petals}\n"
+            f"🕸️ **Durabilidade da rede:** "
+            f"{net}/{DURABILIDADE_REDE_FANTASMAS}\n"
+            f"💵 **Joyens:** {_saldo_joyens(uid):,}"
+        ))
+
+        c.add_item(ui.Separator())
+
+        texto_fantasmas = ui.TextDisplay(
+            f"👻 **Fantasmas Capturados:** {fantasmas}"
+        )
+
+        if fantasmas > 0:
+            botao_adocar = _btn(
+                "Adoçar",
+                lambda i: _adoçar(i, uid),
+                style=discord.ButtonStyle.success,
+                emoji="🍬"
+            )
+
+            c.add_item(
+                ui.Section(
+                    texto_fantasmas,
+                    accessory=botao_adocar
+                )
+            )
+        else:
+            c.add_item(texto_fantasmas)
+
         c.add_item(ui.Separator())
         row = ui.ActionRow()
         row.add_item(_btn("Hallobox", lambda i: _open_hallobox(i, uid), emoji="🎁"))
@@ -449,7 +573,35 @@ def configurar_halloween(bot, ns):
 
     async def _open_main(interaction, uid):
         await interaction.response.edit_message(view=_main_view(uid), attachments=[])
+        
+    async def _adoçar(interaction, uid):
+        quantidade = await asyncio.to_thread(
+            _adoçar_fantasmas,
+            uid
+        )
 
+        if quantidade <= 0:
+            await interaction.response.send_message(
+                "👻 Você não possui fantasmas disponíveis para converter.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"🍬 Você converteu **{quantidade} fantasma(s)** "
+            f"em **{quantidade} doce(s)**!",
+            ephemeral=True
+        )
+
+        # Atualiza o painel e remove o botão se não houver fantasmas restantes.
+        try:
+            await interaction.message.edit(
+                view=_main_view(uid),
+                attachments=[]
+            )
+        except (discord.NotFound, discord.HTTPException) as e:
+            print(f"[Halloween] Erro ao atualizar o painel após adoçar: {e}")
+            
     async def _open_hallobox(interaction, uid):
         view = HalloweenHallobox(uid)
         files = view.arquivos()
@@ -662,7 +814,18 @@ def configurar_halloween(bot, ns):
                     ok, restante = await asyncio.to_thread(_gastar_durabilidade_rede, uid)
                     if ok:
                         sessao["capturados"] += 1
-                        sessao["eventos"].append(f"👻 Fantasma capturado! Total: **{sessao['capturados']}**.")
+
+                        # Registra a captura no banco, independentemente
+                        # de a rede ainda possuir durabilidade.
+                        await asyncio.to_thread(
+                            _registrar_fantasma,
+                            uid
+                        )
+
+                        sessao["eventos"].append(
+                            f"👻 Fantasma capturado! "
+                            f"Total nesta caçada: **{sessao['capturados']}**."
+                        )
                         if restante <= 0:
                             sessao["pausada_rede"] = True
                             sessao["eventos"].append("💥 A Rede de Fantasmas quebrou depois da 20ª captura!")
