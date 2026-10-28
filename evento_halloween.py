@@ -20,7 +20,7 @@ from discord import ui
 HALLOWEEN_ATIVO = True
 FUSO = datetime.timezone(datetime.timedelta(hours=-3))
 
-# Os nomes precisam existir exatamente assim no catálogo de banners do bot.
+# Os nomes precisam existir exatamente assim no catálogo de banners do bot. -
 HALLOWEEN_BANNERS = {
     "aboboras": "Abóboras Animadas",
     "morcegos": "Morcegos",
