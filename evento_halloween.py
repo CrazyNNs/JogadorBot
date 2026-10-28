@@ -35,7 +35,7 @@ HALLOWEEN_CONQUISTAS = {
         "emoji": "🌙",
         "descricao": "Uma criatura que prosperou durante a noite de Halloween.",
     },
-    "Guardião das Cerejeiras Sombria": {
+    "Guardião da Cerejeira Sombria": {
         "emoji": "🌸",
         "descricao": "Protegeu as cerejeiras durante o Halloween sombrio.",
     },
@@ -105,7 +105,7 @@ HALLOWEEN_CAIXAS = {
         "nome": "Caixa Assombrada",
         "emoji": "🎃",
         "descricao": (
-            "Custa 1 🗝️ Chave. Concede doces garantidos e pode trazer "
+            "Custa 1 <:ChaveIcon:1564804190184935444> Chave. Concede doces garantidos e pode trazer "
             "banners, a conquista Halloween 26 e itens normais do bot."
         ),
     },
@@ -113,7 +113,7 @@ HALLOWEEN_CAIXAS = {
         "nome": "Caixa da Sakura Sombria",
         "emoji": "🌸",
         "descricao": (
-            "Custa 1 🗝️ Chave. Concede mais doces, 2–3 Pétalas e tem "
+            "Custa 1 <:ChaveIcon:1564804190184935444> Chave. Concede mais doces, 2–3 Pétalas e tem "
             "chances de trazer o banner raro e conquistas exclusivas."
         ),
     },
@@ -426,7 +426,7 @@ def _halloween_loot_caixa(ns, usuario_id, tipo):
         _halloween_adicionar_doces(usuario_id, doces)
         ns["adicionar_petalas"](usuario_id, petalas)
         mensagens.append(f"🍬 **+{doces} doces**")
-        mensagens.append(f"🌸 **+{petalas} Pétalas**")
+        mensagens.append(f"<:PetalaIcon:1564803824906932385> **+{petalas} Pétalas**")
 
         if random.random() < 0.38:
             ok, motivo = _halloween_conceder_banner(ns, usuario_id, HALLOWEEN_BANNERS["sakura"])
@@ -441,7 +441,7 @@ def _halloween_loot_caixa(ns, usuario_id, tipo):
 
         for titulo, chance, compensacao in [
             ("Criatura da Noite", 0.30, 10),
-            ("Guardião das Cerejeiras Sombria", 0.18, 12),
+            ("Guardião da Cerejeira Sombria", 0.18, 12),
         ]:
             if random.random() < chance:
                 if _halloween_conquista_usuario(usuario_id, titulo):
@@ -656,9 +656,9 @@ def configurar_halloween(bot, ns):
                     "A névoa cobriu a cidade e as cerejeiras brilham sob a lua roxa.\n"
                     "Complete missões para ganhar **Chaves**, abra caixas na **Hallobox** "
                     "e troque os **doces** por lembranças exclusivas.\n\n"
-                    f"🗝️ **Chaves:** {chaves}\n"
+                    f"<:ChaveIcon:1564804190184935444> **Chaves:** {chaves}\n"
                     f"🍬 **Doces do evento:** {doces}\n"
-                    f"🌸 **Pétalas:** {petalas}"
+                    f"<:PetalaIcon:1564803824906932385> **Pétalas:** {petalas}"
                 ),
                 color=discord.Color.dark_purple()
             )
@@ -670,7 +670,7 @@ def configurar_halloween(bot, ns):
             return discord.Embed(
                 title="🎁 Hallobox — Caixas do Halloween",
                 description=(
-                    f"🗝️ **Suas chaves:** {ns['buscar_chaves'](self.usuario_id)}\n\n"
+                    f"<:ChaveIcon:1564804190184935444> **Suas chaves:** {ns['buscar_chaves'](self.usuario_id)}\n\n"
                     f"🎃 **Caixa Assombrada**\n{HALLOWEEN_CAIXAS['assombrada']['descricao']}\n\n"
                     f"🌸 **Caixa da Sakura Sombria**\n{HALLOWEEN_CAIXAS['sakura']['descricao']}\n\n"
                     "Cada abertura consome 1 Chave. Os itens repetidos são convertidos em doces."
@@ -774,7 +774,7 @@ def configurar_halloween(bot, ns):
     class HalloweenMissoes(HalloweenView):
         def embed(self):
             embed = discord.Embed(
-                title="🗝️ Missões — Chaves Perdidas",
+                title="<:ChaveIcon:1564804190184935444> Missões — Chaves Perdidas",
                 description="Complete os objetivos abaixo e clique em resgatar para receber as Chaves.",
                 color=discord.Color.dark_teal()
             )
@@ -785,7 +785,7 @@ def configurar_halloween(bot, ns):
                 embed.add_field(
                     name=missao["nome"],
                     value=f"{missao['descricao']}\nProgresso: **{min(progresso, missao['meta'])}/{missao['meta']}**\n"
-                          f"Recompensa: 🗝️ **{missao['chaves']} Chave(s)** • {status}",
+                          f"Recompensa: <:ChaveIcon:1564804190184935444> **{missao['chaves']} Chave(s)** • {status}",
                     inline=False
                 )
             embed.set_footer(text="O progresso começa quando você abre o painel do evento pela primeira vez.")
@@ -795,7 +795,7 @@ def configurar_halloween(bot, ns):
             ok, resultado = _halloween_reivindicar_missao(self.usuario_id, missao_id)
             if ok:
                 await asyncio.to_thread(ns["adicionar_chaves"], self.usuario_id, resultado)
-                texto = f"Você recebeu **{resultado} 🗝️ Chave(s)**!"
+                texto = f"Você recebeu **{resultado} <:ChaveIcon:1564804190184935444> Chave(s)**!"
             else:
                 texto = resultado
             await interaction.response.send_message(texto, ephemeral=True)
