@@ -41,7 +41,7 @@ HALLOWEEN_LOJA = {
     "banner_sakura": {"nome": "Sakura Sombria", "tipo": "banner", "alvo": HALLOWEEN_BANNERS["sakura"], "preco": 60, "emoji": "🌸", "descricao": "Suas pétalas possuem escuridão."},
     "titulo_fantasma": {"nome": "Fantasminha Camarada", "tipo": "conquista", "alvo": "Fantasminha Camarada", "preco": 20, "emoji": "👻", "descricao": "Desbloqueia a conquista: Fantasminha Camarada."},
     "titulo_sangue": {"nome": "Fome de Sangue", "tipo": "conquista", "alvo": "Fome de Sangue", "preco": 35, "emoji": "🩸", "descricao": "Desbloqueia a conquista: Fome de Sangue."},
-    "pet_dullahan": {"nome": "Cão Dullahan", "tipo": "pet", "alvo": "Cão Dullahan", "preco": 150, "emoji": "🐕‍🦺", "descricao": "O amigo do homem, ás vezes, perde a cabeça por ai."},
+    "pet_dullahan": {"nome": "Cão Dullahan", "tipo": "pet", "alvo": "Cão-Dullahan", "preco": 150, "emoji": "🐕‍🦺", "descricao": "O amigo do homem, ás vezes, perde a cabeça por ai."},
 }
 
 HALLOWEEN_CAIXAS = {
