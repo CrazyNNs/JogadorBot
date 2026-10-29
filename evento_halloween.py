@@ -67,7 +67,7 @@ HALLOWEEN_MISSOES = {
     "explosao_assombrada": {"nome": "💥 Estrondo Assombrado", "descricao": "Use dinamites para minerar 8 vezes", "tipo": "mineracao_dinamite", "meta": 8, "chaves": 1,},
     "amigo_das_criaturas": {"nome": "🐾 Amigo das Criaturas", "descricao": "Brinque com seus pets 5 vezes.", "tipo": "pet_brincadeira", "meta": 5, "chaves": 1,},
     "azar_sobrenatural": {"nome": "🔨 Azar Sobrenatural", "descricao": "Quebre 4 picaretas durante uma mineração.", "tipo": "picaretas_quebradas", "meta": 4, "chaves": 2,},
-    "chamados_alem": {"nome": "🗣️ Chamados do Além", "descricao": "Fique em uma chamada por 10 horas.", "contador": "call_semana", "meta": 600, "chaves": 2,},
+    "chamados_alem": {"nome": "🗣️ Chamados do Além", "descricao": "Fique em uma chamada por 10 horas.", "tipo": "call_semana", "meta": 600, "chaves": 2,},
     "espirito_ganancia": {"nome": "💰 Espírito da Ganância", "descricao": "Acumule 10.000 Joyens.", "tipo": "joyens_acumulados", "meta": 10000, "chaves": 1,},
     "casa_ganha": {"nome": "🎰 A Casa Sempre Ganha", "descricao": "Aposte qualquer valor 15 vezes.", "tipo": "apostar_total", "meta": 15, "chaves": 1,},
 }
