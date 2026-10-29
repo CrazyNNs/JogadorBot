@@ -560,7 +560,7 @@ MISSOES_SEMANAIS = [
     {
         "id": "call_semana",
         "nome": "🎙️ Presença em Call",
-        "descricao": "Fique 2880 minutos em call nessa semana.",
+        "descricao": "Fique 48 horas em call nessa semana.",
         "condicao": "call_semana",
         "meta": 2880,
         "tipo_recompensa": "xp",
