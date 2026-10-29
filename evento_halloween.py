@@ -46,7 +46,7 @@ HALLOWEEN_LOJA = {
 
 HALLOWEEN_CAIXAS = {
     "assombrada": {"nome": "Caixa Assombrada", "emoji": "🎃", "preco_chaves": 1, "imagem": "caixaassombrada.png", "descricao": "Doces | 1 Pétala | Banner Exclusivo | Conquista exclusiva | Itens aleatórios."},
-    "sakura": {"nome": "Caixa da Sakura Sombria", "emoji": "🌸", "preco_chaves": 2, "imagem": "caixasakura.png", "descricao": "Mais doces | 2-3 Pétalas | Banners Exclusivos | Conquistas exclusivas."},
+    "sakura": {"nome": "Caixa da Sakura Sombria", "emoji": "🌸", "preco_chaves": 3, "imagem": "caixasakura.png", "descricao": "Mais doces | 2-3 Pétalas | Banners Exclusivos | Conquistas exclusivas."},
 }
 
 HALLOWEEN_DOCES_CAIXA_ASSOMBRADA = (12, 22)
@@ -61,6 +61,9 @@ HALLOWEEN_MISSOES = {
     "diario": {"nome": "📅 Visita à Cidade Assombrada", "descricao": "Use !diario uma vez depois de iniciar sua participação no evento.", "contador": "diario_total", "meta": 1, "chaves": 1},
     "mensagens": {"nome": "💬 Vozes na Névoa", "descricao": "Envie 40 mensagens depois de abrir o painel do evento.", "contador": "msg_total", "meta": 40, "chaves": 2},
     "trabalho": {"nome": "🧹 Trabalho Sob a Lua", "descricao": "Trabalhe 20 vezes depois de iniciar sua participação no evento.", "contador": "trabalhar_total", "meta": 20, "chaves": 2},
+    "reflexos_sobrenaturais": {"nome": "👻 Reflexos Sobrenaturais", "descricao": "Capture 30 fantasmas durante o evento.", "tipo": "fantasmas_capturados", "meta": 30, "chaves": 2,},
+    "tesouro_cripta": {"nome": "🎁 Tesouro da Cripta", "descricao": "Abra 10 caixas de qualquer tipo nas Hallobox.", "tipo": "hallobox_abertas", "meta": 10, "chaves": 5,},
+    "experiencia_assombrosa": {"nome": "🌙 Experiência Assombrosa", "descricao": "Capture 15 fantasmas em uma única caçada.", "tipo": "melhor_cacada", "meta": 15, "chaves": 3,},
 }
 
 CENARIOS_FANTASMAS = [
@@ -114,6 +117,14 @@ def _criar_tabelas():
             CREATE TABLE IF NOT EXISTS halloween_fantasmas (
                 usuario_id TEXT PRIMARY KEY,
                 quantidade INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS halloween_progresso_exclusivo (
+                usuario_id TEXT PRIMARY KEY,
+                fantasmas_capturados INTEGER NOT NULL DEFAULT 0,
+                hallobox_abertas INTEGER NOT NULL DEFAULT 0,
+                melhor_cacada INTEGER NOT NULL DEFAULT 0
             )
         """)
         con.commit()
@@ -239,7 +250,70 @@ def _conquista(usuario_id, nome):
         cur.execute("INSERT INTO conquistas_usuarios (usuario_id, conquista_id, data) VALUES (?, ?, ?)",
                     (str(usuario_id), cid, datetime.datetime.now(FUSO).strftime("%d/%m/%Y")))
         return True
+        
+def _registrar_progresso_exclusivo(
+    usuario_id,
+    *,
+    fantasmas=0,
+    hallobox=0,
+    cacada=None
+):
+    """Atualiza o progresso das missões exclusivas do Halloween."""
+    uid = str(usuario_id)
 
+    with _db() as con:
+        con.execute("""
+            INSERT OR IGNORE INTO halloween_progresso_exclusivo (
+                usuario_id
+            )
+            VALUES (?)
+        """, (uid,))
+
+        if fantasmas:
+            con.execute("""
+                UPDATE halloween_progresso_exclusivo
+                SET fantasmas_capturados = fantasmas_capturados + ?
+                WHERE usuario_id = ?
+            """, (int(fantasmas), uid))
+
+        if hallobox:
+            con.execute("""
+                UPDATE halloween_progresso_exclusivo
+                SET hallobox_abertas = hallobox_abertas + ?
+                WHERE usuario_id = ?
+            """, (int(hallobox), uid))
+
+        if cacada is not None:
+            con.execute("""
+                UPDATE halloween_progresso_exclusivo
+                SET melhor_cacada = MAX(melhor_cacada, ?)
+                WHERE usuario_id = ?
+            """, (int(cacada), uid))
+
+
+def _progresso_missao_exclusiva(usuario_id, tipo):
+    colunas = {
+        "fantasmas_capturados": "fantasmas_capturados",
+        "hallobox_abertas": "hallobox_abertas",
+        "melhor_cacada": "melhor_cacada",
+    }
+
+    coluna = colunas.get(tipo)
+
+    if coluna is None:
+        return 0
+
+    with _db() as con:
+        row = con.execute(
+            f"""
+            SELECT {coluna}
+            FROM halloween_progresso_exclusivo
+            WHERE usuario_id = ?
+            """,
+            (str(usuario_id),)
+        ).fetchone()
+
+    return int(row[0] or 0) if row else 0
 
 def _dar_banner(usuario_id, nome):
     with _db() as con:
@@ -423,6 +497,57 @@ def _status_missoes(usuario_id):
             saida.append((mid, m, progresso, bool(row and row[0])))
         return saida
 
+def _status_missoes(usuario_id):
+    _garantir_usuario(usuario_id)
+
+    with _db() as con:
+        bases = con.execute(
+            """
+            SELECT base_mensagens, base_trabalho, base_diario
+            FROM halloween_usuarios
+            WHERE usuario_id = ?
+            """,
+            (str(usuario_id),)
+        ).fetchone() or (0, 0, 0)
+
+        colunas = {
+            "msg_total": bases[0],
+            "trabalhar_total": bases[1],
+            "diario_total": bases[2],
+        }
+
+        saida = []
+
+        for mid, m in HALLOWEEN_MISSOES.items():
+            if m.get("tipo"):
+                progresso = _progresso_missao_exclusiva(
+                    usuario_id,
+                    m["tipo"]
+                )
+            else:
+                atual = _contador(usuario_id, m["contador"])
+                progresso = max(
+                    0,
+                    atual - int(colunas[m["contador"]] or 0)
+                )
+
+            row = con.execute(
+                """
+                SELECT concluida
+                FROM halloween_missoes_usuarios
+                WHERE usuario_id = ? AND missao_id = ?
+                """,
+                (str(usuario_id), mid)
+            ).fetchone()
+
+            saida.append((
+                mid,
+                m,
+                progresso,
+                bool(row and row[0])
+            ))
+
+        return saida
 
 def _resgatar_missao(usuario_id, missao_id):
     missao = HALLOWEEN_MISSOES.get(missao_id)
@@ -526,12 +651,12 @@ def configurar_halloween(bot, ns):
 
         c.add_item(ui.TextDisplay(
             f"### 💰 Seus recursos\n"
-            f"🗝️ **Chaves:** {keys}\n"
+            f"<:ChaveIcon:1564804190184935444> **Chaves:** {keys}\n"
             f"🍬 **Doces:** {sweets}\n"
-            f"🌸 **Pétalas:** {petals}\n"
+            f"<:PetalaIcon:1564803824906932385> **Pétalas:** {petals}\n"
             f"🕸️ **Durabilidade da rede:** "
             f"{net}/{DURABILIDADE_REDE_FANTASMAS}\n"
-            f"💵 **Joyens:** {_saldo_joyens(uid):,}"
+            f"<:JoyensIcon:1536254492797050880> **Joyens:** {_saldo_joyens(uid):,}"
         ))
 
         c.add_item(ui.Separator())
@@ -623,11 +748,11 @@ def configurar_halloween(bot, ns):
 
         def montar(self):
             c = _container()
-            c.add_item(ui.TextDisplay(f"# 🎁 Hallobox\n🗝️ **Suas Chaves:** {ns['buscar_chaves'](self.uid)}\nEscolha uma caixa para abrir. Cada compra consome a quantidade de Chaves indicada."))
+            c.add_item(ui.TextDisplay(f"# 🎁 Hallobox\n<:ChaveIcon:1564804190184935444> **Suas Chaves:** {ns['buscar_chaves'](self.uid)}\nEscolha uma caixa para abrir. Cada compra consome a quantidade de Chaves indicada."))
             c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
             for tipo in ("assombrada", "sakura"):
                 d = HALLOWEEN_CAIXAS[tipo]
-                texto = f"### {d['emoji']} {d['nome']}\n{d['descricao']}\n\n🗝️ **Custo: {d['preco_chaves']} Chave(s)**"
+                texto = f"### {d['emoji']} {d['nome']}\n{d['descricao']}\n\n<:ChaveIcon:1564804190184935444> **Custo: {d['preco_chaves']} Chave(s)**"
                 img = ui.Thumbnail(f"attachment://{d['imagem']}") if os.path.isfile(d["imagem"]) else None
                 if img:
                     c.add_item(ui.Section(ui.TextDisplay(texto), accessory=img))
@@ -650,7 +775,15 @@ def configurar_halloween(bot, ns):
                 await interaction.response.send_message(f"Você precisa de **{qtd} Chave(s)** para comprar essa caixa.", ephemeral=True)
                 return
             try:
-                recompensas = await asyncio.to_thread(_loot_caixa, ns, self.uid, tipo)
+                recompensas = await asyncio.to_thread(
+                    _loot_caixa, ns, self.uid, tipo
+                )
+                await asyncio.to_thread(
+                    _registrar_progresso_exclusivo,
+                    self.uid,
+                    hallobox=1
+                )
+                
             except Exception as e:
                 print(f"[Halloween] Erro abrindo caixa: {e}")
                 # Não reembolsa automaticamente porque uma recompensa pode já ter sido gravada.
@@ -658,7 +791,7 @@ def configurar_halloween(bot, ns):
                 return
             result = ui.LayoutView(timeout=90)
             cont = _container()
-            cont.add_item(ui.TextDisplay(f"# {HALLOWEEN_CAIXAS[tipo]['emoji']} Caixa aberta!\n" + "\n".join(f"• {x}" for x in recompensas) + f"\n\n🗝️ Chaves restantes: {ns['buscar_chaves'](self.uid)}"))
+            cont.add_item(ui.TextDisplay(f"# {HALLOWEEN_CAIXAS[tipo]['emoji']} Caixa aberta!\n" + "\n".join(f"• {x}" for x in recompensas) + f"\n\n<:ChaveIcon:1564804190184935444> Chaves restantes: {ns['buscar_chaves'](self.uid)}"))
             cont.add_item(ui.ActionRow(_btn("Fechar", lambda i: i.response.edit_message(view=None), style=discord.ButtonStyle.secondary)))
             result.add_item(cont)
             await interaction.response.send_message(view=result, ephemeral=True)
@@ -719,7 +852,7 @@ def configurar_halloween(bot, ns):
             c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
             for mid, m, progresso, concluida in _status_missoes(self.uid):
                 status = "✅ Resgatada" if concluida else ("🎁 Pronta para resgatar" if progresso >= m["meta"] else "⏳ Em andamento")
-                texto = f"**{m['nome']}**\n{m['descricao']}\nProgresso: **{min(progresso, m['meta'])}/{m['meta']}** · Recompensa: 🗝️ **{m['chaves']}** · {status}"
+                texto = f"**{m['nome']}**\n{m['descricao']}\nProgresso: **{min(progresso, m['meta'])}/{m['meta']}** · Recompensa: <:ChaveIcon:1564804190184935444> **{m['chaves']}** · {status}"
                 row = ui.ActionRow()
                 row.add_item(_btn("Resgatar", lambda i, miss=mid: self.resgatar(i, miss), style=discord.ButtonStyle.success, disabled=concluida or progresso < m["meta"]))
                 c.add_item(ui.Section(ui.TextDisplay(texto), accessory=row.children[0]))
@@ -731,7 +864,7 @@ def configurar_halloween(bot, ns):
             ok, valor = _resgatar_missao(self.uid, mid)
             if ok:
                 await asyncio.to_thread(ns["adicionar_chaves"], self.uid, valor)
-                texto = f"Você recebeu **{valor} 🗝️ Chave(s)**!"
+                texto = f"Você recebeu **{valor} <:ChaveIcon:1564804190184935444> Chave(s)**!"
             else:
                 texto = valor
             await interaction.response.send_message(texto, ephemeral=True)
@@ -927,6 +1060,12 @@ def configurar_halloween(bot, ns):
                         if ok:
                             sessao["capturados"] += 1
                             await asyncio.to_thread(_registrar_fantasma, uid)
+                            await asyncio.to_thread(
+                                _registrar_progresso_exclusivo,
+                                uid,
+                                fantasmas=1,
+                                cacada=sessao["capturados"],
+                            )
                             sessao["eventos"].append(
                                 f"✅ Você capturou o fantasma! Total nesta caçada: "
                                 f"**{sessao['capturados']}**."
