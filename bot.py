@@ -384,6 +384,7 @@ RARIDADES_PET = {
     "Épico":    {"emoji": "🟣"},
     "Lendário": {"emoji": "🟡"},
     "Mítico":   {"emoji": "🔴"},
+    "Exclusivo": {"emoji": "✨"},
 }
 # Raças — puramente estéticas, não mudam preço/petisco/brinquedo (esses seguem a espécie)
 RACAS_POR_ESPECIE = {
@@ -404,6 +405,8 @@ RACAS_POR_ESPECIE = {
          "descricao": "Dizem que nasceu nas regiões congeladas mais profundas do deserto ártico."},
         {"nome": "Cão-Fantasma", "emoji": "👻", "preco": 380, "moeda": "joyogens", "raridade": "Mítico",
          "descricao": "Ninguém sabe quando ou onde morreu. Bêbados e pessoas que passam ao lado do cemitério à noite juram ouvi-lo latir por lá."},
+        {"nome": "Cão-Dullahan", "emoji": "🐶", "raridade": "Exclusivo",
+         "descricao": "Após um acidente no Dia das Bruxas esse cachorro retornou dos mortos, porém, não dá pra dizer que só não perde a cabeça porque tá grudada..."},
     ],
     "Gatos": [
         {"nome": "Gato SRD", "emoji": "<:GatoSRDIcon:1542360701312434227>", "preco": 14000, "moeda": "joyens", "raridade": "Comum",
@@ -443,11 +446,28 @@ RACAS_POR_ESPECIE = {
     ],
 }
 
+# Raça Exclusiva: não tem "preco" nem "moeda" e não aparece no Petshop.
+# Só pode ser ganha em recompensas especiais (missões, eventos).
+RARIDADE_PET_EXCLUSIVA = "Exclusivo"
+
+def raca_eh_exclusiva(especie, raca):
+    for r in RACAS_POR_ESPECIE.get(especie, []):
+        if r["nome"] == raca:
+            return r.get("raridade") == RARIDADE_PET_EXCLUSIVA
+    return False
+
+def racas_a_venda(especie):
+    """Raças que aparecem (e podem ser compradas) no Petshop — as exclusivas ficam de fora."""
+    return [r for r in RACAS_POR_ESPECIE.get(especie, []) if r.get("raridade") != RARIDADE_PET_EXCLUSIVA]
+
 def buscar_preco_pet(especie, raca=None):
-    """Retorna (preco, moeda) da raça específica, ou o preço padrão da espécie em Joyens se não houver raça."""
+    """Retorna (preco, moeda) da raça específica, ou o preço padrão da espécie em Joyens se não houver raça.
+    Raças exclusivas não têm preço: devolve (None, None)."""
     if raca:
         for r in RACAS_POR_ESPECIE.get(especie, []):
             if r["nome"] == raca:
+                if r.get("raridade") == RARIDADE_PET_EXCLUSIVA:
+                    return None, None
                 return r["preco"], r.get("moeda", "joyens")
     return PETS_DISPONIVEIS[especie]["preco"], "joyens"
 
@@ -6736,6 +6756,11 @@ class ModalNomearPet(discord.ui.Modal, title="Dar um nome ao seu novo pet"):
     async def on_submit(self, interaction: discord.Interaction):
         dados = PETS_DISPONIVEIS[self.especie]
         preco, moeda = buscar_preco_pet(self.especie, self.raca)
+        if preco is None:
+            await interaction.response.send_message(
+                "<:Atencao:1534592266625093662> Esse pet é exclusivo e não pode ser comprado.", ephemeral=True
+            )
+            return
         moeda_info = MOEDAS.get(moeda, MOEDAS["joyens"])
 
         if contar_pets(self.usuario_id) >= LIMITE_PETS:
@@ -6880,7 +6905,7 @@ class ViewEscolherRaca(ui.LayoutView):
     def montar(self):
         self.clear_items()
         dados = PETS_DISPONIVEIS[self.especie]
-        racas = RACAS_POR_ESPECIE.get(self.especie, [])
+        racas = racas_a_venda(self.especie)
         total_paginas = max(1, (len(racas) + self.RACAS_POR_PAGINA - 1) // self.RACAS_POR_PAGINA)
         self.pagina = max(0, min(self.pagina, total_paginas - 1))
 
@@ -6945,7 +6970,7 @@ class ViewComprarPet(ui.LayoutView):
                     ephemeral=True
                 )
                 return
-            if RACAS_POR_ESPECIE.get(especie):
+            if racas_a_venda(especie):
                 view = ViewEscolherRaca(self.usuario_id, especie)
                 await interaction.response.edit_message(view=view)
             else:
