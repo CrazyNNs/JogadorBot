@@ -58,12 +58,18 @@ INTERVALO_CACA_SEGUNDOS = 10
 PAUSA_CACA_SEGUNDOS = 600
 
 HALLOWEEN_MISSOES = {
-    "diario": {"nome": "📅 Visita à Cidade Assombrada", "descricao": "Use !diario uma vez depois de iniciar sua participação no evento.", "contador": "diario_total", "meta": 1, "chaves": 1},
-    "mensagens": {"nome": "💬 Vozes na Névoa", "descricao": "Envie 40 mensagens depois de abrir o painel do evento.", "contador": "msg_total", "meta": 40, "chaves": 2},
-    "trabalho": {"nome": "🧹 Trabalho Sob a Lua", "descricao": "Trabalhe 20 vezes depois de iniciar sua participação no evento.", "contador": "trabalhar_total", "meta": 20, "chaves": 2},
     "reflexos_sobrenaturais": {"nome": "👻 Reflexos Sobrenaturais", "descricao": "Capture 30 fantasmas durante o evento.", "tipo": "fantasmas_capturados", "meta": 30, "chaves": 2,},
     "tesouro_cripta": {"nome": "🎁 Tesouro da Cripta", "descricao": "Abra 10 caixas de qualquer tipo nas Hallobox.", "tipo": "hallobox_abertas", "meta": 10, "chaves": 5,},
     "experiencia_assombrosa": {"nome": "🌙 Experiência Assombrosa", "descricao": "Capture 15 fantasmas em uma única caçada.", "tipo": "melhor_cacada", "meta": 15, "chaves": 3,},
+    "diario": {"nome": "📅 Visita à Cidade Assombrada", "descricao": "Use !diario uma vez depois de iniciar sua participação no evento.", "contador": "diario_total", "meta": 1, "chaves": 1},
+    "mensagens": {"nome": "💬 Vozes na Névoa", "descricao": "Envie 40 mensagens depois de abrir o painel do evento.", "contador": "msg_total", "meta": 40, "chaves": 2},
+    "trabalho": {"nome": "🌕 Turno da Meia-Noite", "descricao": "Trabalhe 20 vezes depois de iniciar sua participação no evento.", "contador": "trabalhar_total", "meta": 20, "chaves": 2},
+    "explosao_assombrada": {"nome": "💥 Estrondo Assombrado", "descricao": "Use dinamites para minerar 8 vezes", "tipo": "mineracao_dinamite", "meta": 8, "chaves": 1,},
+    "amigo_das_criaturas": {"nome": "🐾 Amigo das Criaturas", "descricao": "Brinque com seus pets 5 vezes.", "tipo": "pet_brincadeira", "meta": 5, "chaves": 1,},
+    "azar_sobrenatural": {"nome": "🔨 Azar Sobrenatural", "descricao": "Quebre 4 picaretas durante uma mineração.", "tipo": "picaretas_quebradas", "meta": 4, "chaves": 2,},
+    "chamados_alem": {"nome": "🗣️ Chamados do Além", "descricao": "Fique em uma chamada por 10 horas.", "tipo": "call_total", "meta": 600, "chaves": 2,},
+    "espirito_ganancia": {"nome": "💰 Espírito da Ganância", "descricao": "Acumule 10.000 Joyens.", "tipo": "joyens_acumulados", "meta": 10000, "chaves": 1,},
+    "casa_ganha": {"nome": "🎰 A Casa Sempre Ganha", "descricao": "Aposte qualquer valor 15 vezes.", "tipo": "apostar_total", "meta": 15, "chaves": 1,},
 }
 
 CENARIOS_FANTASMAS = [
