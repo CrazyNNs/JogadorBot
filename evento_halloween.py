@@ -698,7 +698,7 @@ def configurar_halloween(bot, ns):
         huntrow.add_item(_btn(hunt_label, lambda i: _start_hunt(i, uid), style=discord.ButtonStyle.primary, emoji="👻", disabled=hunt_disabled))
         c.add_item(huntrow)
         if net <= 0:
-            c.add_item(ui.TextDisplay("-# Você precisa comprar uma Rede de Fantasmas por 5.000 Joyens para iniciar ou continuar a caça."))
+            c.add_item(ui.TextDisplay("-# Você precisa comprar uma Rede de Fantasmas por 15.000 Joyens para iniciar ou continuar a caça."))
         view.add_item(c)
         return view
 
