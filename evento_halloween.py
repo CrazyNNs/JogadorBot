@@ -847,36 +847,170 @@ def configurar_halloween(bot, ns):
             self.montar()
             await interaction.message.edit(view=self, attachments=[])
 
+    
     class HalloweenMissoes(HalloweenView):
-        def __init__(self, uid):
+        MISSOES_POR_PAGINA = 5
+
+        def __init__(self, uid, pagina=0):
             super().__init__(uid)
+            self.pagina = pagina
             self.montar()
 
         def montar(self):
+            # Limpa os componentes anteriores antes de reconstruir a página.
+            self.clear_items()
+
+            todas_missoes = _status_missoes(self.uid)
+            total_missoes = len(todas_missoes)
+
+            total_paginas = max(
+                1,
+                (total_missoes + self.MISSOES_POR_PAGINA - 1)
+                // self.MISSOES_POR_PAGINA
+            )
+
+            # Mantém a página dentro dos limites válidos.
+            self.pagina = max(0, min(self.pagina, total_paginas - 1))
+
+            inicio = self.pagina * self.MISSOES_POR_PAGINA
+            fim = inicio + self.MISSOES_POR_PAGINA
+            missoes_pagina = todas_missoes[inicio:fim]
+
             c = _container()
-            c.add_item(ui.TextDisplay("# 🗝️ Missões — Chaves Perdidas\nComplete os objetivos e resgate as Chaves. O progresso é contado desde a primeira vez que abriu o evento."))
-            c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-            for mid, m, progresso, concluida in _status_missoes(self.uid):
-                status = "✅ Resgatada" if concluida else ("🎁 Pronta para resgatar" if progresso >= m["meta"] else "⏳ Em andamento")
-                texto = f"**{m['nome']}**\n{m['descricao']}\nProgresso: **{min(progresso, m['meta'])}/{m['meta']}** · Recompensa: <:ChaveIcon:1564804190184935444> **{m['chaves']}** · {status}"
-                row = ui.ActionRow()
-                row.add_item(_btn("Resgatar", lambda i, miss=mid: self.resgatar(i, miss), style=discord.ButtonStyle.success, disabled=concluida or progresso < m["meta"]))
-                c.add_item(ui.Section(ui.TextDisplay(texto), accessory=row.children[0]))
-                c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.small))
-            c.add_item(ui.ActionRow(_btn("Voltar", lambda i: _open_main(i, self.uid), style=discord.ButtonStyle.secondary, emoji="↩️")))
+
+            c.add_item(ui.TextDisplay(
+                "# 🗝️ Missões — Chaves Perdidas\n"
+                "Complete os objetivos e resgate suas Chaves.\n"
+                f"**Página {self.pagina + 1}/{total_paginas}**"
+            ))
+
+            c.add_item(
+                ui.Separator(spacing=discord.SeparatorSpacing.large)
+            )
+
+            for mid, m, progresso, concluida in missoes_pagina:
+                if concluida:
+                    status = "✅ Resgatada"
+                elif progresso >= m["meta"]:
+                    status = "🎁 Pronta para resgatar"
+                else:
+                    status = "⏳ Em andamento"
+
+                texto = (
+                    f"**{m['nome']}**\n"
+                    f"{m['descricao']}\n"
+                    f"Progresso: **{min(progresso, m['meta'])}"
+                    f"/{m['meta']}**\n"
+                    f"Recompensa: 🗝️ **{m['chaves']}** · {status}"
+                )
+
+                botao = _btn(
+                    "Resgatar",
+                    lambda i, miss=mid: self.resgatar(i, miss),
+                    style=discord.ButtonStyle.success,
+                    disabled=concluida or progresso < m["meta"],
+                )
+
+                c.add_item(
+                    ui.Section(
+                        ui.TextDisplay(texto),
+                        accessory=botao,
+                    )
+                )
+
+                c.add_item(
+                    ui.Separator(
+                        spacing=discord.SeparatorSpacing.small
+                    )
+                )
+
+            # Navegação entre as páginas.
+            botoes_navegacao = []
+
+            botoes_navegacao.append(
+                _btn(
+                    "Anterior",
+                    self.pagina_anterior,
+                    style=discord.ButtonStyle.secondary,
+                    disabled=self.pagina == 0,
+                    emoji="⬅️",
+                )
+            )
+
+            botoes_navegacao.append(
+                _btn(
+                    "Próxima",
+                    self.proxima_pagina,
+                    style=discord.ButtonStyle.secondary,
+                    disabled=self.pagina >= total_paginas - 1,
+                    emoji="➡️",
+                )
+            )
+
+            c.add_item(ui.ActionRow(*botoes_navegacao))
+
+            c.add_item(
+                ui.ActionRow(
+                    _btn(
+                        "Voltar ao Halloween",
+                        lambda i: _open_main(i, self.uid),
+                        style=discord.ButtonStyle.secondary,
+                        emoji="↩️",
+                    )
+                )
+            )
+
             self.add_item(c)
+
+        async def pagina_anterior(self, interaction):
+            if self.pagina <= 0:
+                await interaction.response.defer()
+                return
+
+            self.pagina -= 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
+
+        async def proxima_pagina(self, interaction):
+            total_missoes = len(_status_missoes(self.uid))
+            total_paginas = max(
+                1,
+                (total_missoes + self.MISSOES_POR_PAGINA - 1)
+                // self.MISSOES_POR_PAGINA
+            )
+
+            if self.pagina >= total_paginas - 1:
+                await interaction.response.defer()
+                return
+
+            self.pagina += 1
+            self.montar()
+            await interaction.response.edit_message(view=self)
 
         async def resgatar(self, interaction, mid):
             ok, valor = _resgatar_missao(self.uid, mid)
+
             if ok:
-                await asyncio.to_thread(ns["adicionar_chaves"], self.uid, valor)
-                texto = f"Você recebeu **{valor} <:ChaveIcon:1564804190184935444> Chave(s)**!"
+                await asyncio.to_thread(
+                    ns["adicionar_chaves"],
+                    self.uid,
+                    valor,
+                )
+                texto = f"Você recebeu **{valor} 🗝️ Chave(s)**!"
             else:
                 texto = valor
-            await interaction.response.send_message(texto, ephemeral=True)
+
+            await interaction.response.send_message(
+                texto,
+                ephemeral=True,
+            )
+
             if ok:
                 self.montar()
-                await interaction.message.edit(view=self, attachments=[])
+                await interaction.message.edit(
+                    view=self,
+                    attachments=[],
+                )
 
     class HalloweenCaca(HalloweenView):
         def __init__(self, uid):
