@@ -539,18 +539,18 @@ def _status_missoes(usuario_id):
 
         saida = []
 
-        for mid, m in HALLOWEEN_MISSOES.items():
-if m.get("tipo") in {
-    "fantasmas_capturados",
-    "hallobox_abertas",
-    "melhor_cacada",
-}:
-    progresso = _progresso_missao_exclusiva(
-        usuario_id,
-        m["tipo"]
-    )
-elif m.get("tipo"):
-    progresso = _contador(usuario_id, m["tipo"])
+for mid, m in HALLOWEEN_MISSOES.items():
+    if m.get("tipo") in {
+        "fantasmas_capturados",
+        "hallobox_abertas",
+        "melhor_cacada",
+    }:
+        progresso = _progresso_missao_exclusiva(
+            usuario_id,
+            m["tipo"]
+        )
+    elif m.get("tipo"):
+        progresso = _contador(usuario_id, m["tipo"])
             else:
                 atual = _contador(usuario_id, m["contador"])
                 progresso = max(
