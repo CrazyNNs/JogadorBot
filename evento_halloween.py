@@ -139,17 +139,22 @@ def _criar_tabelas():
 
 
 def _contador(usuario_id, coluna):
-permitidas = {
-    "msg_total",
-    "trabalhar_total",
-    "diario_total",
-    "mineracao_dinamite",
-    "pet_brincadeira",
-    "picaretas_quebradas",
-    "call_semana",
-    "joyens_acumulados",
-    "apostar_total",
-}
+    permitidas = {
+        "msg_total",
+        "trabalhar_total",
+        "diario_total",
+        "mineracao_dinamite",
+        "pet_brincadeira",
+        "picaretas_quebradas",
+        "call_semana",
+        "joyens_acumulados",
+        "apostar_total",
+    }
+
+    if coluna not in permitidas:
+        return 0
+
+    # Mantenha abaixo o restante do código original da função.
     if coluna not in permitidas:
         return 0
     con = _conectar()
