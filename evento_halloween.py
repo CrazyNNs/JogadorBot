@@ -139,7 +139,17 @@ def _criar_tabelas():
 
 
 def _contador(usuario_id, coluna):
-    permitidas = {"msg_total", "trabalhar_total", "diario_total"}
+permitidas = {
+    "msg_total",
+    "trabalhar_total",
+    "diario_total",
+    "mineracao_dinamite",
+    "pet_brincadeira",
+    "picaretas_quebradas",
+    "call_semana",
+    "joyens_acumulados",
+    "apostar_total",
+}
     if coluna not in permitidas:
         return 0
     con = _conectar()
@@ -525,11 +535,17 @@ def _status_missoes(usuario_id):
         saida = []
 
         for mid, m in HALLOWEEN_MISSOES.items():
-            if m.get("tipo"):
-                progresso = _progresso_missao_exclusiva(
-                    usuario_id,
-                    m["tipo"]
-                )
+if m.get("tipo") in {
+    "fantasmas_capturados",
+    "hallobox_abertas",
+    "melhor_cacada",
+}:
+    progresso = _progresso_missao_exclusiva(
+        usuario_id,
+        m["tipo"]
+    )
+elif m.get("tipo"):
+    progresso = _contador(usuario_id, m["tipo"])
             else:
                 atual = _contador(usuario_id, m["contador"])
                 progresso = max(
