@@ -539,41 +539,41 @@ def _status_missoes(usuario_id):
 
         saida = []
 
-for mid, m in HALLOWEEN_MISSOES.items():
-    if m.get("tipo") in {
-        "fantasmas_capturados",
-        "hallobox_abertas",
-        "melhor_cacada",
-    }:
-        progresso = _progresso_missao_exclusiva(
-            usuario_id,
-            m["tipo"]
-        )
-    elif m.get("tipo"):
-        progresso = _contador(usuario_id, m["tipo"])
-    else:
-        atual = _contador(usuario_id, m["contador"])
-        progresso = max(
-            0,
-            atual - int(colunas[m["contador"]] or 0)
-        )
-        
-        row = con.execute(
-            """
-            SELECT concluida
-            FROM halloween_missoes_usuarios
-            WHERE usuario_id = ? AND missao_id = ?
-            """,
-            (str(usuario_id), mid)
-        ).fetchone()
-        
-        saida.append((
-            mid,
-            m,
-            progresso,
-            bool(row and row[0])
-        ))
-        
+        for mid, m in HALLOWEEN_MISSOES.items():
+            if m.get("tipo") in {
+                "fantasmas_capturados",
+                "hallobox_abertas",
+                "melhor_cacada",
+            }:
+                progresso = _progresso_missao_exclusiva(
+                    usuario_id,
+                    m["tipo"]
+                )
+            elif m.get("tipo"):
+                progresso = _contador(usuario_id, m["tipo"])
+            else:
+                atual = _contador(usuario_id, m["contador"])
+                progresso = max(
+                    0,
+                    atual - int(colunas[m["contador"]] or 0)
+                )
+
+            row = con.execute(
+                """
+                SELECT concluida
+                FROM halloween_missoes_usuarios
+                WHERE usuario_id = ? AND missao_id = ?
+                """,
+                (str(usuario_id), mid)
+            ).fetchone()
+
+            saida.append((
+                mid,
+                m,
+                progresso,
+                bool(row and row[0])
+            ))
+
         return saida
 
 def _resgatar_missao(usuario_id, missao_id):
