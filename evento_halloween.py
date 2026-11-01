@@ -774,6 +774,7 @@ def configurar_halloween(bot, ns):
             return [discord.File(d["imagem"], filename=d["imagem"]) for d in HALLOWEEN_CAIXAS.values() if os.path.isfile(d["imagem"])]
 
         def montar(self):
+            self.clear_items()
             c = _container()
             c.add_item(ui.TextDisplay(f"# 🎁 Hallobox\n<:ChaveIcon:1564804190184935444> **Suas Chaves:** {ns['buscar_chaves'](self.uid)}\nEscolha uma caixa para abrir. Cada compra consome a quantidade de Chaves indicada."))
             c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
@@ -818,12 +819,38 @@ def configurar_halloween(bot, ns):
                 return
             result = ui.LayoutView(timeout=90)
             cont = _container()
-            cont.add_item(ui.TextDisplay(f"# {HALLOWEEN_CAIXAS[tipo]['emoji']} Caixa aberta!\n" + "\n".join(f"• {x}" for x in recompensas) + f"\n\n<:ChaveIcon:1564804190184935444> Chaves restantes: {ns['buscar_chaves'](self.uid)}"))
-            cont.add_item(ui.ActionRow(_btn("Fechar", lambda i: i.response.edit_message(view=None), style=discord.ButtonStyle.secondary)))
+            
+            linhas_recompensas = "\n".join(
+                f"• {recompensa}" for recompensa in recompensas
+            ) or "Nenhuma recompensa foi registrada."
+            
+            cont.add_item(
+                ui.TextDisplay(
+                    f"# {HALLOWEEN_CAIXAS[tipo]['emoji']} Caixa aberta!\n"
+                    f"{linhas_recompensas}\n\n"
+                    f"<:ChaveIcon:1564804190184935444> "
+                    f"**Chaves restantes:** {ns['buscar_chaves'](self.uid)}"
+                )
+            )
+            
+            cont.add_item(
+                ui.ActionRow(
+                    _btn(
+                        "Voltar à Hallobox",
+                        lambda i: _open_hallobox(i, self.uid),
+                        style=discord.ButtonStyle.secondary,
+                        emoji="↩️",
+                    )
+                )
+            )
+            
             result.add_item(cont)
-            await interaction.response.send_message(view=result, ephemeral=True)
-            self.montar()
-            await interaction.message.edit(view=self, attachments=self.arquivos())
+            
+            # Substitui a loja pelo resultado na mesma mensagem.
+            await interaction.response.edit_message(
+                view=result,
+                attachments=[],
+            )
 
     class HalloweenLoja(HalloweenView):
         def __init__(self, uid):
