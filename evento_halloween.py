@@ -33,6 +33,7 @@ HALLOWEEN_CONQUISTAS = {
     "Guardião das Cerejeiras Sombria": ("🌸", "Protegeu as cerejeiras durante o Halloween sombrio."),
     "Fantasminha Camarada": ("👻", "Um fantasminha simpático que acompanha a comunidade."),
     "Fome de Sangue": ("🩸", "Um título temático conquistado no evento de Halloween."),
+    "Presas Famintas": ("🧛", "Conquistou uma recompensa especial das Caixas Sangrentas."),
 }
 
 HALLOWEEN_LOJA = {
@@ -48,6 +49,18 @@ HALLOWEEN_CAIXAS = {
     "assombrada": {"nome": "Caixa Assombrada", "emoji": "🎃", "preco_chaves": 1, "imagem": "caixaassombrada.png", "descricao": "Doces | 1 Pétala | Banner Exclusivo | Conquista exclusiva | Itens aleatórios."},
     "sakura": {"nome": "Caixa da Sakura Sombria", "emoji": "🌸", "preco_chaves": 3, "imagem": "caixasakura.png", "descricao": "Mais doces | 2-3 Pétalas | Banners Exclusivos | Conquistas exclusivas."},
 }
+
+HALLOWEEN_CAIXA_SANGRENTA = {
+    "nome": "Caixa Sangrenta",
+    "emoji": "🩸",
+    "imagem": "caixasangrenta.png",
+    "descricao": (
+        "Uma recompensa garantida por caixa: "
+        "Banner Selene Sangrenta, conquistas, doces, chaves ou pétalas."
+    ),
+}
+
+HALLOWEEN_BANNER_SANGRENTO = "Selene Sangrenta"
 
 HALLOWEEN_DOCES_CAIXA_ASSOMBRADA = (12, 22)
 HALLOWEEN_DOCES_CAIXA_SAKURA = (30, 45)
@@ -131,6 +144,20 @@ def _criar_tabelas():
                 fantasmas_capturados INTEGER NOT NULL DEFAULT 0,
                 hallobox_abertas INTEGER NOT NULL DEFAULT 0,
                 melhor_cacada INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS halloween_caixas_sangrentas (
+                usuario_id TEXT PRIMARY KEY,
+                quantidade INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS halloween_assustar_usos (
+                remetente_id TEXT NOT NULL,
+                destinatario_id TEXT NOT NULL,
+                PRIMARY KEY (remetente_id, destinatario_id)
             )
         """)
         con.commit()
@@ -420,6 +447,86 @@ def _comprar(ns, usuario_id, item_id):
 
 
 def _chaves_gastar(usuario_id, qtd):
+def _caixas_sangrentas(usuario_id):
+    with _db() as con:
+        row = con.execute(
+            """
+            SELECT quantidade
+            FROM halloween_caixas_sangrentas
+            WHERE usuario_id = ?
+            """,
+            (str(usuario_id),)
+        ).fetchone()
+
+    return int(row[0]) if row else 0
+
+
+def _adicionar_caixas_sangrentas(usuario_id, quantidade):
+    with _db() as con:
+        con.execute(
+            """
+            INSERT INTO halloween_caixas_sangrentas (usuario_id, quantidade)
+            VALUES (?, ?)
+            ON CONFLICT(usuario_id)
+            DO UPDATE SET quantidade = quantidade + excluded.quantidade
+            """,
+            (str(usuario_id), int(quantidade))
+        )
+
+
+def _gastar_caixa_sangrenta(usuario_id):
+    with _db() as con:
+        cur = con.execute(
+            """
+            UPDATE halloween_caixas_sangrentas
+            SET quantidade = quantidade - 1
+            WHERE usuario_id = ? AND quantidade > 0
+            """,
+            (str(usuario_id),)
+        )
+
+    return cur.rowcount == 1
+
+
+def _sortear_recompensa_sangrenta(ns, usuario_id):
+    """Entrega exatamente uma recompensa aleatória por caixa."""
+    recompensas = [
+        ("banner", HALLOWEEN_BANNER_SANGRENTO),
+        ("conquista", "Presas Famintas"),
+        ("conquista", "Fome de Sangue"),
+        ("doces", random.randint(20, 70)),
+        ("chaves", random.randint(1, 3)),
+        ("petalas", random.randint(2, 7)),
+    ]
+
+    tipo, premio = random.choice(recompensas)
+
+    if tipo == "banner":
+        ok, motivo = _dar_banner(usuario_id, premio)
+        if ok:
+            return f"🖼️ Banner **{premio}**"
+        if motivo == "duplicado":
+            return f"🖼️ Você já possuía **{premio}**."
+        return f"⚠️ O banner **{premio}** não está cadastrado."
+
+    if tipo == "conquista":
+        if _conquista(usuario_id, premio):
+            return f"🏆 Conquista **{premio}**"
+        return f"🏆 Você já possuía a conquista **{premio}**."
+
+    if tipo == "doces":
+        _adicionar_doces(usuario_id, premio)
+        return f"🍬 **{premio} Doces**"
+
+    if tipo == "chaves":
+        ns["adicionar_chaves"](usuario_id, premio)
+        return f"🗝️ **{premio} Chave(s)**"
+
+    if tipo == "petalas":
+        ns["adicionar_petalas"](usuario_id, premio)
+        return f"🌸 **{premio} Pétalas**"
+
+    return "Não foi possível entregar a recompensa."
     with _db() as con:
         cur = con.execute("UPDATE chaves_usuario SET quantidade = quantidade - ? WHERE usuario_id = ? AND quantidade >= ?", (int(qtd), str(usuario_id), int(qtd)))
         return cur.rowcount == 1
@@ -1439,6 +1546,169 @@ def configurar_halloween(bot, ns):
             f"Não entregues: **{falhas}**."
         )
 
+    @bot.command(name="avisar_ultimo")
+    async def avisar_ultimo_comando(ctx):
+        # Apaga a mensagem que executou o comando.
+        try:
+            await ctx.message.delete()
+        except discord.HTTPException:
+            pass
+
+        dono_id = ns.get("DONO_ID")
+        if not dono_id or ctx.author.id != int(dono_id):
+            return
+
+        if ctx.guild is None:
+            return
+
+        try:
+            with _db() as con:
+                rows = con.execute(
+                    """
+                    SELECT usuario_id
+                    FROM contadores_usuarios
+                    WHERE msg_total > 0
+                    """
+                ).fetchall()
+        except sqlite3.OperationalError as erro:
+            print(f"[Halloween] Erro ao consultar usuários para o aviso: {erro}")
+            return
+
+        ids_registrados = {
+            int(row[0])
+            for row in rows
+            if row and str(row[0]).isdigit()
+        }
+
+        try:
+            ids_membros = {
+                membro.id
+                async for membro in ctx.guild.fetch_members(limit=None)
+            }
+        except discord.HTTPException as erro:
+            print(f"[Halloween] Erro ao listar membros: {erro}")
+            return
+
+        ids = sorted(ids_registrados.intersection(ids_membros))
+
+        aviso = (
+            "🎃 **Último aviso do Halloween do Sakurai!**\n\n"
+            "O evento foi estendido por **mais 1 dia**!\n\n"
+            "🩸 **Nova missão personalizada:** use `!assustar @membro` "
+            "para enviar um susto por mensagem privada e receber "
+            "**5 Caixas Sangrentas**.\n\n"
+            "**Recompensas possíveis de cada Caixa Sangrenta:**\n"
+            "• Banner: **Selene Sangrenta**\n"
+            "• Conquista: **🧛 Presas Famintas**\n"
+            "• Conquista: **🩸 Fome de Sangue**\n"
+            "• **20–70 Doces**\n"
+            "• **1–3 Chaves**\n"
+            "• **2–7 Pétalas**\n\n"
+            "Cada caixa garante **uma única recompensa aleatória**."
+        )
+
+        enviados = 0
+        falhas = 0
+
+        for usuario_id in ids:
+            try:
+                usuario = bot.get_user(usuario_id)
+                if usuario is None:
+                    usuario = await bot.fetch_user(usuario_id)
+
+                await usuario.send(aviso)
+                enviados += 1
+
+            except (discord.Forbidden, discord.NotFound, discord.HTTPException):
+                falhas += 1
+
+            await asyncio.sleep(1)
+
+        print(
+            f"[Halloween] Aviso final concluído: "
+            f"{enviados} enviados; {falhas} falharam."
+        )
+
+    @bot.command(name="assustar")
+    async def assustar_comando(ctx, membro: discord.Member):
+        # Apaga o comando original, mesmo se a validação não passar.
+        try:
+            await ctx.message.delete()
+        except discord.HTTPException:
+            pass
+
+        if ctx.guild is None:
+            return
+
+        if membro.bot or membro.id == ctx.author.id:
+            await ctx.author.send(
+                "Escolha outro membro do servidor para enviar o susto."
+            )
+            return
+
+        if membro.id == bot.user.id:
+            await ctx.author.send("Não pode assustar o próprio Sakurai!")
+            return
+
+        # Um mesmo remetente não pode repetir o prêmio para o mesmo membro.
+        with _db() as con:
+            ja_usou = con.execute(
+                """
+                SELECT 1
+                FROM halloween_assustar_usos
+                WHERE remetente_id = ? AND destinatario_id = ?
+                """,
+                (str(ctx.author.id), str(membro.id))
+            ).fetchone()
+
+        if ja_usou:
+            await ctx.author.send(
+                "Você já enviou um susto para esse membro e recebeu as caixas."
+            )
+            return
+
+        arquivo_nome = random.choice(["assustar.gif", "assustar2.gif"])
+        caminho_gif = os.path.join(os.path.dirname(__file__), arquivo_nome)
+
+        if not os.path.isfile(caminho_gif):
+            await ctx.author.send(
+                f"Não encontrei o arquivo **{arquivo_nome}** na pasta do evento."
+            )
+            return
+
+        try:
+            arquivo = discord.File(caminho_gif, filename=arquivo_nome)
+            await membro.send(
+                file=arquivo,
+                content="Use `!assustar` para devolver o susto em quem você desconfia!"
+            )
+        except discord.Forbidden:
+            await ctx.author.send(
+                "Não consegui enviar o susto. O membro pode estar com as DMs fechadas."
+            )
+            return
+        except discord.HTTPException as erro:
+            print(f"[Halloween] Erro ao enviar susto: {erro}")
+            await ctx.author.send("Ocorreu um erro ao enviar o susto.")
+            return
+
+        # Registra o par e concede as cinco caixas após o envio bem-sucedido.
+        with _db() as con:
+            con.execute(
+                """
+                INSERT OR IGNORE INTO halloween_assustar_usos
+                (remetente_id, destinatario_id)
+                VALUES (?, ?)
+                """,
+                (str(ctx.author.id), str(membro.id))
+            )
+
+        _adicionar_caixas_sangrentas(ctx.author.id, 5)
+
+        await ctx.author.send(
+            f"🎁 Você recebeu **5 Caixas Sangrentas** por assustar {membro.mention}!"
+        )
+    
     @bot.command(name="halloween")
     async def halloween_comando(ctx):
         if not HALLOWEEN_ATIVO:
