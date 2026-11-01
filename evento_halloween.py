@@ -447,6 +447,10 @@ def _comprar(ns, usuario_id, item_id):
 
 
 def _chaves_gastar(usuario_id, qtd):
+    with _db() as con:
+        cur = con.execute("UPDATE chaves_usuario SET quantidade = quantidade - ? WHERE usuario_id = ? AND quantidade >= ?", (int(qtd), str(usuario_id), int(qtd)))
+        return cur.rowcount == 1
+
 def _caixas_sangrentas(usuario_id):
     with _db() as con:
         row = con.execute(
@@ -527,10 +531,6 @@ def _sortear_recompensa_sangrenta(ns, usuario_id):
         return f"🌸 **{premio} Pétalas**"
 
     return "Não foi possível entregar a recompensa."
-    with _db() as con:
-        cur = con.execute("UPDATE chaves_usuario SET quantidade = quantidade - ? WHERE usuario_id = ? AND quantidade >= ?", (int(qtd), str(usuario_id), int(qtd)))
-        return cur.rowcount == 1
-
 
 def _loot_caixa(ns, usuario_id, tipo):
     out = []
