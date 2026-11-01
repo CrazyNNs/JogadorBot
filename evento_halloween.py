@@ -965,6 +965,7 @@ def configurar_halloween(bot, ns):
             self.montar()
 
         def montar(self):
+            self.clear_items()
             c = _container()
             c.add_item(ui.TextDisplay(f"# 🛍️ Lembrancinhas — Bazar da Lua Roxa\n🍬 **Seus doces:** {_doces(self.uid)}\nCada item permanente só pode ser adquirido uma vez. A Rede de Fantasmas é comprada com Joyens e pode ser reposta quando quebrar."))
             c.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
