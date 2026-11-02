@@ -13,7 +13,6 @@ import io
 import asyncio
 import traceback
 import threading
-import evento_halloween
 
 _sqlite3_connect_original = sqlite3.connect
 
@@ -11959,10 +11958,5 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             await interaction.response.send_message(
                 "<:Atencao:1534592266625093662> Permissões insuficientes.", ephemeral=True
             )
-            
-# ============================================================
-# EVENTO DE HALLOWEEN
-# ============================================================
-evento_halloween.configurar_halloween(bot, globals())
 
 bot.run(TOKEN)
