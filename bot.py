@@ -4843,7 +4843,7 @@ class ViewKuruulandia(ui.LayoutView):
             f"{local['emoji']} **{local['nome']}** — {local['local']}" for local in LOCAIS_KURUULANDIA
         )
         container.add_item(ui.TextDisplay(f"### 🗺️ Kuruulândia\n{texto_locais}"))
-        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/kuruulandia.png")))
+        container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/kuruucity.png")))
 
         # Cada linha de botões comporta no máximo 5, então os locais são divididos em linhas de 5.
         for inicio in range(0, len(LOCAIS_KURUULANDIA), 5):
@@ -4998,7 +4998,7 @@ class ViewMenuLoja(ui.LayoutView):
 
     async def voltar_mapa(self, interaction: discord.Interaction):
         view = ViewKuruulandia(self.usuario_id)
-        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        arquivo = discord.File("kuruucity.png", filename="kuruucity.png") if os.path.exists("kuruucity.png") else None
         if arquivo:
             await interaction.response.edit_message(view=view, attachments=[arquivo])
         else:
@@ -5006,7 +5006,7 @@ class ViewMenuLoja(ui.LayoutView):
 
     async def voltar_mapa(self, interaction: discord.Interaction):
         view = ViewKuruulandia(self.usuario_id)
-        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        arquivo = discord.File("kuruucity.png", filename="kuruucity.png") if os.path.exists("kuruucity.png") else None
         if arquivo:
             await interaction.response.edit_message(view=view, attachments=[arquivo])
         else:
@@ -6679,7 +6679,7 @@ class ViewMenuPetshop(ui.LayoutView):
 
     async def voltar_mapa(self, interaction: discord.Interaction):
         view = ViewKuruulandia(self.usuario_id)
-        arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+        arquivo = discord.File("kuruucity.png", filename="kuruucity.png") if os.path.exists("kuruucity.png") else None
         if arquivo:
             await interaction.response.edit_message(view=view, attachments=[arquivo])
         else:
@@ -10920,7 +10920,7 @@ async def mochila(ctx, membro: discord.Member = None):
 @bot.command(name="mapa")
 async def kuruu(ctx):
     view = ViewKuruulandia(ctx.author.id)
-    arquivo = discord.File("kuruulandia.png", filename="kuruulandia.png") if os.path.exists("kuruulandia.png") else None
+    arquivo = discord.File("kuruucity.png", filename="kuruucity.png") if os.path.exists("kuruucity.png") else None
     if arquivo:
         await ctx.send(view=view, file=arquivo)
     else:
