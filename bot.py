@@ -612,6 +612,7 @@ LOCAIS_KURUULANDIA = [
     {"chave": "cassino", "emoji": "🎰", "nome": "Cassino", "local": "_(em breve)_", "disponivel": False},
     {"chave": "mineracao", "emoji": "⛏️", "nome": "Mineração", "local": "Abismo Terrível", "disponivel": False},
     {"chave": "banco", "emoji": "🏦", "nome": "Banco", "local": "Banco Sakurai", "disponivel": True},
+    {"chave": "santuario", "emoji": "⛩️", "nome": "Santuário", "local": "_(em breve)_", "disponivel": False},
 ]
 
 # ============================================================
@@ -4844,21 +4845,23 @@ class ViewKuruulandia(ui.LayoutView):
         container.add_item(ui.TextDisplay(f"### 🗺️ Kuruulândia\n{texto_locais}"))
         container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media="https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/kuruulandia.png")))
 
-        linha = ui.ActionRow()
-        for local in LOCAIS_KURUULANDIA:
-            botao = ui.Button(
-                emoji=local["emoji"],
-                style=discord.ButtonStyle.secondary,
-                disabled=not local["disponivel"]
-            )
-            if local["chave"] == "loja":
-                botao.callback = self.abrir_loja
-            elif local["chave"] == "petshop":
-                botao.callback = self.abrir_petshop
-            elif local["chave"] == "banco":
-                botao.callback = self.abrir_banco
-            linha.add_item(botao)
-        container.add_item(linha)
+        # Cada linha de botões comporta no máximo 5, então os locais são divididos em linhas de 5.
+        for inicio in range(0, len(LOCAIS_KURUULANDIA), 5):
+            linha = ui.ActionRow()
+            for local in LOCAIS_KURUULANDIA[inicio:inicio + 5]:
+                botao = ui.Button(
+                    emoji=local["emoji"],
+                    style=discord.ButtonStyle.secondary,
+                    disabled=not local["disponivel"]
+                )
+                if local["chave"] == "loja":
+                    botao.callback = self.abrir_loja
+                elif local["chave"] == "petshop":
+                    botao.callback = self.abrir_petshop
+                elif local["chave"] == "banco":
+                    botao.callback = self.abrir_banco
+                linha.add_item(botao)
+            container.add_item(linha)
 
         self.add_item(container)
 
