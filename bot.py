@@ -642,7 +642,7 @@ BENEFICIOS_VIP = {
 }
 
 VIP_SAKURA_PRECO = 15                                   # Pétalas — compra única, o VIP Sakura é permanente
-VIP_SAMURAI_PACOTES = {7: 10, 14: 15, 21: 20, 30: 25}   # dias: preço em Pétalas
+VIP_SAMURAI_PACOTES = {7: 10, 14: 15, 21: 20, 28: 25}   # dias: preço em Pétalas
 VIP_NIVEL_PARA_SAMURAI = 10                             # nível de VIP necessário para evoluir
 VIP_DIAS_PARA_RESETAR_NIVEL = 7                         # dias após o Samurai expirar antes de o nível zerar
 
@@ -5230,9 +5230,9 @@ class ViewSantuario(_ViewSantuarioBase):
         container.add_item(ui.Section(
             ui.TextDisplay(
                 f"### {NOMES_VIP['sakura']}\n"
-                f"📋Benefícios: Por enquanto nada\n"
-                f"💴Preço: {VIP_SAKURA_PRECO} {EMOJI_PETALAS} Pétalas\n"
-                f"⏰Duração: Permanente"
+                f"📋**Benefícios:** Por enquanto nada\n"
+                f"💴**Preço:** {VIP_SAKURA_PRECO} {EMOJI_PETALAS} Pétalas\n"
+                f"⏰**Duração:** Permanente"
             ),
             accessory=btn_sakura
         ))
@@ -5246,10 +5246,10 @@ class ViewSantuario(_ViewSantuarioBase):
         container.add_item(ui.Section(
             ui.TextDisplay(
                 f"### {NOMES_VIP['samurai']}\n"
-                f"Benefícios: Por enquanto nada\n"
-                f"Requisito: {NOMES_VIP['sakura']} no nível {VIP_NIVEL_PARA_SAMURAI}\n"
-                f"Preço: de {min(precos)} a {max(precos)} {EMOJI_PETALAS} Pétalas\n"
-                f"Duração: {', '.join(str(d) for d in dias_lista[:-1])} ou {dias_lista[-1]} Dias (você escolhe ao comprar)"
+                f"📋**Benefícios:** Por enquanto nada\n"
+                f"📚**Requisito:** {NOMES_VIP['sakura']} no nível {VIP_NIVEL_PARA_SAMURAI}\n"
+                f"💴**Preço:** {min(precos)}-{max(precos)} {EMOJI_PETALAS} Pétalas\n"
+                f"⏰**Duração:** {', '.join(str(d) for d in dias_lista[:-1])} ou {dias_lista[-1]} Dias"
             ),
             accessory=btn_samurai
         ))
