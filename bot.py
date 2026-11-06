@@ -628,15 +628,28 @@ VALOR_POR_DIA_EXTRA_EMPRESTIMO = 5000  # a cada 5.000 pedidos, +1 dia até a cob
 # SANTUÁRIO - Armazenamento de dados
 # ============================================================
 URL_IMAGEM_SANTUARIO = "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Santu%C3%A1rio/guardiaosantuario.png"
+URL_ICONE_VIP = {
+    "sakura": "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Santu%C3%A1rio/sakuravip.png",
+    "samurai": "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Santu%C3%A1rio/samuraivip.png",
+}
 EMOJI_PETALAS = "<:PetalasIcon:1564674289758638280>"
 
-VIP_SAKURA_PRECO = 15               # Pétalas
-VIP_SAKURA_DIAS = 15
-VIP_SAMURAI_PRECO_BASE = 10         # Pétalas, somadas a +1 para cada 2 dias escolhidos
-VIP_SAMURAI_DIAS_POR_PETALA = 2
-VIP_SAMURAI_DIAS_MIN = 1
-VIP_SAMURAI_DIAS_MAX = 30
 NOMES_VIP = {"sakura": "VIP Sakura", "samurai": "VIP Samurai"}
+# Para adicionar um benefício, é só incluir uma linha na lista do VIP.
+BENEFICIOS_VIP = {
+    "sakura": ["Por enquanto nada"],
+    "samurai": ["Por enquanto nada"],
+}
+
+VIP_SAKURA_PRECO = 15                                   # Pétalas — compra única, o VIP Sakura é permanente
+VIP_SAMURAI_PACOTES = {7: 10, 14: 15, 21: 20, 30: 25}   # dias: preço em Pétalas
+VIP_NIVEL_PARA_SAMURAI = 10                             # nível de VIP necessário para evoluir
+VIP_DIAS_PARA_RESETAR_NIVEL = 7                         # dias após o Samurai expirar antes de o nível zerar
+
+VIP_XP_POR_MENSAGEM = 10
+VIP_XP_INTERVALO_SEGUNDOS = 0       # 0 = toda mensagem conta. Ex.: 60 = no máximo 1 mensagem por minuto rende XP
+VIP_XP_BASE = 1000                  # XP para sair do nível 0 (cresce 10% a cada nível, como o level principal)
+VIP_XP_CRESCIMENTO = 1.1
 # ============================================================
 # ITENS DE MINERAÇÃO — Loja e sistema de mineração
 # ============================================================
@@ -1656,11 +1669,13 @@ def iniciar_banco():
     con.commit()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS vips_usuarios (
-            usuario_id TEXT NOT NULL,
-            tipo TEXT NOT NULL,
-            expira_ts INTEGER NOT NULL,
-            PRIMARY KEY (usuario_id, tipo)
+        CREATE TABLE IF NOT EXISTS vip_usuarios (
+            usuario_id TEXT PRIMARY KEY,
+            sakura_ativado_ts INTEGER,
+            level INTEGER NOT NULL DEFAULT 0,
+            xp INTEGER NOT NULL DEFAULT 0,
+            samurai_ativado_ts INTEGER,
+            samurai_expira_ts INTEGER
         )
     """)
     con.commit()
@@ -4906,40 +4921,128 @@ class ViewKuruulandia(ui.LayoutView):
 # ============================================================
 # SANTUÁRIO DAS CEREJEIRAS — VIPs
 # ============================================================
+def vip_xp_necessario(level):
+    """XP para passar do nível 'level' para o próximo."""
+    xp = VIP_XP_BASE
+    for _ in range(level):
+        xp = int(xp * VIP_XP_CRESCIMENTO)
+    return xp
+
+
 def preco_vip(tipo, dias=None):
-    """Preço em Pétalas. O Samurai custa 10 + 1 para cada 2 dias escolhidos (arredondando para baixo)."""
     if tipo == "sakura":
         return VIP_SAKURA_PRECO
-    return VIP_SAMURAI_PRECO_BASE + dias // VIP_SAMURAI_DIAS_POR_PETALA
+    return VIP_SAMURAI_PACOTES[dias]
 
 
 def _vip_agora():
     return int(datetime.datetime.now(FUSO_BR).timestamp())
 
 
-def buscar_vip_expiracao(usuario_id, tipo):
-    """Timestamp (unix) em que o VIP expira, ou None se o usuário não tem esse VIP ativo."""
+def _vip_data(ts):
+    return datetime.datetime.fromtimestamp(ts, FUSO_BR).strftime("%d/%m/%Y")
+
+
+def _vip_dias_texto(dias):
+    return f"{dias} dia" + ("s" if dias != 1 else "")
+
+
+_VIP_COLUNAS = ("sakura_ativado_ts", "level", "xp", "samurai_ativado_ts", "samurai_expira_ts")
+
+
+def _vip_ler(cur, usuario_id):
+    cur.execute(
+        "SELECT sakura_ativado_ts, level, xp, samurai_ativado_ts, samurai_expira_ts "
+        "FROM vip_usuarios WHERE usuario_id = ?", (usuario_id,)
+    )
+    linha = cur.fetchone()
+    return dict(zip(_VIP_COLUNAS, linha)) if linha else None
+
+
+def _vip_estado(dados, agora):
+    """Interpreta a linha do banco no instante 'agora', já aplicando a regra do reset de nível
+    (sem gravar nada). 'precisa_gravar_reset' avisa quando o banco ainda guarda o nível antigo."""
+    estado = {
+        "tem_sakura": False, "samurai_ativo": False, "vip_atual": None,
+        "level": 0, "xp": 0, "sakura_ativado_ts": None,
+        "samurai_ativado_ts": None, "samurai_expira_ts": None,
+        "reset_em": None, "precisa_gravar_reset": False,
+    }
+    if not dados or not dados["sakura_ativado_ts"]:
+        return estado
+    estado["tem_sakura"] = True
+    estado["sakura_ativado_ts"] = dados["sakura_ativado_ts"]
+    level, xp = dados["level"], dados["xp"]
+    ativado, expira = dados["samurai_ativado_ts"], dados["samurai_expira_ts"]
+
+    if expira is not None and agora >= expira + VIP_DIAS_PARA_RESETAR_NIVEL * 86400:
+        level, xp, ativado, expira = 0, 0, None, None       # passou o prazo sem evoluir de novo
+        estado["precisa_gravar_reset"] = True
+
+    estado["level"], estado["xp"] = level, xp
+    estado["samurai_ativado_ts"], estado["samurai_expira_ts"] = ativado, expira
+    if expira is not None:
+        if expira > agora:
+            estado["samurai_ativo"] = True
+        else:
+            estado["reset_em"] = expira + VIP_DIAS_PARA_RESETAR_NIVEL * 86400
+    estado["vip_atual"] = "samurai" if estado["samurai_ativo"] else "sakura"
+    return estado
+
+
+def _vip_gravar_reset(cur, usuario_id):
+    cur.execute(
+        "UPDATE vip_usuarios SET level = 0, xp = 0, samurai_ativado_ts = NULL, samurai_expira_ts = NULL "
+        "WHERE usuario_id = ?", (usuario_id,)
+    )
+
+
+def buscar_status_vip(usuario_id):
+    """Situação atual do VIP do usuário (somente leitura)."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        dados = _vip_ler(con.cursor(), str(usuario_id))
+    finally:
+        con.close()
+    return _vip_estado(dados, _vip_agora())
+
+
+def vip_adicionar_xp_sync(usuario_id, quantidade):
+    """Soma XP VIP (só quem tem o VIP Sakura). Devolve (level, xp) ou None se o usuário não tem VIP."""
+    usuario_id = str(usuario_id)
     con = sqlite3.connect("jogadorbot.db")
     try:
         cur = con.cursor()
-        cur.execute("SELECT expira_ts FROM vips_usuarios WHERE usuario_id = ? AND tipo = ?", (str(usuario_id), tipo))
-        linha = cur.fetchone()
+        cur.execute("BEGIN IMMEDIATE")
+        estado = _vip_estado(_vip_ler(cur, usuario_id), _vip_agora())
+        if not estado["tem_sakura"]:
+            con.rollback()
+            return None
+        if estado["precisa_gravar_reset"]:
+            _vip_gravar_reset(cur, usuario_id)
+        level, xp = estado["level"], estado["xp"] + quantidade
+        while xp >= vip_xp_necessario(level):
+            xp -= vip_xp_necessario(level)
+            level += 1
+        cur.execute("UPDATE vip_usuarios SET level = ?, xp = ? WHERE usuario_id = ?", (level, xp, usuario_id))
+        con.commit()
+        return level, xp
+    except BaseException:
+        con.rollback()
+        raise
     finally:
         con.close()
-    if linha and linha[0] > _vip_agora():
-        return linha[0]
-    return None
 
 
 def comprar_vip_sync(usuario_id, tipo, dias):
-    """Cobra as Pétalas e ativa (ou estende) o VIP numa transação só.
-    Devolve (True, expira_ts) ou (False, mensagem_de_erro)."""
+    """Cobra as Pétalas e ativa o VIP numa transação só.
+    Devolve (True, {"expira_ts": ...}) ou (False, mensagem_de_erro)."""
     usuario_id = str(usuario_id)
     if tipo == "sakura":
-        dias = VIP_SAKURA_DIAS
+        dias = None
     elif tipo == "samurai":
-        if not (VIP_SAMURAI_DIAS_MIN <= dias <= VIP_SAMURAI_DIAS_MAX):
-            return False, f"A duração precisa ser de {VIP_SAMURAI_DIAS_MIN} a {VIP_SAMURAI_DIAS_MAX} dias."
+        if dias not in VIP_SAMURAI_PACOTES:
+            return False, "Essa duração não está disponível."
     else:
         return False, "Esse VIP não existe."
     preco = preco_vip(tipo, dias)
@@ -4949,13 +5052,19 @@ def comprar_vip_sync(usuario_id, tipo, dias):
         cur = con.cursor()
         cur.execute("BEGIN IMMEDIATE")
         agora = _vip_agora()
+        estado = _vip_estado(_vip_ler(cur, usuario_id), agora)
 
+        if tipo == "sakura" and estado["tem_sakura"]:
+            con.rollback()
+            return False, "Você já possui o **VIP Sakura** (ele é permanente)."
         if tipo == "samurai":
-            cur.execute("SELECT expira_ts FROM vips_usuarios WHERE usuario_id = ? AND tipo = 'sakura'", (usuario_id,))
-            sakura = cur.fetchone()
-            if not sakura or sakura[0] <= agora:
+            if not estado["tem_sakura"]:
                 con.rollback()
-                return False, "Você precisa ter o **VIP Sakura** ativo para comprar o VIP Samurai."
+                return False, "Você precisa ter o **VIP Sakura** para evoluir para o VIP Samurai."
+            if estado["level"] < VIP_NIVEL_PARA_SAMURAI:
+                con.rollback()
+                return False, (f"Você precisa estar no **nível {VIP_NIVEL_PARA_SAMURAI}** do VIP para evoluir "
+                               f"para o VIP Samurai. Seu nível atual: **{estado['level']}**.")
 
         cur.execute(
             "UPDATE usuario_stats SET petalas = COALESCE(petalas, 0) - ? "
@@ -4969,17 +5078,30 @@ def comprar_vip_sync(usuario_id, tipo, dias):
             con.rollback()
             return False, f"Você não tem Pétalas suficientes! Custa {preco} e você tem {saldo}."
 
-        cur.execute("SELECT expira_ts FROM vips_usuarios WHERE usuario_id = ? AND tipo = ?", (usuario_id, tipo))
-        atual = cur.fetchone()
-        base = atual[0] if atual and atual[0] > agora else agora   # comprar de novo soma à duração restante
-        nova_expiracao = base + dias * 86400
-        cur.execute(
-            "INSERT INTO vips_usuarios (usuario_id, tipo, expira_ts) VALUES (?, ?, ?) "
-            "ON CONFLICT(usuario_id, tipo) DO UPDATE SET expira_ts = excluded.expira_ts",
-            (usuario_id, tipo, nova_expiracao)
-        )
+        if estado["precisa_gravar_reset"]:
+            _vip_gravar_reset(cur, usuario_id)
+
+        if tipo == "sakura":
+            cur.execute(
+                "INSERT INTO vip_usuarios (usuario_id, sakura_ativado_ts) VALUES (?, ?) "
+                "ON CONFLICT(usuario_id) DO UPDATE SET sakura_ativado_ts = excluded.sakura_ativado_ts",
+                (usuario_id, agora)
+            )
+            resultado = {"expira_ts": None}
+        else:
+            if estado["samurai_ativo"]:      # renovar soma ao prazo restante e mantém a data de ativação
+                ativado = estado["samurai_ativado_ts"]
+                expira = estado["samurai_expira_ts"] + dias * 86400
+            else:
+                ativado = agora
+                expira = agora + dias * 86400
+            cur.execute(
+                "UPDATE vip_usuarios SET samurai_ativado_ts = ?, samurai_expira_ts = ? WHERE usuario_id = ?",
+                (ativado, expira, usuario_id)
+            )
+            resultado = {"expira_ts": expira}
         con.commit()
-        return True, nova_expiracao
+        return True, resultado
     except BaseException:
         con.rollback()
         raise
@@ -4987,6 +5109,49 @@ def comprar_vip_sync(usuario_id, tipo, dias):
         con.close()
 
 
+# ------------------------------------------------------------
+# XP VIP: cada mensagem de quem tem o VIP Sakura rende XP
+# ------------------------------------------------------------
+_VIP_DONOS_SAKURA = None     # ids de quem tem o VIP Sakura (evita consultar o banco a cada mensagem)
+_VIP_XP_ULTIMO = {}
+
+
+def vip_carregar_donos_sync():
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT usuario_id FROM vip_usuarios WHERE sakura_ativado_ts IS NOT NULL")
+        return {linha[0] for linha in cur.fetchall()}
+    finally:
+        con.close()
+
+
+def vip_registrar_dono_cache(usuario_id):
+    if _VIP_DONOS_SAKURA is not None:
+        _VIP_DONOS_SAKURA.add(str(usuario_id))
+
+
+async def processar_xp_vip(message):
+    """Chamado em toda mensagem de usuário (on_message)."""
+    global _VIP_DONOS_SAKURA
+    if message.guild is None:
+        return
+    if _VIP_DONOS_SAKURA is None:
+        _VIP_DONOS_SAKURA = vip_carregar_donos_sync()
+    usuario_id = str(message.author.id)
+    if usuario_id not in _VIP_DONOS_SAKURA:
+        return
+    if VIP_XP_INTERVALO_SEGUNDOS > 0:
+        agora = _vip_agora()
+        if agora - _VIP_XP_ULTIMO.get(usuario_id, 0) < VIP_XP_INTERVALO_SEGUNDOS:
+            return
+        _VIP_XP_ULTIMO[usuario_id] = agora
+    await executar_db(vip_adicionar_xp_sync, usuario_id, VIP_XP_POR_MENSAGEM)
+
+
+# ------------------------------------------------------------
+# Telas
+# ------------------------------------------------------------
 class _ViewSantuarioBase(ui.LayoutView):
     """Base das telas do Santuário: só quem abriu o mapa pode mexer."""
 
@@ -5010,6 +5175,7 @@ class _ViewSantuarioBase(ui.LayoutView):
 class ViewSantuario(_ViewSantuarioBase):
     def __init__(self, usuario_id):
         super().__init__(usuario_id)
+        self.tem_sakura = buscar_status_vip(usuario_id)["tem_sakura"]
         self.montar()
 
     async def voltar_mapa(self, interaction: discord.Interaction):
@@ -5021,17 +5187,29 @@ class ViewSantuario(_ViewSantuarioBase):
             await interaction.response.edit_message(view=view, attachments=[])
 
     async def comprar_sakura(self, interaction: discord.Interaction):
-        await interaction.response.edit_message(view=ViewConfirmarVip(self.usuario_id, "sakura", VIP_SAKURA_DIAS))
+        await interaction.response.edit_message(view=ViewConfirmarVip(self.usuario_id, "sakura", None))
 
     async def comprar_samurai(self, interaction: discord.Interaction):
-        sakura_ativo = await executar_db(buscar_vip_expiracao, self.usuario_id, "sakura")
-        if not sakura_ativo:
+        estado = await executar_db(buscar_status_vip, self.usuario_id)
+        if not estado["tem_sakura"]:
             await interaction.response.send_message(
-                "<:Atencao:1534592266625093662> Você precisa ter o **VIP Sakura** ativo para comprar o VIP Samurai.",
+                "<:Atencao:1534592266625093662> Você precisa ter o **VIP Sakura** para evoluir para o VIP Samurai.",
+                ephemeral=True
+            )
+            return
+        if estado["level"] < VIP_NIVEL_PARA_SAMURAI:
+            await interaction.response.send_message(
+                f"<:Atencao:1534592266625093662> Você precisa estar no **nível {VIP_NIVEL_PARA_SAMURAI}** do VIP "
+                f"para evoluir para o VIP Samurai. Seu nível atual: **{estado['level']}** "
+                f"({estado['xp']}/{vip_xp_necessario(estado['level'])} XP). "
+                f"Envie mensagens para ganhar {VIP_XP_POR_MENSAGEM} XP VIP por mensagem!",
                 ephemeral=True
             )
             return
         await interaction.response.edit_message(view=ViewDiasSamurai(self.usuario_id))
+
+    async def abrir_status(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(view=ViewVipStatus(self.usuario_id))
 
     def montar(self):
         self.clear_items()
@@ -5044,14 +5222,17 @@ class ViewSantuario(_ViewSantuarioBase):
         container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=URL_IMAGEM_SANTUARIO)))
 
         # Primeiro VIP
-        btn_sakura = ui.Button(label="Comprar", style=discord.ButtonStyle.success)
+        if self.tem_sakura:
+            btn_sakura = ui.Button(label="Já possui", style=discord.ButtonStyle.secondary, disabled=True)
+        else:
+            btn_sakura = ui.Button(label="Comprar", style=discord.ButtonStyle.success)
         btn_sakura.callback = self.comprar_sakura
         container.add_item(ui.Section(
             ui.TextDisplay(
                 f"### {NOMES_VIP['sakura']}\n"
                 f"Benefícios: Por enquanto nada\n"
                 f"Preço: {VIP_SAKURA_PRECO} {EMOJI_PETALAS} Pétalas\n"
-                f"Duração: {VIP_SAKURA_DIAS} Dias"
+                f"Duração: Permanente"
             ),
             accessory=btn_sakura
         ))
@@ -5060,23 +5241,28 @@ class ViewSantuario(_ViewSantuarioBase):
         # Segundo VIP
         btn_samurai = ui.Button(label="Comprar", style=discord.ButtonStyle.success)
         btn_samurai.callback = self.comprar_samurai
+        precos = list(VIP_SAMURAI_PACOTES.values())
+        dias_lista = list(VIP_SAMURAI_PACOTES.keys())
         container.add_item(ui.Section(
             ui.TextDisplay(
                 f"### {NOMES_VIP['samurai']}\n"
                 f"Benefícios: Por enquanto nada\n"
-                f"Preço: {NOMES_VIP['sakura']} + {VIP_SAMURAI_PRECO_BASE} "
-                f"(+1 para cada {VIP_SAMURAI_DIAS_POR_PETALA} dias de duração total escolhidos) {EMOJI_PETALAS} Pétalas\n"
-                f"Duração: de {VIP_SAMURAI_DIAS_MIN} a {VIP_SAMURAI_DIAS_MAX} Dias (você escolhe ao comprar)"
+                f"Requisito: {NOMES_VIP['sakura']} no nível {VIP_NIVEL_PARA_SAMURAI}\n"
+                f"Preço: de {min(precos)} a {max(precos)} {EMOJI_PETALAS} Pétalas\n"
+                f"Duração: {', '.join(str(d) for d in dias_lista[:-1])} ou {dias_lista[-1]} Dias (você escolhe ao comprar)"
             ),
             accessory=btn_samurai
         ))
+        container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
+
+        btn_status = ui.Button(label="Status", style=discord.ButtonStyle.secondary)
+        btn_status.callback = self.abrir_status
+        container.add_item(ui.ActionRow(btn_status))
         self.add_item(container)
 
 
 class ViewDiasSamurai(_ViewSantuarioBase):
-    """Menu de opções para escolher a duração do VIP Samurai (1 a 30 dias).
-    O Discord limita cada menu a 25 opções, então os dias são divididos em dois menus."""
-    DIAS_POR_MENU = 15
+    """Menu de opções para escolher a duração (e o preço) do VIP Samurai."""
 
     def __init__(self, usuario_id):
         super().__init__(usuario_id)
@@ -5094,29 +5280,18 @@ class ViewDiasSamurai(_ViewSantuarioBase):
         btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
         btn_voltar.callback = self.voltar_santuario
         container.add_item(ui.Section(ui.TextDisplay(f"### {NOMES_VIP['samurai']}"), accessory=btn_voltar))
-        container.add_item(ui.TextDisplay(
-            f"Escolha por quantos dias você quer o VIP. "
-            f"O preço é {VIP_SAMURAI_PRECO_BASE} {EMOJI_PETALAS} Pétalas "
-            f"+1 para cada {VIP_SAMURAI_DIAS_POR_PETALA} dias escolhidos."
-        ))
+        container.add_item(ui.TextDisplay("Escolha por quantos dias você quer o VIP Samurai."))
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
 
-        todos_os_dias = list(range(VIP_SAMURAI_DIAS_MIN, VIP_SAMURAI_DIAS_MAX + 1))
-        for inicio in range(0, len(todos_os_dias), self.DIAS_POR_MENU):
-            grupo = todos_os_dias[inicio:inicio + self.DIAS_POR_MENU]
-            menu = ui.Select(
-                placeholder=f"Dias {grupo[0]} a {grupo[-1]}",
-                options=[
-                    discord.SelectOption(
-                        label=f"{dia} dia" + ("s" if dia > 1 else ""),
-                        value=str(dia),
-                        description=f"{preco_vip('samurai', dia)} Pétalas"
-                    )
-                    for dia in grupo
-                ],
-            )
-            menu.callback = self.escolher_dias
-            container.add_item(ui.ActionRow(menu))
+        menu = ui.Select(
+            placeholder="Escolha a duração",
+            options=[
+                discord.SelectOption(label=f"{dias} Dias", value=str(dias), description=f"{preco} Pétalas")
+                for dias, preco in VIP_SAMURAI_PACOTES.items()
+            ],
+        )
+        menu.callback = self.escolher_dias
+        container.add_item(ui.ActionRow(menu))
         self.add_item(container)
 
 
@@ -5127,7 +5302,7 @@ class ViewConfirmarVip(_ViewSantuarioBase):
         self.dias = dias
         self.preco = preco_vip(tipo, dias)
         self.saldo = buscar_petalas(usuario_id)
-        self.expira_atual = buscar_vip_expiracao(usuario_id, tipo)
+        self.estado = buscar_status_vip(usuario_id)
         self.processando = False
         self.montar()
 
@@ -5147,8 +5322,10 @@ class ViewConfirmarVip(_ViewSantuarioBase):
             self.processando = False
             await interaction.response.send_message(f"<:Atencao:1534592266625093662> {resultado}", ephemeral=True)
             return
+        if self.tipo == "sakura":
+            vip_registrar_dono_cache(self.usuario_id)
         await interaction.response.edit_message(
-            view=ViewVipComprado(self.usuario_id, self.tipo, self.dias, self.preco, resultado)
+            view=ViewVipComprado(self.usuario_id, self.tipo, self.dias, self.preco, resultado["expira_ts"])
         )
 
     def montar(self):
@@ -5156,17 +5333,17 @@ class ViewConfirmarVip(_ViewSantuarioBase):
         container = ui.Container()
         container.accent_color = discord.Colour.pink()
         nome = NOMES_VIP[self.tipo]
-        dias_texto = f"{self.dias} dia" + ("s" if self.dias > 1 else "")
 
         texto = (
             f"### Confirmar compra\n"
-            f"**{nome}** por **{dias_texto}**\n"
+            f"**{nome}**\n"
+            f"Duração: **{'Permanente' if self.tipo == 'sakura' else _vip_dias_texto(self.dias)}**\n"
             f"Custo: **{self.preco}** {EMOJI_PETALAS} Pétalas\n"
             f"Seu saldo: **{self.saldo}** {EMOJI_PETALAS} Pétalas"
         )
-        if self.expira_atual:
-            texto += (f"\n\nSeu {nome} já está ativo até <t:{self.expira_atual}:f>. "
-                      f"Esta compra soma {dias_texto} a esse prazo.")
+        if self.tipo == "samurai" and self.estado["samurai_ativo"]:
+            texto += (f"\n\nSeu {nome} já está ativo até {_vip_data(self.estado['samurai_expira_ts'])}. "
+                      f"Esta compra soma {_vip_dias_texto(self.dias)} a esse prazo.")
         if self.saldo < self.preco:
             texto += "\n\n⚠️ Você não tem Pétalas suficientes."
         container.add_item(ui.TextDisplay(texto))
@@ -5185,15 +5362,95 @@ class ViewVipComprado(_ViewSantuarioBase):
         super().__init__(usuario_id)
         container = ui.Container()
         container.accent_color = discord.Colour.green()
-        dias_texto = f"{dias} dia" + ("s" if dias > 1 else "")
-        container.add_item(ui.TextDisplay(
-            f"### ✅ {NOMES_VIP[tipo]} ativado!\n"
-            f"Você pagou **{preco}** {EMOJI_PETALAS} Pétalas por **{dias_texto}**.\n"
-            f"Válido até <t:{expira_ts}:f> (<t:{expira_ts}:R>)."
-        ))
+        if tipo == "sakura":
+            texto = (
+                f"### ✅ {NOMES_VIP[tipo]} ativado!\n"
+                f"Você pagou **{preco}** {EMOJI_PETALAS} Pétalas. Ele é **permanente**.\n"
+                f"Agora cada mensagem que você enviar rende **{VIP_XP_POR_MENSAGEM} XP VIP**. "
+                f"Ao chegar no nível {VIP_NIVEL_PARA_SAMURAI}, você poderá evoluir para o {NOMES_VIP['samurai']}."
+            )
+        else:
+            texto = (
+                f"### ✅ {NOMES_VIP[tipo]} ativado!\n"
+                f"Você pagou **{preco}** {EMOJI_PETALAS} Pétalas por **{_vip_dias_texto(dias)}**.\n"
+                f"Válido até <t:{expira_ts}:f> (<t:{expira_ts}:R>)."
+            )
+        container.add_item(ui.TextDisplay(texto))
         btn_voltar = ui.Button(label="Voltar ao Santuário", style=discord.ButtonStyle.secondary)
         btn_voltar.callback = self.voltar_santuario
         container.add_item(ui.ActionRow(btn_voltar))
+        self.add_item(container)
+
+
+class ViewVipStatus(_ViewSantuarioBase):
+    """Painel com os dados do VIP atual do usuário."""
+
+    def __init__(self, usuario_id):
+        super().__init__(usuario_id)
+        self.agora = _vip_agora()
+        self.estado = buscar_status_vip(usuario_id)
+        self.montar()
+
+    def montar(self):
+        self.clear_items()
+        estado = self.estado
+        container = ui.Container()
+        container.accent_color = discord.Colour.pink()
+
+        btn_voltar = ui.Button(emoji="<:SaidaIcon:1532863338902589500>", style=discord.ButtonStyle.danger)
+        btn_voltar.callback = self.voltar_santuario
+        container.add_item(ui.Section(ui.TextDisplay("### Status do VIP"), accessory=btn_voltar))
+
+        tipo = estado["vip_atual"]
+        if tipo is None:
+            container.add_item(ui.TextDisplay(
+                f"Você ainda não possui nenhum VIP. Compre o **{NOMES_VIP['sakura']}** no Santuário "
+                f"para começar a ganhar XP VIP!"
+            ))
+            self.add_item(container)
+            return
+
+        if tipo == "samurai":
+            ativado, expira = estado["samurai_ativado_ts"], estado["samurai_expira_ts"]
+            dias_restantes = max(1, -(-(expira - self.agora) // 86400))
+            data_expiracao = _vip_data(expira)
+            tempo_restante = _vip_dias_texto(dias_restantes)
+        else:
+            ativado = estado["sakura_ativado_ts"]
+            data_expiracao = "Permanente"
+            tempo_restante = "Permanente"
+
+        beneficios = BENEFICIOS_VIP[tipo]
+        if len(beneficios) == 1:
+            texto_beneficios = f"**Benefícios:** {beneficios[0]}"
+        else:
+            texto_beneficios = "**Benefícios:**\n" + "\n".join(f"• {b}" for b in beneficios)
+
+        level = estado["level"]
+        linhas = [
+            f"**VIP:** {tipo.capitalize()}",
+            f"**Level:** {level} ({estado['xp']}/{vip_xp_necessario(level)} XP)",
+            f"**Data de Ativação:** {_vip_data(ativado)}",
+            f"**Data de Expiração:** {data_expiracao}",
+            f"**Tempo restante:** {tempo_restante}",
+            texto_beneficios,
+        ]
+        container.add_item(ui.Section(
+            ui.TextDisplay("\n".join(linhas)),
+            accessory=ui.Thumbnail(media=URL_ICONE_VIP[tipo])
+        ))
+
+        if estado["reset_em"]:
+            container.add_item(ui.TextDisplay(
+                f"-# ⚠️ Seu nível será resetado em {_vip_data(estado['reset_em'])} "
+                f"se você não renovar o {NOMES_VIP['samurai']} até lá."
+            ))
+        elif tipo == "sakura" and level < VIP_NIVEL_PARA_SAMURAI:
+            container.add_item(ui.TextDisplay(
+                f"-# Chegue ao nível {VIP_NIVEL_PARA_SAMURAI} para evoluir para o {NOMES_VIP['samurai']}."
+            ))
+        elif tipo == "sakura":
+            container.add_item(ui.TextDisplay(f"-# Você já pode evoluir para o {NOMES_VIP['samurai']}!"))
         self.add_item(container)
 
 # ============================================================
@@ -12258,6 +12515,10 @@ async def on_message(message):
         return
     await executar_db(_registrar_mensagem_sync, message.author.id)
     await verificar_missoes_usuario(str(message.author.id))
+    try:
+        await processar_xp_vip(message)
+    except Exception:
+        traceback.print_exc()
     await bot.process_commands(message)
 
 # ============================================================
