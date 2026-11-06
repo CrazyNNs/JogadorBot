@@ -632,7 +632,7 @@ URL_ICONE_VIP = {
     "sakura": "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Santu%C3%A1rio/sakuravip.png",
     "samurai": "https://raw.githubusercontent.com/CrazyNNs/JogadorBot/main/Imagens/Santu%C3%A1rio/samuraivip.png",
 }
-EMOJI_PETALAS = "<:PetalasIcon:1564674289758638280>"
+EMOJI_PETALAS = "<:PetalaIcon:1564803824906932385>"
 
 NOMES_VIP = {"sakura": "VIP Sakura", "samurai": "VIP Samurai"}
 # Para adicionar um benefício, é só incluir uma linha na lista do VIP.
@@ -5230,9 +5230,9 @@ class ViewSantuario(_ViewSantuarioBase):
         container.add_item(ui.Section(
             ui.TextDisplay(
                 f"### {NOMES_VIP['sakura']}\n"
-                f"Benefícios: Por enquanto nada\n"
-                f"Preço: {VIP_SAKURA_PRECO} {EMOJI_PETALAS} Pétalas\n"
-                f"Duração: Permanente"
+                f"📋Benefícios: Por enquanto nada\n"
+                f"💴Preço: {VIP_SAKURA_PRECO} {EMOJI_PETALAS} Pétalas\n"
+                f"⏰Duração: Permanente"
             ),
             accessory=btn_sakura
         ))
