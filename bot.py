@@ -807,6 +807,7 @@ INVENTARIO_ESTRUTURA = {
             "petiscos": {"emoji": "🍖", "nome": "Petiscos"},
             "brinquedos": {"emoji": "🧸", "nome": "Brinquedos"},
             "higiene": {"emoji": "🧼", "nome": "Higiene"},
+            "medicamentos": {"emoji": "💊", "nome": "Medicamentos"},
         }
     },
     "minerar": {
@@ -2945,6 +2946,36 @@ def _listar_banners_usuario(usuario_id, animados):
     return [f"🖼️ **{nome}**" for nome in filtrados] or None
 
 
+def listar_itens_empilhaveis_mineracao(usuario_id, subcategoria):
+    """Linhas da mochila para os itens de mineração que se acumulam por quantidade
+    (consumíveis, dinamite...). Lê direto do ITENS_MINERACAO, então um item novo
+    com essa subcategoria aparece na mochila sozinho. Ferramentas com "usos" e
+    equipamentos com "durabilidade" têm tela própria (para equipar)."""
+    linhas = []
+    for nome, dados in ITENS_MINERACAO.items():
+        if dados["subcategoria"] != subcategoria or "usos" in dados or "durabilidade" in dados:
+            continue
+        qtd = buscar_qtd_item_mineracao(usuario_id, nome)
+        if qtd > 0:
+            linhas.append(f"{dados['emoji']} **{nome}** — {qtd} unidade(s)")
+    return linhas
+
+def buscar_medicamentos_usuario(usuario_id):
+    """Medicamentos que o usuário tem: lista de (nome, emoji, quantidade)."""
+    con = sqlite3.connect("jogadorbot.db")
+    try:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT mu.nome, COALESCE(m.emoji, '💊'), mu.quantidade
+            FROM medicamentos_usuarios mu
+            LEFT JOIN medicamentos m ON m.nome = mu.nome
+            WHERE mu.usuario_id = ? AND mu.quantidade > 0
+            ORDER BY mu.nome
+        """, (str(usuario_id),))
+        return cur.fetchall()
+    finally:
+        con.close()
+
 def buscar_itens_mochila(usuario, categoria, subcategoria):
     """
     Retorna uma lista de strings com os itens do usuário para a subcategoria pedida,
@@ -2983,22 +3014,15 @@ def buscar_itens_mochila(usuario, categoria, subcategoria):
         qtd = buscar_sabonetes_usuario(usuario_id)
         return [f"🧼 **Sabonete** — {qtd} unidade(s)"] if qtd > 0 else None
 
+    if categoria == "petshop" and subcategoria == "medicamentos":
+        medicamentos = buscar_medicamentos_usuario(usuario_id)
+        return [f"{emoji} **{nome}** — {qtd} unidade(s)" for nome, emoji, qtd in medicamentos] or None
+
     if categoria == "minerar" and subcategoria == "ferramentas":
-        dinamite_qtd = buscar_qtd_item_mineracao(usuario_id, "Dinamite")
-        itens = []
-        if dinamite_qtd > 0:
-            itens.append(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)")
-        return itens or None
+        return listar_itens_empilhaveis_mineracao(usuario_id, "Ferramentas") or None
 
     if categoria == "minerar" and subcategoria == "consumiveis":
-        marmita_qtd = buscar_qtd_item_mineracao(usuario_id, "Marmita")
-        pimenta_qtd = buscar_qtd_item_mineracao(usuario_id, "Pimenta")
-        itens = []
-        if marmita_qtd > 0:
-            itens.append(f"🍱 **Marmita** — {marmita_qtd} unidade(s)")
-        if pimenta_qtd > 0:
-            itens.append(f"🌶️ **Pimenta** — {pimenta_qtd} unidade(s)")
-        return itens or None
+        return listar_itens_empilhaveis_mineracao(usuario_id, "Consumíveis") or None
 
     if categoria == "minerar" and subcategoria == "minerios":
         minerios = buscar_minerios_usuario(usuario_id)
@@ -6081,9 +6105,9 @@ class ViewMochilaItens(ui.LayoutView):
 
         elif self.categoria == "minerar" and self.subcategoria == "ferramentas":
             ferramentas = buscar_ferramentas_usuario(self.usuario.id)
-            dinamite_qtd = buscar_qtd_item_mineracao(self.usuario.id, "Dinamite")
+            outros_itens = listar_itens_empilhaveis_mineracao(self.usuario.id, "Ferramentas")
 
-            if not ferramentas and dinamite_qtd <= 0:
+            if not ferramentas and not outros_itens:
                 container.add_item(ui.TextDisplay(
                     "Você não possui nenhuma ferramenta.\nCompre uma em `!mapa`→ 🏪 Armazém 404 → ⛏️ Mineração → 🔧 Ferramentas."
                 ))
@@ -6124,8 +6148,8 @@ class ViewMochilaItens(ui.LayoutView):
                     container.add_item(ui.Section(ui.TextDisplay(texto_item), accessory=botao_equip))
                     container.add_item(ui.Separator())
 
-                if dinamite_qtd > 0:
-                    container.add_item(ui.TextDisplay(f"🧨 **Dinamite** — {dinamite_qtd} unidade(s)"))
+                if outros_itens:
+                    container.add_item(ui.TextDisplay("\n".join(outros_itens)))
         else:
             itens = buscar_itens_mochila(self.usuario, self.categoria, self.subcategoria)
             if itens:
