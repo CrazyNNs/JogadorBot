@@ -15,7 +15,7 @@ DURACAO_EVENTO = 14
 # O evento começa desativado até a configuração
 # das datas oficiais.
 
-EVENTO_ATIVO = True
+EVENTO_ATIVO = False
 
 DATA_INICIO = None
 DATA_FIM = None
