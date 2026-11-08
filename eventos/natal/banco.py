@@ -31,10 +31,18 @@ def obter_conexao():
 
     try:
 
-        with conexao:
-            yield conexao
+        yield conexao
+
+        conexao.commit()
+
+    except Exception:
+
+        conexao.rollback()
+
+        raise
 
     finally:
+
         conexao.close()
 
 
