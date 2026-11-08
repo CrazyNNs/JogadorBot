@@ -98,6 +98,20 @@ def inicializar_banco():
         """)
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS natal_recompensas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                user_id INTEGER NOT NULL,
+
+                recompensa_id TEXT NOT NULL,
+
+                data TEXT NOT NULL,
+
+                UNIQUE(user_id, recompensa_id)
+            )
+        """)
+        
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS natal_guardiao (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
 
