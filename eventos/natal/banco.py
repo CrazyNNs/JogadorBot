@@ -19,30 +19,17 @@ DB_PATH = os.path.abspath("jogadorbot.db")
 
 @contextmanager
 def obter_conexao():
-
-    conexao = sqlite3.connect(
-        DB_PATH,
-        timeout=30,
-    )
-
+    conexao = sqlite3.connect(DB_PATH, timeout=30)
     conexao.row_factory = sqlite3.Row
-
     conexao.execute("PRAGMA foreign_keys = ON")
 
     try:
-
         yield conexao
-
         conexao.commit()
-
     except Exception:
-
         conexao.rollback()
-
         raise
-
     finally:
-
         conexao.close()
 
 
