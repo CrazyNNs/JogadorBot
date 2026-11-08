@@ -14,6 +14,8 @@ import asyncio
 import traceback
 import threading
 
+from eventos.natal.natal import configurar_natal
+
 _sqlite3_connect_original = sqlite3.connect
 
 # Limita quantas conexões SQLite podem estar abertas ao mesmo tempo em todo o
@@ -12575,4 +12577,12 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
                 "<:Atencao:1534592266625093662> Permissões insuficientes.", ephemeral=True
             )
 
+# ==========================================
+# REGISTRO DOS EVENTOS
+# ==========================================
+
+configurar_natal(bot)
+
+# ==========================================
+# ==========================================
 bot.run(TOKEN)
