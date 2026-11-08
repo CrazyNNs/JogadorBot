@@ -26,17 +26,22 @@ _sqlite3_connect_original = sqlite3.connect
 # antes mesmo de tentar abrir a conexão.
 _db_conexoes_semaforo = threading.BoundedSemaphore(8)
 
-
 class _ConexaoComSemaforo:
-    """Encapsula a conexão real e libera a vaga no semáforo quando fechada.
-    Se algum código esquecer de chamar close() (bug/exceção não tratada), o
-    __del__ libera a vaga de qualquer forma quando o GC recolher o objeto —
-    assim um vazamento nunca trava o bot inteiro, só atrasa um pouco."""
+    """Encapsula a conexão real e libera a vaga no semáforo quando fechada."""
 
     def __init__(self, con, semaforo):
-        self._con = con
-        self._semaforo = semaforo
-        self._liberado = False
+        object.__setattr__(self, "_con", con)
+        object.__setattr__(self, "_semaforo", semaforo)
+        object.__setattr__(self, "_liberado", False)
+
+    def __getattr__(self, nome):
+        return getattr(self._con, nome)
+
+    def __setattr__(self, nome, valor):
+        if nome in {"_con", "_semaforo", "_liberado"}:
+            object.__setattr__(self, nome, valor)
+        else:
+            setattr(self._con, nome, valor)
 
     def close(self):
         if not self._liberado:
@@ -46,12 +51,8 @@ class _ConexaoComSemaforo:
             finally:
                 self._semaforo.release()
 
-    def __getattr__(self, nome):
-        return getattr(self._con, nome)
-
     def __del__(self):
         self.close()
-
 
 def _conectar_com_timeout(*args, **kwargs):
     kwargs.setdefault("timeout", 15)
