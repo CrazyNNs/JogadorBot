@@ -7,7 +7,7 @@ from .configuracoes import GUARDIAO
 
 
 # ==========================================
-# CONFIGURAÇÃO DO BANCO
+# CONFIGURAÇÃO DO BANCO-
 # ==========================================
 
 DB_PATH = os.path.abspath("jogadorbot.db")
