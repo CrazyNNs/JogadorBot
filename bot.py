@@ -12382,20 +12382,50 @@ async def missao_criar(
     finally:
         con.close()
 
-@missao_group.command(name="condicoes", description="Lista todos os códigos de condição disponíveis pras missões (admin)")
-@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
-async def missao_condicoes(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="📋 Códigos de condição disponíveis",
-        description="Use no formato `codigo:meta` em `/missao criar`, separados por vírgula.",
-        color=discord.Color.blurple()
-    )
+def montar_embeds_condicoes():
+    """Monta a lista de códigos de condição respeitando os limites do Discord:
+    1024 caracteres por campo, 25 campos e 6000 caracteres por embed.
+    Categorias grandes são divididas em vários campos e, se preciso, em vários embeds."""
+    titulo = "📋 Códigos de condição disponíveis"
+    descricao = "Use no formato `codigo:meta` em `/missao criar`, separados por vírgula."
+
     categorias = {}
     for codigo, dados in CONDICOES_MISSAO.items():
         categorias.setdefault(dados["categoria"], []).append(f"`{codigo}` — {dados['nome']}")
+
+    campos = []   # (nome, valor)
     for categoria, linhas in categorias.items():
-        embed.add_field(name=categoria, value="\n".join(linhas), inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        bloco, tamanho, parte = [], 0, 1
+        for linha in linhas:
+            if bloco and tamanho + len(linha) + 1 > 1000:
+                campos.append((categoria if parte == 1 else f"{categoria} (cont.)", "\n".join(bloco)))
+                bloco, tamanho, parte = [], 0, parte + 1
+            bloco.append(linha)
+            tamanho += len(linha) + 1
+        if bloco:
+            campos.append((categoria if parte == 1 else f"{categoria} (cont.)", "\n".join(bloco)))
+
+    embeds, atual, total = [], None, 0
+    for nome, valor in campos:
+        if atual is None or len(atual.fields) >= 25 or total + len(nome) + len(valor) > 5000:
+            if embeds:
+                atual = discord.Embed(color=discord.Color.blurple())
+                total = 0
+            else:
+                atual = discord.Embed(title=titulo, description=descricao, color=discord.Color.blurple())
+                total = len(titulo) + len(descricao)
+            embeds.append(atual)
+        atual.add_field(name=nome, value=valor, inline=False)
+        total += len(nome) + len(valor)
+    return embeds
+
+@missao_group.command(name="condicoes", description="Lista todos os códigos de condição disponíveis pras missões (admin)")
+@app_commands.check(lambda interaction: eh_admin(interaction.user.id))
+async def missao_condicoes(interaction: discord.Interaction):
+    embeds = montar_embeds_condicoes()
+    await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+    for embed_extra in embeds[1:]:
+        await interaction.followup.send(embed=embed_extra, ephemeral=True)
 
 @missao_group.command(name="deletar", description="Deleta uma missão (admin)")
 @app_commands.describe(nome="Nome exato da missão a deletar")
@@ -12577,6 +12607,20 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             await interaction.response.send_message(
                 "<:Atencao:1534592266625093662> Permissões insuficientes.", ephemeral=True
             )
+    else:
+        # Antes, qualquer outro erro sumia sem aviso e o Discord só mostrava "O aplicativo não respondeu".
+        original = getattr(error, "original", error)
+        nome_comando = interaction.command.qualified_name if interaction.command else "?"
+        print(f"❌ Erro não tratado no comando /{nome_comando} (usuário {interaction.user.id}):")
+        traceback.print_exception(type(original), original, original.__traceback__)
+        try:
+            mensagem = "<:Atencao:1534592266625093662> Ocorreu um erro ao executar este comando. Avise a administração."
+            if interaction.response.is_done():
+                await interaction.followup.send(mensagem, ephemeral=True)
+            else:
+                await interaction.response.send_message(mensagem, ephemeral=True)
+        except Exception:
+            pass
 
 # ==========================================
 # REGISTRO DOS EVENTOS
