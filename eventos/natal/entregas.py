@@ -167,9 +167,10 @@ def gerar_pedido(dificuldade):
 
 def gerar_entregas_diarias(user_id):
 
-    agora = obter_agora()
-    data_hoje = agora.date().isoformat()
-
+    agora_dt = obter_agora()
+    agora = agora_dt.isoformat()
+    data_hoje = agora_dt.date().isoformat()
+    
     proxima_meia_noite = (
         agora.replace(
             hour=0,
