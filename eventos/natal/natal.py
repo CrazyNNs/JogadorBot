@@ -12,6 +12,7 @@ from .entregas import (
     concluir_entrega,
     DIFICULDADES,
 )
+from .oficina import inicializar_oficina
 
 # ==========================================
 # MONTAR EMBED DO INVENTÁRIO
@@ -549,7 +550,8 @@ class PainelNatal(discord.ui.View):
 def configurar_natal(bot):
 
     inicializar_banco()
-
+    inicializar_oficina()
+    
     @bot.command(name="natal")
     async def natal(ctx):
 
