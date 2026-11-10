@@ -139,7 +139,7 @@ def montar_embed_entregas(user_id):
 
         embed.add_field(
             name="📭 Nenhuma entrega disponível",
-            value="Não há pedidos ativos no momento.",
+            value="Você já concluiu todos os pedidos de hoje!",
             inline=False,
         )
 
@@ -147,10 +147,12 @@ def montar_embed_entregas(user_id):
 
     for entrega in entregas:
 
-        dificuldade = entrega["dificuldade"]
+        pedido = entrega["pedido"]
+
+        dificuldade = pedido["dificuldade"]
         dados_dificuldade = DIFICULDADES[dificuldade]
 
-        materiais = entrega["materiais"]
+        materiais = pedido["materiais"]
 
         linhas_materiais = []
 
@@ -177,10 +179,10 @@ def montar_embed_entregas(user_id):
         embed.add_field(
             name=(
                 f"{dados_dificuldade['emoji']} "
-                f"{dados_dificuldade['nome']} — {entrega['titulo']}"
+                f"{dados_dificuldade['nome']} — {pedido['titulo']}"
             ),
             value=(
-                f"{entrega['descricao']}\n\n"
+                f"{pedido['descricao']}\n\n"
                 f"**Materiais necessários:**\n"
                 f"{chr(10).join(linhas_materiais)}\n\n"
                 f"**Recompensa:**\n{recompensa}"
@@ -241,11 +243,44 @@ class BotaoConcluirEntrega(discord.ui.Button):
 
         else:
 
-            mensagem = resultado.get(
-                "mensagem",
-                "Não foi possível concluir essa entrega. "
-                "Verifique seus materiais e tente novamente.",
-            )
+            motivo = resultado.get("motivo")
+
+            if motivo == "materiais_insuficientes":
+
+                faltantes = resultado.get("faltantes", {})
+                linhas = []
+
+                for item_id, quantidade in faltantes.items():
+
+                    dados = ITENS_NATALINOS.get(item_id)
+
+                    if dados:
+                        emoji = dados["emoji"]
+                        nome = dados["nome"]
+                    else:
+                        emoji = "📦"
+                        nome = item_id
+
+                    linhas.append(
+                        f"{emoji} **{nome}:** faltam {quantidade}"
+                    )
+
+                mensagem = (
+                    "Você ainda não possui todos os materiais necessários:\n\n"
+                    + "\n".join(linhas)
+                )
+
+            elif motivo == "expirada":
+
+                mensagem = "Esse pedido já expirou."
+
+            elif motivo == "indisponivel":
+
+                mensagem = "Esse pedido já foi concluído ou não está mais disponível."
+
+            else:
+
+                mensagem = "Não foi possível encontrar essa entrega."
 
             await interaction.response.send_message(
                 f"⚠️ {mensagem}",
