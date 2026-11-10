@@ -199,7 +199,62 @@ def inicializar_banco():
                 concluida INTEGER NOT NULL DEFAULT 0
             )
         """)
+        
+        # ----------------------------------
+        # SOLICITAÇÕES DE ENTREGA
+        # ----------------------------------
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS natal_entregas (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                user_id INTEGER NOT NULL,
+
+                pedido_id TEXT NOT NULL,
+
+                pedido_json TEXT NOT NULL,
+
+                data_rotacao TEXT NOT NULL,
+
+                slot INTEGER NOT NULL,
+
+                criado_em TEXT NOT NULL,
+
+                expira_em TEXT NOT NULL,
+
+                status TEXT NOT NULL DEFAULT 'ativa',
+
+                recompensa_flocos INTEGER NOT NULL DEFAULT 0,
+
+                recompensa_pontos INTEGER NOT NULL DEFAULT 0,
+
+                concluida_em TEXT,
+
+                FOREIGN KEY (user_id)
+                    REFERENCES natal_jogadores(user_id),
+
+                UNIQUE (user_id, data_rotacao, slot)
+            )
+        """)
+
+        # ----------------------------------
+        # ÍNDICES DAS ENTREGAS
+        # ----------------------------------
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_entregas_usuario
+
+            ON natal_entregas(user_id, status)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_entregas_expiracao
+
+            ON natal_entregas(expira_em, status)
+        """)
         # ----------------------------------
         # INICIALIZAÇÃO DO GUARDIÃO
         # ----------------------------------
