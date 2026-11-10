@@ -167,20 +167,19 @@ def gerar_pedido(dificuldade):
 
 def gerar_entregas_diarias(user_id):
 
-    agora_dt = obter_agora()
-    agora = agora_dt.isoformat()
-    data_hoje = agora_dt.date().isoformat()
+    agora = obter_agora()
+    data_hoje = agora.date().isoformat()
     
     proxima_meia_noite = (
         agora.replace(
-            hour=0,
-            minute=0,
-            second=0,
-            microsecond=0,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
         )
         + timedelta(days=1)
     )
-
+    
     agora_texto = agora.isoformat()
     expiracao_texto = proxima_meia_noite.isoformat()
 
@@ -275,8 +274,9 @@ def consultar_entregas(user_id):
 
     gerar_entregas_diarias(user_id)
 
-    agora = obter_agora().isoformat()
-    data_hoje = obter_agora().date().isoformat()
+    agora_dt = obter_agora()
+    agora = agora_dt.isoformat()
+    data_hoje = agora_dt.date().isoformat()
 
     with obter_conexao() as conn:
 
