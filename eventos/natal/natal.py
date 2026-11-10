@@ -1,16 +1,17 @@
 import discord
-
 from .banco import inicializar_banco
-
 from .configuracoes import (
     NOME_EVENTO,
     EVENTO_ATIVO,
     DURACAO_EVENTO,
     ITENS_NATALINOS,
 )
-
 from .inventario import consultar_inventario
-
+from .entregas import (
+    consultar_entregas,
+    concluir_entrega,
+    DIFICULDADES,
+)
 
 # ==========================================
 # MONTAR EMBED DO INVENTÁRIO
@@ -115,8 +116,244 @@ def montar_embed_inventario(user_id):
     )
 
     return embed
+    
+# ==========================================
+# MONTAR EMBED DAS ENTREGAS
+# ==========================================
+
+def montar_embed_entregas(user_id):
+
+    entregas = consultar_entregas(user_id)
+
+    embed = discord.Embed(
+        title="📦 Entregas Natalinas",
+        description=(
+            "Ajude os moradores e a oficina da vila!\n"
+            "Você recebe três pedidos por dia. "
+            "Conclua-os para ganhar Flocos de Neve e Espírito Natalino."
+        ),
+        color=discord.Color.from_rgb(80, 170, 255),
+    )
+
+    if not entregas:
+
+        embed.add_field(
+            name="📭 Nenhuma entrega disponível",
+            value="Não há pedidos ativos no momento.",
+            inline=False,
+        )
+
+        return embed
+
+    for entrega in entregas:
+
+        dificuldade = entrega["dificuldade"]
+        dados_dificuldade = DIFICULDADES[dificuldade]
+
+        materiais = entrega["materiais"]
+
+        linhas_materiais = []
+
+        for item_id, quantidade in materiais.items():
+
+            dados_item = ITENS_NATALINOS.get(item_id)
+
+            if dados_item is None:
+                nome = item_id
+                emoji = "📦"
+            else:
+                nome = dados_item["nome"]
+                emoji = dados_item["emoji"]
+
+            linhas_materiais.append(
+                f"{emoji} **{nome}:** {quantidade}"
+            )
+
+        recompensa = (
+            f"❄️ **{entrega['recompensa_flocos']} Flocos de Neve**\n"
+            f"⭐ **{entrega['recompensa_pontos']} Espírito Natalino**"
+        )
+
+        embed.add_field(
+            name=(
+                f"{dados_dificuldade['emoji']} "
+                f"{dados_dificuldade['nome']} — {entrega['titulo']}"
+            ),
+            value=(
+                f"{entrega['descricao']}\n\n"
+                f"**Materiais necessários:**\n"
+                f"{chr(10).join(linhas_materiais)}\n\n"
+                f"**Recompensa:**\n{recompensa}"
+            ),
+            inline=False,
+        )
+
+    embed.set_footer(
+        text="Os pedidos são renovados diariamente."
+    )
+
+    return embed
+
+# ==========================================
+# BOTÃO INDIVIDUAL DE ENTREGA
+# ==========================================
+
+class BotaoConcluirEntrega(discord.ui.Button):
+
+    def __init__(self, painel, entrega):
+
+        self.painel = painel
+        self.entrega_id = entrega["id"]
+
+        super().__init__(
+            label="Entregar",
+            emoji="📦",
+            style=discord.ButtonStyle.success,
+        )
+
+    async def callback(self, interaction):
+
+        resultado = concluir_entrega(
+            self.painel.user_id,
+            self.entrega_id,
+        )
+
+        if resultado.get("sucesso"):
+
+            embed = montar_embed_entregas(
+                self.painel.user_id
+            )
+
+            mensagem = (
+                f"✅ **Entrega concluída: {resultado['titulo']}**\n\n"
+                f"Você recebeu:\n"
+                f"❄️ **{resultado['flocos']} Flocos de Neve**\n"
+                f"⭐ **{resultado['pontos']} Espírito Natalino**"
+            )
+
+            self.painel.recarregar_botoes()
+
+            await interaction.response.edit_message(
+                content=mensagem,
+                embed=embed,
+                view=self.painel,
+            )
+
+        else:
+
+            mensagem = resultado.get(
+                "mensagem",
+                "Não foi possível concluir essa entrega. "
+                "Verifique seus materiais e tente novamente.",
+            )
+
+            await interaction.response.send_message(
+                f"⚠️ {mensagem}",
+                ephemeral=True,
+            )
 
 
+# ==========================================
+# BOTÕES DE CONTROLE DAS ENTREGAS
+# ==========================================
+
+class BotaoAtualizarEntregas(discord.ui.Button):
+
+    def __init__(self, painel):
+
+        self.painel = painel
+
+        super().__init__(
+            label="Atualizar",
+            emoji="🔄",
+            style=discord.ButtonStyle.primary,
+        )
+
+    async def callback(self, interaction):
+
+        self.painel.recarregar_botoes()
+
+        embed = montar_embed_entregas(
+            self.painel.user_id
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=embed,
+            view=self.painel,
+        )
+
+
+class BotaoFecharEntregas(discord.ui.Button):
+
+    def __init__(self, painel):
+
+        self.painel = painel
+
+        super().__init__(
+            label="Fechar",
+            emoji="❌",
+            style=discord.ButtonStyle.secondary,
+        )
+
+    async def callback(self, interaction):
+
+        self.painel.stop()
+
+        await interaction.response.edit_message(
+            content="Painel de entregas fechado.",
+            embed=None,
+            view=None,
+        )
+
+
+# ==========================================
+# PAINEL DE ENTREGAS
+# ==========================================
+
+class PainelEntregas(discord.ui.View):
+
+    def __init__(self, user_id):
+
+        super().__init__(timeout=300)
+
+        self.user_id = user_id
+
+        self.recarregar_botoes()
+
+    async def interaction_check(self, interaction):
+
+        if interaction.user.id != self.user_id:
+
+            await interaction.response.send_message(
+                "Este painel de entregas pertence a outro jogador.",
+                ephemeral=True,
+            )
+
+            return False
+
+        return True
+
+    def recarregar_botoes(self):
+
+        self.clear_items()
+
+        entregas = consultar_entregas(self.user_id)
+
+        for entrega in entregas:
+
+            self.add_item(
+                BotaoConcluirEntrega(self, entrega)
+            )
+
+        self.add_item(
+            BotaoAtualizarEntregas(self)
+        )
+
+        self.add_item(
+            BotaoFecharEntregas(self)
+        )
+        
 # ==========================================
 # VIEW DO INVENTÁRIO
 # ==========================================
@@ -248,7 +485,27 @@ class PainelNatal(discord.ui.View):
 
             ephemeral=True,
         )
+        
+    # ----------------------------------
+    # ABRIR ENTREGAS
+    # ----------------------------------
 
+    @discord.ui.button(
+        label="Entregas",
+        emoji="📦",
+        style=discord.ButtonStyle.success,
+    )
+    async def entregas(self, interaction, button):
+
+        embed = montar_embed_entregas(
+            self.user_id
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=PainelEntregas(self.user_id),
+            ephemeral=True,
+        )
 
 # ==========================================
 # CONFIGURAR EVENTO
