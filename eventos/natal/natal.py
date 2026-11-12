@@ -385,18 +385,15 @@ class BotaoConcluirEntrega(discord.ui.Button):
                 f"⭐ **{resultado['pontos']} Espírito Natalino**"
             )
             
-        await interaction.response.send_message(
-            content=mensagem,
-            embed=embed,
-            ephemeral=True,
-        )
-
+            await interaction.response.send_message(
+                content=mensagem,
+                embed=embed,
+                ephemeral=True,
+            )
         else:
-
             motivo = resultado.get("motivo")
-
             if motivo == "materiais_insuficientes":
-
+                
                 faltantes = resultado.get("faltantes", {})
                 linhas = []
 
