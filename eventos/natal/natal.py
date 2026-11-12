@@ -635,16 +635,17 @@ class ModalQuantidadeOficina(discord.ui.Modal):
         self.add_item(self.quantidade)
 
 
-async def on_submit(self, interaction):
-    try:
-        quantidade = int(self.quantidade.value)
-    except ValueError:
-        await interaction.response.send_message(
-            "Digite uma quantidade numérica válida.",
-            ephemeral=True,
-        )
-        return
-        
+
+    async def on_submit(self, interaction):
+        try:
+            quantidade = int(self.quantidade.value)
+        except ValueError:
+            await interaction.response.send_message(
+                "Digite uma quantidade numérica válida.",
+                ephemeral=True,
+            )
+            return
+
         if quantidade <= 0:
             await interaction.response.send_message(
                 "A quantidade precisa ser maior que zero.",
@@ -715,6 +716,11 @@ async def on_submit(self, interaction):
                     f"\n\n🎉 **Melhoria concluída!**\n"
                     f"{resultado['beneficio']}"
                 )
+
+        await interaction.response.send_message(
+            content=mensagem,
+            ephemeral=True,
+        )
 
         await interaction.response.send_message(
             content=mensagem,
