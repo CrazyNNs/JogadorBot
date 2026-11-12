@@ -16,6 +16,77 @@ LIMITE_EXPLORACOES_DIARIAS = 5
 ETAPAS_POR_EXPLORACAO = 3
 TEMPO_INATIVIDADE_MINUTOS = 15
 
+        {
+            "id": "noel_especial",
+            "raridade": "raro",
+            "titulo": "O presente de Noel",
+            "narrativa": (
+                "Uma pequena carroça aparece na praça. "
+                "Ao lado dela está Noel, organizando presentes "
+                "para as famílias da vila. Ele percebe sua presença "
+                "e decide conversar com você."
+            ),
+            "escolhas": {
+                "ajudar": {
+                    "texto": "🎁 Ajudar Noel",
+                    "resultado": (
+                        "Você ajuda a organizar os presentes. "
+                        "Noel agradece e entrega uma recompensa especial."
+                    ),
+                    "itens": {"presente_dourado": 1},
+                    "flocos": 20,
+                    "pontos": 10,
+                },
+
+                "conversar": {
+                    "texto": "💬 Conversar com Noel",
+                    "resultado": (
+                        "Noel conta uma antiga história sobre "
+                        "a estrela mágica e presenteia você."
+                    ),
+                    "itens": {"presente_vermelho": 2},
+                    "flocos": 15,
+                    "pontos": 8,
+                },
+            },
+        },
+
+        {
+            "id": "pipo_especial",
+            "raridade": "incomum",
+            "titulo": "O plano de Pipo",
+            "narrativa": (
+                "Pipo aparece carregando uma caixa enorme. "
+                "Ele diz ter encontrado um caminho secreto "
+                "para recuperar materiais, mas precisa de ajuda."
+            ),
+            "escolhas": {
+                "acompanhar": {
+                    "texto": "🧭 Acompanhar Pipo",
+                    "resultado": (
+                        "O caminho secreto realmente existe! "
+                        "Vocês encontram materiais escondidos."
+                    ),
+                    "itens": {
+                        "tecido_festivo": 3,
+                        "madeira_natalina": 2,
+                    },
+                    "flocos": 12,
+                    "pontos": 6,
+                },
+
+                "abrir_caixa": {
+                    "texto": "📦 Abrir a caixa",
+                    "resultado": (
+                        "A caixa estava cheia de presentes "
+                        "que Pipo havia esquecido de entregar."
+                    ),
+                    "itens": {"presente_vermelho": 2},
+                    "flocos": 10,
+                    "pontos": 5,
+                },
+            },
+        },
 
 # ==========================================
 # REGIÕES
@@ -52,6 +123,78 @@ REGIOES = {
     },
 }
 
+        {
+            "id": "lumi_especial",
+            "raridade": "raro",
+            "titulo": "A luz de Lumi",
+            "narrativa": (
+                "Uma luz azulada ilumina a caverna. "
+                "Lumi aparece diante de você e revela "
+                "que está procurando fragmentos da estrela."
+            ),
+            "escolhas": {
+                "ajudar": {
+                    "texto": "✨ Ajudar Lumi",
+                    "resultado": (
+                        "Lumi utiliza sua magia para revelar "
+                        "um fragmento escondido nas paredes."
+                    ),
+                    "itens": {
+                        "estrela_fragmentada": 1,
+                        "cristal_glacial": 2,
+                    },
+                    "flocos": 18,
+                    "pontos": 10,
+                },
+
+                "perguntar": {
+                    "texto": "❓ Perguntar sobre a estrela",
+                    "resultado": (
+                        "Lumi explica parte da história da estrela "
+                        "e compartilha um pouco de sua energia."
+                    ),
+                    "itens": {"cristal_glacial": 3},
+                    "flocos": 22,
+                    "pontos": 8,
+                },
+            },
+        },
+
+        {
+            "id": "frost_especial",
+            "raridade": "lendario",
+            "titulo": "A presença do Guardião",
+            "narrativa": (
+                "A temperatura despenca repentinamente. "
+                "Uma silhueta surge entre os cristais. "
+                "É Frost, o Guardião do Inverno. "
+                "Ele observa você em silêncio antes de desaparecer."
+            ),
+            "escolhas": {
+                "enfrentar": {
+                    "texto": "❄️ Encarar o Guardião",
+                    "resultado": (
+                        "Frost libera uma onda de energia congelante. "
+                        "Você resiste e encontra um fragmento "
+                        "estelar deixado para trás."
+                    ),
+                    "itens": {"estrela_fragmentada": 2},
+                    "flocos": 30,
+                    "pontos": 18,
+                },
+
+                "observar": {
+                    "texto": "👁️ Observar sua presença",
+                    "resultado": (
+                        "Você percebe símbolos antigos em sua armadura. "
+                        "Frost desaparece, deixando cristais raros."
+                    ),
+                    "itens": {"cristal_glacial": 5},
+                    "flocos": 25,
+                    "pontos": 15,
+                },
+            },
+        },
 
 # ==========================================
 # ACONTECIMENTOS
@@ -537,17 +680,39 @@ def validar_recompensas(itens):
     return True
 
 
+
 def criar_proximo_evento(regiao, eventos_usados):
+
+    pesos = {
+        "comum": 70,
+        "incomum": 22,
+        "raro": 7,
+        "lendario": 1,
+    }
+
     disponiveis = [
         evento
-        for evento in EVENTOS[regiao]
+        for evento in EVENTOS.get(regiao, [])
         if evento["id"] not in eventos_usados
     ]
 
     if not disponiveis:
         return None
 
-    return random.choice(disponiveis)
+    pesos_eventos = [
+        pesos.get(
+            evento.get("raridade", "comum"),
+            pesos["comum"],
+        )
+        for evento in disponiveis
+    ]
+
+    return random.choices(
+        disponiveis,
+        weights=pesos_eventos,
+        k=1,
+    )[0]
+
 
 
 # ==========================================
@@ -719,7 +884,10 @@ def iniciar_exploracao(user_id, regiao):
                 "restantes": 0,
             }
 
-        primeiro_evento = random.choice(EVENTOS[regiao])
+        primeiro_evento = criar_proximo_evento(
+            regiao,
+            [],
+        )
 
         estado = {
             "itens": {},
