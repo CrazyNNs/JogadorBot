@@ -225,16 +225,15 @@ def montar_embed_oficina():
         ),
         color=discord.Color.from_rgb(80, 170, 255),
     )
-
+    
     for indice, (receita_id, receita) in enumerate(receitas.items()):
-
-    if indice > 0:
-        embed.add_field(
-            name="\u200b",
-            value="━━━━━━━━━━━━━━━━━━",
-            inline=False,
-        )
-        linhas = []
+        if indice > 0:
+            embed.add_field(
+                name="\u200b",
+                value="━━━━━━━━━━━━━━━━━━",
+                inline=False,
+            )
+            linhas = []
 
         for material_id, quantidade in receita["materiais"].items():
             dados = ITENS_NATALINOS.get(material_id, {})
