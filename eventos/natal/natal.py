@@ -30,7 +30,7 @@ from .exploracao import (
 )
 
 # ==========================================
-# MONTAR EMBED DO INVENTÁRIO
+# MONTAR EMBED DO INVENTÁRIO-
 # ==========================================
 
 def montar_embed_inventario(user_id):
