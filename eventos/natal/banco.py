@@ -255,6 +255,105 @@ def inicializar_banco():
 
             ON natal_entregas(expira_em, status)
         """)
+
+
+        # ----------------------------------
+        # EXPLORAÇÕES NATALINAS
+        # ----------------------------------
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS natal_exploracoes (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                user_id INTEGER NOT NULL,
+
+                regiao TEXT NOT NULL,
+
+                etapa INTEGER NOT NULL DEFAULT 1,
+
+                status TEXT NOT NULL DEFAULT 'ativa',
+
+                estado_json TEXT NOT NULL,
+
+                data_rotacao TEXT NOT NULL,
+
+                iniciada_em TEXT NOT NULL,
+
+                atualizada_em TEXT NOT NULL,
+
+                expira_em TEXT NOT NULL,
+
+                FOREIGN KEY (user_id)
+                    REFERENCES natal_jogadores(user_id)
+            )
+        """)
+
+        # ----------------------------------
+        # HISTÓRICO DOS ACONTECIMENTOS
+        # ----------------------------------
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS natal_exploracao_eventos (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                exploracao_id INTEGER NOT NULL,
+
+                etapa INTEGER NOT NULL,
+
+                evento_id TEXT NOT NULL,
+
+                narrativa TEXT NOT NULL,
+
+                escolha_id TEXT,
+
+                escolha_texto TEXT,
+
+                consequencia_json TEXT,
+
+                criado_em TEXT NOT NULL,
+
+                FOREIGN KEY (exploracao_id)
+                    REFERENCES natal_exploracoes(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        # ----------------------------------
+        # ÍNDICES DAS EXPLORAÇÕES
+        # ----------------------------------
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracoes_usuario_data
+
+            ON natal_exploracoes(user_id, data_rotacao)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracoes_status
+
+            ON natal_exploracoes(status, expira_em)
+        """)
+
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_natal_exploracao_ativa_usuario
+
+            ON natal_exploracoes(user_id)
+            WHERE status = 'ativa'
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracao_eventos_sessao
+
+            ON natal_exploracao_eventos(exploracao_id, etapa)
+        """)
+
+        
         # ----------------------------------
         # INICIALIZAÇÃO DO GUARDIÃO
         # ----------------------------------
