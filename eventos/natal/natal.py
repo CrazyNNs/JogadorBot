@@ -153,17 +153,23 @@ def montar_embed_entregas(user_id):
 
         return embed
 
-    for entrega in entregas:
-
-        pedido = entrega["pedido"]
-
-        dificuldade = pedido["dificuldade"]
-        dados_dificuldade = DIFICULDADES[dificuldade]
-
-        materiais = pedido["materiais"]
-
-        linhas_materiais = []
-
+    for indice, entrega in enumerate(entregas):
+        if indice > 0:
+            embed.add_field(
+                name="\u200b",
+                value="━━━━━━━━━━━━━━━━━━",
+                inline=False,
+            )
+            
+            pedido = entrega["pedido"]
+            
+            dificuldade = pedido["dificuldade"]
+            dados_dificuldade = DIFICULDADES[dificuldade]
+            
+            materiais = pedido["materiais"]
+            
+            linhas_materiais = []
+            
         for item_id, quantidade in materiais.items():
 
             dados_item = ITENS_NATALINOS.get(item_id)
@@ -220,7 +226,14 @@ def montar_embed_oficina():
         color=discord.Color.from_rgb(80, 170, 255),
     )
 
-    for receita_id, receita in receitas.items():
+    for indice, (receita_id, receita) in enumerate(receitas.items()):
+
+    if indice > 0:
+        embed.add_field(
+            name="\u200b",
+            value="━━━━━━━━━━━━━━━━━━",
+            inline=False,
+        )
         linhas = []
 
         for material_id, quantidade in receita["materiais"].items():
