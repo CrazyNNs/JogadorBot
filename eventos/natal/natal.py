@@ -418,6 +418,18 @@ def montar_embed_evento(
     regiao = exploracao["regiao"]
     evento = exploracao["evento"]
 
+    raridades = {
+        "comum": "⚪ Comum",
+        "incomum": "🟢 Incomum",
+        "raro": "🟣 Raro",
+        "lendario": "🌟 Lendário",
+    }
+
+    raridade = raridades.get(
+        evento.get("raridade", "comum"),
+        "⚪ Comum",
+    )
+
     embed = discord.Embed(
         title=(
             f"{regiao['emoji']} {regiao['nome']}"
@@ -426,6 +438,7 @@ def montar_embed_evento(
             f"**Etapa {exploracao['etapa']}/"
             f"{exploracao['total_etapas']}**\n\n"
             f"**{evento['titulo']}**\n"
+            f"{raridade}\n\n"
             f"{evento['narrativa']}"
         ),
         color=discord.Color.from_rgb(80, 170, 255),
