@@ -1473,6 +1473,9 @@ class PainelNatal(discord.ui.View):
 
         self.user_id = user_id
 
+        self.add_item(
+            BotaoAbrirExploracao(self.user_id)
+        )
     # ----------------------------------
     # VERIFICAR PROPRIETÁRIO
     # ----------------------------------
