@@ -12,7 +12,6 @@ from .entregas import (
     concluir_entrega,
     DIFICULDADES,
 )
-from .oficina import inicializar_oficina
 from .oficina import (
     inicializar_oficina,
     fabricar_presente,
