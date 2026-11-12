@@ -616,7 +616,6 @@ class PainelInventario(discord.ui.View):
 # ==========================================
 # MODAL DE QUANTIDADE DA OFICINA
 # ==========================================
-
 class ModalQuantidadeOficina(discord.ui.Modal):
 
     def __init__(self, painel, acao, item_id, nome):
@@ -636,33 +635,30 @@ class ModalQuantidadeOficina(discord.ui.Modal):
 
         self.add_item(self.quantidade)
 
-    async def on_submit(self, interaction):
 
-        try:
-            quantidade = int(self.quantidade.value)
-
-        except ValueError:
-            await interaction.response.send_message(
-                "Digite uma quantidade numérica válida.",
-                ephemeral=True,
-            )
-            return
-
+async def on_submit(self, interaction):
+    try:
+        quantidade = int(self.quantidade.value)
+    except ValueError:
+        await interaction.response.send_message(
+            "Digite uma quantidade numérica válida.",
+            ephemeral=True,
+        )
+        return
+        
         if quantidade <= 0:
             await interaction.response.send_message(
                 "A quantidade precisa ser maior que zero.",
                 ephemeral=True,
             )
             return
-            
-        self.painel.recarregar_botoes()
+
         if self.acao == "fabricar":
             resultado = fabricar_presente(
                 interaction.user.id,
                 self.item_id,
                 quantidade,
             )
-
         else:
             resultado = contribuir_para_vila(
                 interaction.user.id,
@@ -709,9 +705,6 @@ class ModalQuantidadeOficina(discord.ui.Modal):
                 f"✅ Você fabricou **{resultado['quantidade']}x "
                 f"{resultado['nome']}**!"
             )
-
-            embed = montar_embed_oficina()
-
         else:
             mensagem = (
                 f"🎁 Você contribuiu com **{quantidade}x** "
@@ -724,14 +717,10 @@ class ModalQuantidadeOficina(discord.ui.Modal):
                     f"{resultado['beneficio']}"
                 )
 
-            embed = montar_embed_progresso_vila()
-
-        await interaction.response.edit_message(
+        await interaction.response.send_message(
             content=mensagem,
-            embed=embed,
-            view=self.painel,
+            ephemeral=True,
         )
-
 
 # ==========================================
 # BOTÃO DE FABRICAÇÃO
