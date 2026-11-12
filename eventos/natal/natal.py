@@ -129,8 +129,8 @@ def montar_embed_inventario(user_id):
 # MONTAR EMBED DAS ENTREGAS
 # ==========================================
 
-def montar_embed_entregas(user_id):
 
+def montar_embed_entregas(user_id):
     entregas = consultar_entregas(user_id)
 
     embed = discord.Embed(
@@ -144,34 +144,32 @@ def montar_embed_entregas(user_id):
     )
 
     if not entregas:
-
         embed.add_field(
             name="📭 Nenhuma entrega disponível",
             value="Você já concluiu todos os pedidos de hoje!",
             inline=False,
         )
-
         return embed
 
     for indice, entrega in enumerate(entregas):
+
+        # Separador entre as entregas
         if indice > 0:
             embed.add_field(
                 name="\u200b",
                 value="━━━━━━━━━━━━━━━━━━",
                 inline=False,
             )
-            
-            pedido = entrega["pedido"]
-            
-            dificuldade = pedido["dificuldade"]
-            dados_dificuldade = DIFICULDADES[dificuldade]
-            
-            materiais = pedido["materiais"]
-            
-            linhas_materiais = []
-            
-        for item_id, quantidade in materiais.items():
 
+        pedido = entrega["pedido"]
+
+        dificuldade = pedido["dificuldade"]
+        dados_dificuldade = DIFICULDADES[dificuldade]
+
+        materiais = pedido["materiais"]
+        linhas_materiais = []
+
+        for item_id, quantidade in materiais.items():
             dados_item = ITENS_NATALINOS.get(item_id)
 
             if dados_item is None:
@@ -209,10 +207,11 @@ def montar_embed_entregas(user_id):
     )
 
     return embed
-    
+
 # ==========================================
 # EMBED DA OFICINA NATALINA
 # ==========================================
+
 
 def montar_embed_oficina():
     receitas = consultar_receitas()
@@ -225,15 +224,18 @@ def montar_embed_oficina():
         ),
         color=discord.Color.from_rgb(80, 170, 255),
     )
-    
+
     for indice, (receita_id, receita) in enumerate(receitas.items()):
+
+        # Separador entre as receitas
         if indice > 0:
             embed.add_field(
                 name="\u200b",
                 value="━━━━━━━━━━━━━━━━━━",
                 inline=False,
             )
-            linhas = []
+
+        linhas = []
 
         for material_id, quantidade in receita["materiais"].items():
             dados = ITENS_NATALINOS.get(material_id, {})
@@ -258,7 +260,6 @@ def montar_embed_oficina():
     )
 
     return embed
-
 
 # ==========================================
 # EMBED DA RECONSTRUÇÃO DA VILA
@@ -396,11 +397,6 @@ class BotaoConcluirEntrega(discord.ui.Button):
                 f"⭐ **{resultado['pontos']} Espírito Natalino**"
             )
             
-            await interaction.response.send_message(
-                content=mensagem,
-                embed=embed,
-                ephemeral=True,
-            )
         else:
             motivo = resultado.get("motivo")
             if motivo == "materiais_insuficientes":
