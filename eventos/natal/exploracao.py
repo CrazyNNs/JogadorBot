@@ -16,77 +16,77 @@ LIMITE_EXPLORACOES_DIARIAS = 5
 ETAPAS_POR_EXPLORACAO = 3
 TEMPO_INATIVIDADE_MINUTOS = 15
 
-        {
-            "id": "noel_especial",
-            "raridade": "raro",
-            "titulo": "O presente de Noel",
-            "narrativa": (
+{
+        "id": "noel_especial",
+        "raridade": "raro",
+        "titulo": "O presente de Noel",
+        "narrativa": (
                 "Uma pequena carroça aparece na praça. "
                 "Ao lado dela está Noel, organizando presentes "
                 "para as famílias da vila. Ele percebe sua presença "
                 "e decide conversar com você."
-            ),
-            "escolhas": {
+        ),
+        "escolhas": {
                 "ajudar": {
-                    "texto": "🎁 Ajudar Noel",
-                    "resultado": (
-                        "Você ajuda a organizar os presentes. "
-                        "Noel agradece e entrega uma recompensa especial."
-                    ),
-                    "itens": {"presente_dourado": 1},
-                    "flocos": 20,
-                    "pontos": 10,
+                        "texto": "🎁 Ajudar Noel",
+                        "resultado": (
+                                "Você ajuda a organizar os presentes. "
+                                "Noel agradece e entrega uma recompensa especial."
+                        ),
+                        "itens": {"presente_dourado": 1},
+                        "flocos": 20,
+                        "pontos": 10,
                 },
-
+                
                 "conversar": {
-                    "texto": "💬 Conversar com Noel",
-                    "resultado": (
-                        "Noel conta uma antiga história sobre "
-                        "a estrela mágica e presenteia você."
-                    ),
-                    "itens": {"presente_vermelho": 2},
-                    "flocos": 15,
-                    "pontos": 8,
+                        "texto": "💬 Conversar com Noel",
+                        "resultado": (
+                                "Noel conta uma antiga história sobre "
+                                "a estrela mágica e presenteia você."
+                        ),
+                        "itens": {"presente_vermelho": 2},
+                        "flocos": 15,
+                        "pontos": 8,
                 },
-            },
         },
+},
 
-        {
-            "id": "pipo_especial",
-            "raridade": "incomum",
-            "titulo": "O plano de Pipo",
-            "narrativa": (
+{
+        "id": "pipo_especial",
+        "raridade": "incomum",
+        "titulo": "O plano de Pipo",
+        "narrativa": (
                 "Pipo aparece carregando uma caixa enorme. "
                 "Ele diz ter encontrado um caminho secreto "
                 "para recuperar materiais, mas precisa de ajuda."
-            ),
-            "escolhas": {
+        ),
+        "escolhas": {
                 "acompanhar": {
-                    "texto": "🧭 Acompanhar Pipo",
-                    "resultado": (
-                        "O caminho secreto realmente existe! "
-                        "Vocês encontram materiais escondidos."
-                    ),
-                    "itens": {
-                        "tecido_festivo": 3,
-                        "madeira_natalina": 2,
-                    },
-                    "flocos": 12,
-                    "pontos": 6,
+                        "texto": "🧭 Acompanhar Pipo",
+                        "resultado": (
+                                "O caminho secreto realmente existe! "
+                                "Vocês encontram materiais escondidos."
+                        ),
+                        "itens": {
+                                "tecido_festivo": 3,
+                                "madeira_natalina": 2,
+                        },
+                        "flocos": 12,
+                        "pontos": 6,
                 },
-
+                
                 "abrir_caixa": {
-                    "texto": "📦 Abrir a caixa",
-                    "resultado": (
-                        "A caixa estava cheia de presentes "
-                        "que Pipo havia esquecido de entregar."
-                    ),
-                    "itens": {"presente_vermelho": 2},
-                    "flocos": 10,
-                    "pontos": 5,
+                        "texto": "📦 Abrir a caixa",
+                        "resultado": (
+                                "A caixa estava cheia de presentes "
+                                "que Pipo havia esquecido de entregar."
+                        ),
+                        "itens": {"presente_vermelho": 2},
+                        "flocos": 10,
+                        "pontos": 5,
                 },
-            },
         },
+},
 
 # ==========================================
 # REGIÕES
