@@ -21,6 +21,14 @@ from .oficina import (
     consultar_ranking_vila,
 )
 
+from .exploracao import (
+    REGIOES,
+    iniciar_exploracao,
+    consultar_exploracao,
+    consultar_tentativas,
+    registrar_escolha,
+)
+
 # ==========================================
 # MONTAR EMBED DO INVENTÁRIO
 # ==========================================
@@ -361,6 +369,491 @@ def montar_embed_ranking_vila():
     return embed
     
 # ==========================================
+# EMBEDS DA EXPLORAÇÃO NATALINA
+# ==========================================
+
+def montar_embed_regioes(user_id):
+
+    tentativas = consultar_tentativas(user_id)
+
+    embed = discord.Embed(
+        title="🧭 Exploração Natalina",
+        description=(
+            "Escolha uma região para iniciar sua aventura!\n\n"
+            "Cada exploração possui três acontecimentos "
+            "com decisões e recompensas."
+        ),
+        color=discord.Color.from_rgb(80, 170, 255),
+    )
+
+    embed.add_field(
+        name="🎟️ Tentativas disponíveis",
+        value=(
+            f"**{tentativas['restantes']}**/"
+            f"**{tentativas['limite']}** restantes hoje."
+        ),
+        inline=False,
+    )
+
+    for regiao_id, regiao in REGIOES.items():
+        embed.add_field(
+            name=f"{regiao['emoji']} {regiao['nome']}",
+            value=regiao["descricao"],
+            inline=False,
+        )
+
+    embed.set_footer(
+        text="As tentativas são renovadas diariamente à meia-noite."
+    )
+
+    return embed
+
+
+def montar_embed_evento(
+    exploracao,
+    resultado_escolha=None,
+    recompensas=None,
+):
+
+    regiao = exploracao["regiao"]
+    evento = exploracao["evento"]
+
+    embed = discord.Embed(
+        title=(
+            f"{regiao['emoji']} {regiao['nome']}"
+        ),
+        description=(
+            f"**Etapa {exploracao['etapa']}/"
+            f"{exploracao['total_etapas']}**\n\n"
+            f"**{evento['titulo']}**\n"
+            f"{evento['narrativa']}"
+        ),
+        color=discord.Color.from_rgb(80, 170, 255),
+    )
+
+    if resultado_escolha is not None:
+
+        embed.add_field(
+            name="📖 Sua decisão",
+            value=(
+                f"{resultado_escolha['texto']}\n"
+                f"{resultado_escolha['resultado']}"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🎁 Recompensa encontrada",
+            value=(
+                f"❄️ {resultado_escolha['flocos']} Flocos de Neve\n"
+                f"⭐ {resultado_escolha['pontos']} Espírito Natalino"
+            ),
+            inline=False,
+        )
+
+    if recompensas is not None:
+
+        linhas = []
+
+        for item_id, quantidade in recompensas["itens"].items():
+            dados = ITENS_NATALINOS.get(item_id, {})
+            emoji = dados.get("emoji", "📦")
+            nome = dados.get("nome", item_id)
+
+            linhas.append(
+                f"{emoji} **{nome}:** {quantidade}"
+            )
+
+        if not linhas:
+            linhas.append("Nenhum material encontrado.")
+
+        embed.add_field(
+            name="🎒 Materiais acumulados",
+            value="\n".join(linhas),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🏆 Resultado final",
+            value=(
+                f"❄️ **{recompensas['flocos']} Flocos de Neve**\n"
+                f"⭐ **{recompensas['pontos']} Espírito Natalino**"
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(
+            text="Exploração concluída! Suas recompensas foram entregues."
+        )
+
+    else:
+        embed.set_footer(
+            text="Escolha uma ação para continuar sua aventura."
+        )
+
+    return embed
+
+# ==========================================
+# PAINEL DE EXPLORAÇÃO
+# ==========================================
+
+class BotaoFecharExploracao(discord.ui.Button):
+
+    def __init__(self):
+        super().__init__(
+            label="Fechar",
+            emoji="❌",
+            style=discord.ButtonStyle.secondary,
+        )
+
+    async def callback(self, interaction):
+
+        self.view.stop()
+
+        await interaction.response.edit_message(
+            content="Painel de exploração fechado.",
+            embed=None,
+            view=None,
+        )
+
+
+class BotaoEscolherRegiao(discord.ui.Button):
+
+    def __init__(self, painel, regiao_id):
+        self.painel = painel
+        self.regiao_id = regiao_id
+
+        regiao = REGIOES[regiao_id]
+
+        super().__init__(
+            label=regiao["nome"],
+            emoji=regiao["emoji"],
+            style=discord.ButtonStyle.primary,
+        )
+
+    async def callback(self, interaction):
+
+        resultado = iniciar_exploracao(
+            self.painel.user_id,
+            self.regiao_id,
+        )
+
+        if not resultado["sucesso"]:
+
+            if resultado["motivo"] == "aventura_ativa":
+                exploracao = consultar_exploracao(
+                    self.painel.user_id
+                )
+
+                if exploracao is not None:
+                    await interaction.response.edit_message(
+                        content=None,
+                        embed=montar_embed_evento(exploracao),
+                        view=PainelEscolhas(
+                            self.painel.user_id,
+                            exploracao["exploracao_id"],
+                            exploracao["evento"]["escolhas"],
+                        ),
+                    )
+                    return
+
+                mensagem = (
+                    "Você já possui uma aventura ativa, "
+                    "mas não foi possível recuperá-la."
+                )
+
+            elif resultado["motivo"] == "limite_diario":
+                mensagem = (
+                    "Você já utilizou suas cinco explorações "
+                    "de hoje. Volte amanhã!"
+                )
+
+            else:
+                mensagem = "Não foi possível iniciar essa exploração."
+
+            await interaction.response.send_message(
+                f"⚠️ {mensagem}",
+                ephemeral=True,
+            )
+            return
+
+        exploracao = {
+            "regiao": resultado["regiao"],
+            "etapa": resultado["etapa"],
+            "total_etapas": resultado["total_etapas"],
+            "evento": resultado["evento"],
+            "exploracao_id": resultado["exploracao_id"],
+        }
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=montar_embed_evento(exploracao),
+            view=PainelEscolhas(
+                self.painel.user_id,
+                resultado["exploracao_id"],
+                resultado["evento"]["escolhas"],
+            ),
+        )
+
+
+class PainelRegioes(discord.ui.View):
+
+    def __init__(self, user_id):
+        super().__init__(timeout=300)
+
+        self.user_id = user_id
+
+        for regiao_id in REGIOES:
+            self.add_item(
+                BotaoEscolherRegiao(self, regiao_id)
+            )
+
+        self.add_item(BotaoFecharExploracao())
+
+    async def interaction_check(self, interaction):
+
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Esta exploração pertence a outro jogador.",
+                ephemeral=True,
+            )
+            return False
+
+        return True
+
+
+# ==========================================
+# BOTÕES DAS ESCOLHAS
+# ==========================================
+
+class BotaoEscolhaExploracao(discord.ui.Button):
+
+    def __init__(
+        self,
+        painel,
+        escolha,
+    ):
+        self.painel = painel
+        self.escolha_id = escolha["id"]
+
+        super().__init__(
+            label=escolha["texto"],
+            style=discord.ButtonStyle.primary,
+        )
+
+    async def callback(self, interaction):
+
+        resultado = registrar_escolha(
+            self.painel.user_id,
+            self.painel.exploracao_id,
+            self.escolha_id,
+        )
+
+        if not resultado["sucesso"]:
+
+            motivos = {
+                "exploracao_indisponivel": (
+                    "Esta aventura não está mais disponível."
+                ),
+                "expirada": (
+                    "Sua aventura expirou por inatividade."
+                ),
+                "escolha_invalida": (
+                    "Essa escolha não está disponível."
+                ),
+                "estado_invalido": (
+                    "Não foi possível recuperar o estado da aventura."
+                ),
+                "evento_indisponivel": (
+                    "O acontecimento atual não está disponível."
+                ),
+            }
+
+            mensagem = motivos.get(
+                resultado["motivo"],
+                "Não foi possível registrar sua escolha.",
+            )
+
+            await interaction.response.send_message(
+                f"⚠️ {mensagem}",
+                ephemeral=True,
+            )
+            return
+
+        escolha = resultado["resultado_escolha"]
+
+        if resultado["concluida"]:
+
+            recompensas = resultado["recompensas"]
+
+            exploracao = {
+                "regiao": REGIOES[
+                    self.painel.regiao_id
+                ],
+                "etapa": 3,
+                "total_etapas": 3,
+                "evento": {
+                    "titulo": "Aventura concluída!",
+                    "narrativa": (
+                        "Você terminou sua jornada e conseguiu "
+                        "retornar em segurança. Todas as suas "
+                        "recompensas foram entregues!"
+                    ),
+                },
+            }
+
+            embed = montar_embed_evento(
+                exploracao,
+                resultado_escolha=escolha,
+                recompensas=recompensas,
+            )
+
+            await interaction.response.edit_message(
+                content=None,
+                embed=embed,
+                view=PainelExploracaoConcluida(),
+            )
+            return
+
+        exploracao = {
+            "regiao": REGIOES[
+                self.painel.regiao_id
+            ],
+            "etapa": resultado["etapa"],
+            "total_etapas": resultado["total_etapas"],
+            "evento": resultado["proximo_evento"],
+        }
+
+        embed = montar_embed_evento(
+            exploracao,
+            resultado_escolha=escolha,
+        )
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=embed,
+            view=PainelEscolhas(
+                self.painel.user_id,
+                self.painel.exploracao_id,
+                resultado["proximo_evento"]["escolhas"],
+                regiao_id=self.painel.regiao_id,
+            ),
+        )
+
+
+class PainelEscolhas(discord.ui.View):
+
+    def __init__(
+        self,
+        user_id,
+        exploracao_id,
+        escolhas,
+        regiao_id=None,
+    ):
+        super().__init__(timeout=900)
+
+        self.user_id = user_id
+        self.exploracao_id = exploracao_id
+
+        self.regiao_id = regiao_id
+
+        if self.regiao_id is None:
+            exploracao = consultar_exploracao(user_id)
+
+            if exploracao is not None:
+                for regiao_id, dados in REGIOES.items():
+                    if dados == exploracao["regiao"]:
+                        self.regiao_id = regiao_id
+                        break
+
+        for escolha in escolhas:
+            self.add_item(
+                BotaoEscolhaExploracao(
+                    self,
+                    escolha,
+                )
+            )
+
+        self.add_item(BotaoFecharExploracao())
+
+    async def interaction_check(self, interaction):
+
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Esta aventura pertence a outro jogador.",
+                ephemeral=True,
+            )
+            return False
+
+        return True
+
+
+class PainelExploracaoConcluida(discord.ui.View):
+
+    def __init__(self):
+        super().__init__(timeout=180)
+
+        self.add_item(BotaoFecharExploracao())
+
+
+# ==========================================
+# BOTÃO DE ABRIR EXPLORAÇÃO
+# ==========================================
+
+class BotaoAbrirExploracao(discord.ui.Button):
+
+    def __init__(self, user_id):
+        self.user_id = user_id
+
+        super().__init__(
+            label="Explorar",
+            emoji="🧭",
+            style=discord.ButtonStyle.success,
+        )
+
+    async def callback(self, interaction):
+
+        exploracao = consultar_exploracao(
+            self.user_id
+        )
+
+        if exploracao is not None:
+
+            embed = montar_embed_evento(exploracao)
+
+            view = PainelEscolhas(
+                self.user_id,
+                exploracao["exploracao_id"],
+                exploracao["evento"]["escolhas"],
+                regiao_id=next(
+                    (
+                        regiao_id
+                        for regiao_id, dados in REGIOES.items()
+                        if dados == exploracao["regiao"]
+                    ),
+                    None,
+                ),
+            )
+
+            await interaction.response.send_message(
+                content="🔄 Você possui uma aventura em andamento!",
+                embed=embed,
+                view=view,
+                ephemeral=True,
+            )
+            return
+
+        embed = montar_embed_regioes(
+            self.user_id
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=PainelRegioes(self.user_id),
+            ephemeral=True,
+        )
+
+# ==========================================
 # BOTÃO INDIVIDUAL DE ENTREGA
 # ==========================================
 
@@ -507,6 +1000,10 @@ class PainelEntregas(discord.ui.View):
         super().__init__(timeout=300)
 
         self.user_id = user_id
+        
+        self.add_item(
+            BotaoAbrirExploracao(self.user_id)
+        )
 
         self.recarregar_botoes()
 
