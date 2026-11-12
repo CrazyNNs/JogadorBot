@@ -646,6 +646,7 @@ def montar_dados_evento(evento):
     return {
         "id": evento["id"],
         "titulo": evento["titulo"],
+        "raridade": evento.get("raridade", "comum"),
         "narrativa": evento["narrativa"],
         "escolhas": [
             {
