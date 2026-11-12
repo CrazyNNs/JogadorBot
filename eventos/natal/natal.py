@@ -384,14 +384,12 @@ class BotaoConcluirEntrega(discord.ui.Button):
                 f"❄️ **{resultado['flocos']} Flocos de Neve**\n"
                 f"⭐ **{resultado['pontos']} Espírito Natalino**"
             )
-
-            self.painel.recarregar_botoes()
-
-            await interaction.response.edit_message(
-                content=mensagem,
-                embed=embed,
-                view=self.painel,
-            )
+            
+        await interaction.response.send_message(
+            content=mensagem,
+            embed=embed,
+            ephemeral=True,
+        )
 
         else:
 
@@ -795,6 +793,30 @@ class BotaoDoarMaterial(discord.ui.Button):
             )
         )
 
+# ==========================================
+# BOTÃO DE ATUALIZAÇÃO DA OFICINA
+# ==========================================
+
+class BotaoAtualizarOficina(discord.ui.Button):
+
+    def __init__(self, painel):
+        self.painel = painel
+
+        super().__init__(
+            label="Atualizar",
+            emoji="🔄",
+            style=discord.ButtonStyle.secondary,
+        )
+
+    async def callback(self, interaction):
+
+        self.painel.recarregar_botoes()
+
+        await interaction.response.edit_message(
+            content=None,
+            embed=montar_embed_oficina(),
+            view=self.painel,
+        )
 
 # ==========================================
 # PAINEL DA OFICINA
@@ -863,6 +885,7 @@ class PainelOficina(discord.ui.View):
 
         self.add_item(BotaoVerVila(self))
         self.add_item(BotaoVerRankingVila(self))
+        self.add_item(BotaoAtualizarOficina(self))
         self.add_item(BotaoFecharOficina(self))
 
 
