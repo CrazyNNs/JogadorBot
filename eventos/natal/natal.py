@@ -1911,7 +1911,6 @@ class PainelNatal(discord.ui.View):
 
         self.user_id = user_id
 
-        self.recarregar_botoes()
     # ----------------------------------
     # VERIFICAR PROPRIETÁRIO
     # ----------------------------------
