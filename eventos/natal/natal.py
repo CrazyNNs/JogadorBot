@@ -29,14 +29,6 @@ from .exploracao import (
     registrar_escolha,
 )
 
-from .exploracao import (
-    REGIOES,
-    consultar_tentativas,
-    iniciar_exploracao,
-    consultar_exploracao,
-    registrar_escolha,
-)
-
 # ==========================================
 # MONTAR EMBED DO INVENTÁRIO-
 # ==========================================
@@ -1021,10 +1013,6 @@ class PainelEntregas(discord.ui.View):
         super().__init__(timeout=300)
 
         self.user_id = user_id
-        
-        self.add_item(
-            BotaoAbrirExploracao(self.user_id)
-        )
 
         self.recarregar_botoes()
 
@@ -1617,20 +1605,6 @@ class PainelExploracao(discord.ui.LayoutView):
                 )
             )
 
-            botoes = [
-                BotaoExploracao(
-                    self,
-                    "Fechar",
-                    "❌",
-                    "fechar",
-                    estilo=discord.ButtonStyle.secondary,
-                )
-            ]
-
-            container.add_item(
-                discord.ui.ActionRow(*botoes)
-            )
-
             self.add_item(container)
             return
 
@@ -1750,26 +1724,33 @@ class PainelExploracao(discord.ui.LayoutView):
                 )
             )
 
-        else:
 
-            botoes = []
+        else:
 
             for regiao_id, dados in REGIOES.items():
 
-                botoes.append(
-                    BotaoExploracao(
-                        self,
-                        dados["nome"],
-                        dados["emoji"],
-                        "regiao",
-                        regiao_id,
-                        discord.ButtonStyle.primary,
+                container.add_item(
+                    discord.ui.Separator()
+                )
+
+                container.add_item(
+                    discord.ui.ActionRow(
+                        BotaoExploracao(
+                            self,
+                            dados["nome"],
+                            dados["emoji"],
+                            "regiao",
+                            regiao_id,
+                            discord.ButtonStyle.primary,
+                        )
                     )
                 )
 
-            container.add_item(
-                discord.ui.ActionRow(*botoes)
-            )
+                container.add_item(
+                    discord.ui.TextDisplay(
+                        dados["descricao"]
+                    )
+                )
 
         if self.mensagem_status:
 
@@ -1786,26 +1767,7 @@ class PainelExploracao(discord.ui.LayoutView):
         container.add_item(
             discord.ui.Separator()
         )
-
-        container.add_item(
-            discord.ui.ActionRow(
-                BotaoExploracao(
-                    self,
-                    "Atualizar",
-                    "🔄",
-                    "atualizar",
-                    estilo=discord.ButtonStyle.secondary,
-                ),
-                BotaoExploracao(
-                    self,
-                    "Fechar",
-                    "❌",
-                    "fechar",
-                    estilo=discord.ButtonStyle.secondary,
-                ),
-            )
-        )
-
+        
         self.add_item(container)
 
     # ----------------------------------
@@ -1949,9 +1911,7 @@ class PainelNatal(discord.ui.View):
 
         self.user_id = user_id
 
-        self.add_item(
-            BotaoAbrirExploracao(self.user_id)
-        )
+        self.recarregar_botoes()
     # ----------------------------------
     # VERIFICAR PROPRIETÁRIO
     # ----------------------------------
