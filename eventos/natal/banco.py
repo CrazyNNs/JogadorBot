@@ -256,7 +256,6 @@ def inicializar_banco():
             ON natal_entregas(expira_em, status)
         """)
 
-
         # ----------------------------------
         # EXPLORAÇÕES NATALINAS
         # ----------------------------------
@@ -288,6 +287,61 @@ def inicializar_banco():
                     REFERENCES natal_jogadores(user_id)
             )
         """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS natal_exploracao_eventos (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                exploracao_id INTEGER NOT NULL,
+
+                etapa INTEGER NOT NULL,
+
+                evento_id TEXT NOT NULL,
+
+                narrativa TEXT NOT NULL,
+
+                escolha_id TEXT,
+
+                escolha_texto TEXT,
+
+                consequencia_json TEXT,
+
+                criado_em TEXT NOT NULL,
+
+                FOREIGN KEY (exploracao_id)
+                    REFERENCES natal_exploracoes(id)
+                    ON DELETE CASCADE,
+
+                UNIQUE (exploracao_id, etapa)
+            )
+        """)
+
+        # ----------------------------------
+        # ÍNDICES DAS EXPLORAÇÕES
+        # ----------------------------------
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracoes_usuario
+
+            ON natal_exploracoes(user_id, status)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracoes_expiracao
+
+            ON natal_exploracoes(expira_em, status)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_natal_exploracao_eventos
+
+            ON natal_exploracao_eventos(exploracao_id, etapa)
+        """)
+
 
         # ----------------------------------
         # HISTÓRICO DOS ACONTECIMENTOS
