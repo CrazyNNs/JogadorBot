@@ -29,6 +29,14 @@ from .exploracao import (
     registrar_escolha,
 )
 
+from .exploracao import (
+    REGIOES,
+    consultar_tentativas,
+    iniciar_exploracao,
+    consultar_exploracao,
+    registrar_escolha,
+)
+
 # ==========================================
 # MONTAR EMBED DO INVENTÁRIO-
 # ==========================================
@@ -1473,6 +1481,461 @@ class BotaoFecharOficina(discord.ui.Button):
             view=None,
         )
 
+# ==========================================
+# EXPLORAÇÃO NATALINA — COMPONENTS V2
+# ==========================================
+
+class BotaoExploracao(discord.ui.Button):
+
+    def __init__(self, painel, label, emoji, acao, valor=None, estilo=None):
+        self.painel = painel
+        self.acao = acao
+        self.valor = valor
+
+        super().__init__(
+            label=label,
+            emoji=emoji,
+            style=estilo or discord.ButtonStyle.primary,
+        )
+
+    async def callback(self, interaction):
+        await self.painel.executar(
+            interaction,
+            self.acao,
+            self.valor,
+        )
+
+
+class PainelExploracao(discord.ui.LayoutView):
+
+    def __init__(self, user_id):
+        super().__init__(timeout=300)
+
+        self.user_id = user_id
+        self.mensagem_status = None
+        self.resultado_final = None
+
+        self.montar()
+
+    async def interaction_check(self, interaction):
+
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Esta exploração pertence a outro jogador.",
+                ephemeral=True,
+            )
+            return False
+
+        return True
+
+    # ----------------------------------
+    # FORMATAÇÃO DAS RECOMPENSAS
+    # ----------------------------------
+
+    def formatar_recompensas(self, recompensas):
+
+        linhas = []
+
+        flocos = recompensas.get("flocos", 0)
+        pontos = recompensas.get("pontos", 0)
+        itens = recompensas.get("itens", {})
+
+        if flocos:
+            linhas.append(
+                f"❄️ **{flocos} Flocos de Neve**"
+            )
+
+        if pontos:
+            linhas.append(
+                f"⭐ **{pontos} Espírito Natalino**"
+            )
+
+        for item_id, quantidade in itens.items():
+
+            dados = ITENS_NATALINOS.get(item_id, {})
+
+            emoji = dados.get("emoji", "📦")
+            nome = dados.get("nome", item_id)
+
+            linhas.append(
+                f"{emoji} **{nome}:** {quantidade}"
+            )
+
+        return "\n".join(linhas) if linhas else "Nenhuma recompensa."
+
+    # ----------------------------------
+    # MONTAR INTERFACE
+    # ----------------------------------
+
+    def montar(self):
+
+        self.clear_items()
+
+        container = discord.ui.Container()
+        container.accent_color = discord.Color.from_rgb(
+            80, 170, 255
+        )
+
+        container.add_item(
+            discord.ui.TextDisplay(
+                "# ❄️ Exploração Natalina"
+            )
+        )
+
+        container.add_item(
+            discord.ui.Separator(
+                spacing=discord.SeparatorSpacing.large
+            )
+        )
+
+        # ----------------------------------
+        # RESULTADO FINAL
+        # ----------------------------------
+
+        if self.resultado_final is not None:
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    "## 🎉 Exploração concluída!"
+                )
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    self.resultado_final
+                )
+            )
+
+            container.add_item(
+                discord.ui.Separator()
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    "As recompensas foram adicionadas "
+                    "ao seu inventário natalino."
+                )
+            )
+
+            botoes = [
+                BotaoExploracao(
+                    self,
+                    "Fechar",
+                    "❌",
+                    "fechar",
+                    estilo=discord.ButtonStyle.secondary,
+                )
+            ]
+
+            container.add_item(
+                discord.ui.ActionRow(*botoes)
+            )
+
+            self.add_item(container)
+            return
+
+        # ----------------------------------
+        # CONSULTAR AVENTURA ATIVA
+        # ----------------------------------
+
+        exploracao = consultar_exploracao(
+            self.user_id
+        )
+
+        if exploracao is not None:
+
+            regiao = exploracao["regiao"]
+            evento = exploracao["evento"]
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    f"## {regiao['emoji']} {regiao['nome']}"
+                )
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    f"**Etapa:** {exploracao['etapa']}"
+                    f"/{exploracao['total_etapas']}"
+                )
+            )
+
+            container.add_item(
+                discord.ui.Separator()
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    f"### {evento['titulo']}\n"
+                    f"{evento['narrativa']}"
+                )
+            )
+
+            container.add_item(
+                discord.ui.Separator()
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    "### O que você deseja fazer?"
+                )
+            )
+
+            botoes = []
+
+            for escolha in evento["escolhas"]:
+
+                botoes.append(
+                    BotaoExploracao(
+                        self,
+                        escolha["texto"],
+                        None,
+                        "escolha",
+                        escolha["id"],
+                        discord.ButtonStyle.primary,
+                    )
+                )
+
+            if botoes:
+                container.add_item(
+                    discord.ui.ActionRow(*botoes)
+                )
+
+            if self.mensagem_status:
+
+                container.add_item(
+                    discord.ui.Separator()
+                )
+
+                container.add_item(
+                    discord.ui.TextDisplay(
+                        self.mensagem_status
+                    )
+                )
+
+            self.add_item(container)
+            return
+
+        # ----------------------------------
+        # MENU DE REGIÕES
+        # ----------------------------------
+
+        tentativas = consultar_tentativas(
+            self.user_id
+        )
+
+        container.add_item(
+            discord.ui.TextDisplay(
+                "Escolha uma região para começar sua aventura."
+            )
+        )
+
+        container.add_item(
+            discord.ui.Separator()
+        )
+
+        container.add_item(
+            discord.ui.TextDisplay(
+                f"**Explorações disponíveis hoje:** "
+                f"{tentativas['restantes']}/{tentativas['limite']}"
+            )
+        )
+
+        if tentativas["restantes"] <= 0:
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    "⚠️ Você já utilizou todas as suas "
+                    "explorações de hoje. Volte amanhã!"
+                )
+            )
+
+        else:
+
+            botoes = []
+
+            for regiao_id, dados in REGIOES.items():
+
+                botoes.append(
+                    BotaoExploracao(
+                        self,
+                        dados["nome"],
+                        dados["emoji"],
+                        "regiao",
+                        regiao_id,
+                        discord.ButtonStyle.primary,
+                    )
+                )
+
+            container.add_item(
+                discord.ui.ActionRow(*botoes)
+            )
+
+        if self.mensagem_status:
+
+            container.add_item(
+                discord.ui.Separator()
+            )
+
+            container.add_item(
+                discord.ui.TextDisplay(
+                    self.mensagem_status
+                )
+            )
+
+        container.add_item(
+            discord.ui.Separator()
+        )
+
+        container.add_item(
+            discord.ui.ActionRow(
+                BotaoExploracao(
+                    self,
+                    "Atualizar",
+                    "🔄",
+                    "atualizar",
+                    estilo=discord.ButtonStyle.secondary,
+                ),
+                BotaoExploracao(
+                    self,
+                    "Fechar",
+                    "❌",
+                    "fechar",
+                    estilo=discord.ButtonStyle.secondary,
+                ),
+            )
+        )
+
+        self.add_item(container)
+
+    # ----------------------------------
+    # PROCESSAR INTERAÇÕES
+    # ----------------------------------
+
+    async def executar(self, interaction, acao, valor=None):
+
+        if acao == "fechar":
+
+            self.stop()
+
+            await interaction.response.edit_message(
+                view=None
+            )
+            return
+
+        if acao == "atualizar":
+
+            self.mensagem_status = None
+            self.montar()
+
+            await interaction.response.edit_message(
+                view=self
+            )
+            return
+
+        # ----------------------------------
+        # INICIAR EXPLORAÇÃO
+        # ----------------------------------
+
+        if acao == "regiao":
+
+            resultado = iniciar_exploracao(
+                self.user_id,
+                valor,
+            )
+
+            if not resultado["sucesso"]:
+
+                motivos = {
+                    "regiao_invalida": "Essa região não existe.",
+                    "aventura_ativa": "Você já possui uma exploração ativa.",
+                    "limite_diario": "Você já utilizou suas cinco explorações de hoje.",
+                    "sem_eventos_disponiveis": "Não há acontecimentos disponíveis nessa região.",
+                }
+
+                self.mensagem_status = (
+                    "⚠️ "
+                    + motivos.get(
+                        resultado.get("motivo"),
+                        "Não foi possível iniciar a exploração.",
+                    )
+                )
+
+            else:
+
+                self.mensagem_status = (
+                    f"🧭 Você começou uma exploração em "
+                    f"**{resultado['regiao']['nome']}**!"
+                )
+
+        # ----------------------------------
+        # REGISTRAR ESCOLHA
+        # ----------------------------------
+
+        elif acao == "escolha":
+
+            exploracao = consultar_exploracao(
+                self.user_id
+            )
+
+            if exploracao is None:
+
+                self.mensagem_status = (
+                    "⚠️ Sua exploração não está mais disponível."
+                )
+
+            else:
+
+                resultado = registrar_escolha(
+                    self.user_id,
+                    exploracao["exploracao_id"],
+                    valor,
+                )
+
+                if not resultado["sucesso"]:
+
+                    motivos = {
+                        "expirada": "Sua exploração expirou.",
+                        "exploracao_indisponivel": "Essa exploração não está mais disponível.",
+                        "escolha_invalida": "Essa escolha não é válida.",
+                        "evento_indisponivel": "O acontecimento não está mais disponível.",
+                    }
+
+                    self.mensagem_status = (
+                        "⚠️ "
+                        + motivos.get(
+                            resultado.get("motivo"),
+                            "Não foi possível registrar sua escolha.",
+                        )
+                    )
+
+                else:
+
+                    escolha = resultado["resultado_escolha"]
+
+                    self.mensagem_status = (
+                        f"### {escolha['texto']}\n"
+                        f"{escolha['resultado']}"
+                    )
+
+                    if resultado["concluida"]:
+
+                        recompensas = self.formatar_recompensas(
+                            resultado["recompensas"]
+                        )
+
+                        self.resultado_final = (
+                            f"**Resultado da última escolha:**\n"
+                            f"{escolha['resultado']}\n\n"
+                            f"**Recompensas recebidas:**\n"
+                            f"{recompensas}"
+                        )
+
+        self.montar()
+
+        await interaction.response.edit_message(
+            view=self
+        )
 
 # ==========================================
 # PAINEL PRINCIPAL DO NATAL
@@ -1569,6 +2032,26 @@ class PainelNatal(discord.ui.View):
         await interaction.response.send_message(
             embed=embed,
             view=PainelOficina(self.user_id),
+            ephemeral=True,
+        )
+
+    # ----------------------------------
+    # ABRIR EXPLORAÇÃO
+    # ----------------------------------
+
+    @discord.ui.button(
+        label="Explorar",
+        emoji="🧭",
+        style=discord.ButtonStyle.success,
+    )
+    async def explorar(self, interaction, button):
+
+        painel = PainelExploracao(
+            self.user_id
+        )
+
+        await interaction.response.send_message(
+            view=painel,
             ephemeral=True,
         )
 
