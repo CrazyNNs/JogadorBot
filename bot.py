@@ -3604,7 +3604,7 @@ def usuario_favoritou_banner(usuario_id, banner_id):
     con.close()
     return resultado is not None
 
-async def gerar_imagem_catalogo(banners_pagina):
+def _gerar_imagem_catalogo_sync(banners_pagina):
     """Gera a imagem do catálogo com até 3 banners empilhados."""
     card = Image.open("catalogo.png").convert("RGBA")
     largura, altura = card.size
@@ -3624,6 +3624,10 @@ async def gerar_imagem_catalogo(banners_pagina):
     card.save(buffer, format="PNG")
     buffer.seek(0)
     return buffer
+
+async def gerar_imagem_catalogo(banners_pagina):
+    """Roda a geração da imagem numa thread, para não travar o bot inteiro enquanto o Pillow trabalha."""
+    return await asyncio.to_thread(_gerar_imagem_catalogo_sync, banners_pagina)
 
 # ============================================================
 # FUNÇÕES AUXILIARES - Rotação de banner na loja
@@ -8568,9 +8572,10 @@ class SelectCategoriaCatalogo(discord.ui.Select):
         if not banners:
             await interaction.response.send_message("<:Atencao:1534592266625093662> Nenhum banner disponível nesta categoria ainda!", ephemeral=True)
             return
+        await interaction.response.defer()  # gerar a imagem pode passar de 3 segundos
         view = ViewCatalogoBanners(self.usuario_id, banners, pagina=0)
         embed, arquivo = await view.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=view, attachments=[arquivo])
+        await interaction.edit_original_response(embed=embed, view=view, attachments=[arquivo])
 
 class ViewMenuCatalogo(discord.ui.View):
     def __init__(self, usuario_id):
@@ -8692,17 +8697,22 @@ class ViewCatalogoBanners(discord.ui.View):
         return embed, arquivo_discord
 
     async def atualizar_mensagem(self, interaction):
+        # Gerar a imagem pode passar de 3 segundos: responde logo e edita a mensagem depois.
+        if not interaction.response.is_done():
+            await interaction.response.defer()
         embed, arquivo = await self.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+        await interaction.edit_original_response(embed=embed, view=self, attachments=[arquivo])
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, row=0)
     async def anterior(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         self.pagina -= 1
         self.atualizar_botoes()
         await self.atualizar_mensagem(interaction)
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, row=0)
     async def proximo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         self.pagina += 1
         self.atualizar_botoes()
         await self.atualizar_mensagem(interaction)
@@ -8744,6 +8754,8 @@ class ViewCatalogoBanners(discord.ui.View):
             )
             return
 
+        await interaction.response.defer()
+
         con = sqlite3.connect("jogadorbot.db")
         cur = con.cursor()
 
@@ -8761,8 +8773,7 @@ class ViewCatalogoBanners(discord.ui.View):
             mensagem_confirmacao = f"⭐ Banner **{nome}** favoritado! Você será avisado quando ele estiver na loja."
 
         self.atualizar_botoes()
-        embed, arquivo = await self.gerar_embed_e_imagem()
-        await interaction.response.edit_message(embed=embed, view=self, attachments=[arquivo])
+        await self.atualizar_mensagem(interaction)
         await interaction.followup.send(mensagem_confirmacao, ephemeral=True)
 
 # ============================================================
